@@ -1914,7 +1914,19 @@
           return;
         }
 
-        state.analysisResults.push(...batchResults.resultats);
+        // Normalisation silencieuse : département = 2 premiers chars si 5 chiffres (code postal)
+        const normalizedBatch = batchResults.resultats.map(function(rv) {
+          const fieldNom = (getFieldNom(rv.id_champ) || '').toLowerCase();
+          if (fieldNom.includes('d\u00e9partement') || fieldNom.includes('departement')) {
+            const fixVal = function(v) {
+              if (v && /^\d{5}$/.test(String(v).trim())) return String(v).trim().slice(0, 2);
+              return v;
+            };
+            return Object.assign({}, rv, { valeur_audit: fixVal(rv.valeur_audit), valeur_vt: fixVal(rv.valeur_vt) });
+          }
+          return rv;
+        });
+        state.analysisResults.push(...normalizedBatch);
         if (batchResults.nouveaux_termes) {
           state.lexiqueSuggestions.push(...batchResults.nouveaux_termes);
         }
@@ -2323,7 +2335,7 @@ RAPPEL : instance_label = null si le champ n'a qu'une instance. Si plusieurs ins
         MANQUANT: {hdr:C.MAN_HDR, sect:C.MAN_SECT, stxt:C.MAN_STXT, row:C.MAN_ROW, rtxt:C.MAN_TXT, badge:C.MAN_BADGE},
         VERT:     {hdr:C.VERT_HDR,sect:C.VERT_SECT,stxt:C.VERT_STXT,row:C.VERT_ROW,rtxt:C.VERT_TXT,badge:C.VERT_BADGE},
       };
-      const STATUS_ORDER = ['ROUGE','ORANGE','MANQUANT','VERT'];
+      const STATUS_ORDER = ['VERT','ROUGE','ORANGE','MANQUANT'];
       const STATUS_LABELS = {
         ROUGE:'\u26d4  NON CONFORMES', ORANGE:'\u26a0  APPROXIMATIFS',
         MANQUANT:'\u25a1  MANQUANTS',  VERT:'\u2714  CONFORMES',
