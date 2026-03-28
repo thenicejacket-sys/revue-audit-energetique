@@ -2496,13 +2496,13 @@ RAPPEL : instance_label = null si le champ n'a qu'une instance. Si plusieurs ins
 
       // ── ONGLET 3 ──────────────────────────────────────────────────────────
       var ws3=wb.addWorksheet('Synthese');
-      ws3.columns=[{width:36},{width:16},{width:16}];
+      ws3.columns=[{width:44},{width:28},{width:16}];
       var approx=state.analysisResults.filter(function(rv){return rv.statut==='ORANGE';}).length;
       var nonconf=state.analysisResults.filter(function(rv){return rv.statut==='ROUGE';}).length;
       var manqTotal=state.analysisResults.filter(function(rv){return rv.statut==='MANQUANT';}).length;
-      mrow(ws3,["OT \u00c9NERGIE \u2014 Synth\u00e8se de l'Analyse",'',''],3,C.BLU_DARK,C.WHT,{bold:true,sz:14},26);
-      ws3.addRow(['','','']);
-      var hdr3=ws3.addRow(['Indicateur','Valeur','% du total']); hdr3.height=18;
+      mrow(ws3,["OT \u00c9NERGIE \u2014 Synth\u00e8se de l'Analyse",'',''],3,C.BLU_DARK,C.WHT,{bold:true,sz:14},30);
+      ws3.addRow(['','','']).height=6;
+      var hdr3=ws3.addRow(['Indicateur','Valeur','% du total']); hdr3.height=24;
       sr(hdr3,C.BLU_DARK,C.WHT,{bold:true,align:'center'},3);
       [['Total champs analys\u00e9s',total,'100%','FFF2F4F9','FF2C3E70',null],
        ['Conformes (VERT)',conformes,total?Math.round(conformes/total*100)+'%':'-',C.VERT_ROW,C.VERT_TXT,C.VERT_BADGE],
@@ -2510,19 +2510,21 @@ RAPPEL : instance_label = null si le champ n'a qu'une instance. Si plusieurs ins
        ['Non conformes (ROUGE)',nonconf,total?Math.round(nonconf/total*100)+'%':'-',C.RGE_ROW,C.RGE_TXT,C.RGE_BADGE],
        ['Manquants',manqTotal,total?Math.round(manqTotal/total*100)+'%':'-',C.MAN_ROW,C.MAN_TXT,C.MAN_BADGE],
       ].forEach(function(d){
-        var r=ws3.addRow([d[0],d[1],d[2]]); r.height=16;
-        sc(r.getCell(1),d[3],d[4],{bold:true});
-        sc(r.getCell(2),d[5]||d[3],d[5]?C.WHT:d[4],{bold:true,align:'center',sz:11});
-        sc(r.getCell(3),d[3],d[4],{align:'center'});
+        var r=ws3.addRow([d[0],d[1],d[2]]); r.height=22;
+        sc(r.getCell(1),d[3],d[4],{bold:true,sz:11});
+        sc(r.getCell(2),d[5]||d[3],d[5]?C.WHT:d[4],{bold:true,align:'center',sz:13});
+        sc(r.getCell(3),d[3],d[4],{align:'center',sz:11});
       });
-      ws3.addRow(['','','']);
-      var scRow=ws3.addRow(['Score global',pct+'%','']); scRow.height=18;
-      sc(scRow.getCell(1),SCORE_BG,SCORE_FG,{bold:true,sz:11});
-      sc(scRow.getCell(2),SCORE_BD,C.WHT,{bold:true,align:'center',sz:14});
+      ws3.addRow(['','','']).height=8;
+      var scRow=ws3.addRow(['Score global',pct+'%','']); scRow.height=26;
+      ws3.mergeCells(scRow.number,2,scRow.number,3);
+      sc(scRow.getCell(1),SCORE_BG,SCORE_FG,{bold:true,sz:12});
+      sc(scRow.getCell(2),SCORE_BD,C.WHT,{bold:true,align:'center',sz:16});
       sc(scRow.getCell(3),SCORE_BG,SCORE_FG,{});
       var verdict=pct>=95?'Dossier probablement recevable':pct>=80?'Dossier \u00e0 v\u00e9rifier':'Dossier non conforme';
-      var vRow=ws3.addRow(['Verdict',verdict,'']); vRow.height=16;
-      sc(vRow.getCell(1),SCORE_BG,SCORE_FG,{bold:true}); sc(vRow.getCell(2),SCORE_BG,SCORE_FG,{bold:true}); sc(vRow.getCell(3),SCORE_BG,SCORE_FG,{});
+      var vRow=ws3.addRow(['Verdict',verdict,'']); vRow.height=22;
+      ws3.mergeCells(vRow.number,2,vRow.number,3);
+      sc(vRow.getCell(1),SCORE_BG,SCORE_FG,{bold:true,sz:11}); sc(vRow.getCell(2),SCORE_BG,SCORE_FG,{bold:true,sz:11,wrap:true}); sc(vRow.getCell(3),SCORE_BG,SCORE_FG,{});
 
       var dateFile='OTEnergie_Rapport_AuditVT_'+new Date().toISOString().slice(0,10)+'.xlsx';
       var buffer=await wb.xlsx.writeBuffer();
