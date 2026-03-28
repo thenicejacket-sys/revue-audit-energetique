@@ -1,0 +1,3259 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AuditVT Comparator — OT Énergie</title>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <style>
+    :root {
+      --primary: #1B3F8B;
+      --primary-dark: #12296a;
+      --primary-light: #2a56b8;
+      --accent-green: #4CAF50;
+      --accent-teal: #00BCD4;
+      --accent-yellow: #FFC107;
+      --text-dark: #1A1A2E;
+      --text-muted: #6b7280;
+      --bg-light: #F4F7FC;
+      --white: #FFFFFF;
+      --border: #dde3ef;
+      --shadow: 0 2px 12px rgba(27,63,139,0.10);
+      --shadow-hover: 0 6px 24px rgba(27,63,139,0.18);
+      --radius: 10px;
+      --status-green-bg: #C6EFCE;
+      --status-green-text: #276221;
+      --status-orange-bg: #FFEB9C;
+      --status-orange-text: #9C5700;
+      --status-red-bg: #FFC7CE;
+      --status-red-text: #9C0006;
+      --status-grey-bg: #D9D9D9;
+      --status-grey-text: #555555;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Nunito', sans-serif;
+      background: var(--bg-light);
+      color: var(--text-dark);
+      min-height: 100vh;
+    }
+
+    /* ===== HEADER ===== */
+    .app-header {
+      background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 55%, var(--primary-light) 100%);
+      padding: 0 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 68px;
+      box-shadow: 0 4px 20px rgba(27,63,139,0.25);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header-logo {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .logo-svg-wrap svg {
+      display: block;
+    }
+    .logo-svg-wrap img {
+      display: block;
+      border-radius: 6px;
+    }
+
+    .header-title {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .header-title-main {
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 800;
+      font-size: 20px;
+      color: var(--white);
+      letter-spacing: 0.5px;
+      line-height: 1.2;
+    }
+
+    .header-title-sub {
+      font-size: 12px;
+      color: rgba(255,255,255,0.72);
+      font-weight: 500;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+    }
+
+    .header-badge {
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.25);
+      color: rgba(255,255,255,0.90);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 12px;
+      border-radius: 20px;
+      letter-spacing: 0.5px;
+    }
+
+    /* ===== NAV TABS ===== */
+    .nav-bar {
+      background: var(--white);
+      border-bottom: 2px solid var(--border);
+      padding: 0 32px;
+      display: flex;
+      gap: 4px;
+      box-shadow: 0 2px 8px rgba(27,63,139,0.06);
+    }
+
+    .nav-tab {
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 600;
+      font-size: 13px;
+      padding: 16px 22px;
+      border: none;
+      background: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      position: relative;
+      letter-spacing: 0.3px;
+      transition: color 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-transform: uppercase;
+    }
+
+    .nav-tab::after {
+      content: '';
+      position: absolute;
+      bottom: -2px;
+      left: 0; right: 0;
+      height: 3px;
+      border-radius: 2px 2px 0 0;
+      background: var(--primary);
+      transform: scaleX(0);
+      transition: transform 0.25s cubic-bezier(.4,0,.2,1);
+    }
+
+    .nav-tab.active {
+      color: var(--primary);
+    }
+
+    .nav-tab.active::after {
+      transform: scaleX(1);
+    }
+
+    .nav-tab:hover:not(.active) {
+      color: var(--primary-light);
+    }
+
+    /* ===== MAIN CONTENT ===== */
+    .main-content {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 32px 24px;
+    }
+
+    .tab-panel {
+      display: none;
+      animation: fadeIn 0.22s ease;
+    }
+
+    .tab-panel.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ===== SECTION TITLES ===== */
+    .section-title {
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 700;
+      font-size: 16px;
+      color: var(--primary);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section-title::before {
+      content: '';
+      width: 4px;
+      height: 20px;
+      background: var(--accent-teal);
+      border-radius: 2px;
+      display: inline-block;
+    }
+
+    /* ===== CARDS ===== */
+    .card {
+      background: var(--white);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 24px;
+      border: 1px solid var(--border);
+    }
+
+    /* ===== DROP ZONES ===== */
+    .drop-zones-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+
+    .drop-zone-wrapper {
+      position: relative;
+    }
+
+    .drop-zone-badge {
+      position: absolute;
+      top: -10px;
+      left: 16px;
+      z-index: 2;
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 700;
+      font-size: 10px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    .badge-master {
+      background: #dc2626;
+      color: white;
+    }
+
+    .badge-compare {
+      background: var(--primary);
+      color: white;
+    }
+
+    .drop-zone {
+      border: 2px dashed var(--primary-light);
+      border-radius: var(--radius);
+      padding: 36px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: rgba(27,63,139,0.02);
+      min-height: 160px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: var(--accent-teal);
+      background: rgba(0,188,212,0.04);
+      box-shadow: 0 0 0 4px rgba(0,188,212,0.12);
+    }
+
+    .drop-zone.loaded {
+      border-color: var(--accent-green);
+      background: rgba(76,175,80,0.04);
+    }
+
+    .drop-zone-icon {
+      color: var(--primary-light);
+      opacity: 0.6;
+    }
+
+    .drop-zone.loaded .drop-zone-icon {
+      color: var(--accent-green);
+      opacity: 1;
+    }
+
+    .drop-zone-title {
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 700;
+      font-size: 13px;
+      color: var(--primary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .drop-zone-hint {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .drop-zone-filename {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--accent-green);
+      max-width: 220px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .drop-zone-filesize {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .file-input { display: none; }
+
+    /* ===== BUTTONS ===== */
+    .btn {
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 700;
+      font-size: 13px;
+      padding: 11px 22px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s;
+      letter-spacing: 0.3px;
+      text-decoration: none;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--primary-dark);
+      box-shadow: var(--shadow-hover);
+      transform: translateY(-1px);
+    }
+
+    .btn-primary:disabled {
+      background: #aab4c8;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .btn-success {
+      background: var(--accent-green);
+      color: white;
+    }
+
+    .btn-success:hover:not(:disabled) {
+      background: #3d9e41;
+      box-shadow: var(--shadow-hover);
+    }
+
+    .btn-outline {
+      background: transparent;
+      border: 2px solid var(--primary);
+      color: var(--primary);
+    }
+
+    .btn-outline:hover {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-danger {
+      background: #ef4444;
+      color: white;
+    }
+
+    .btn-danger:hover {
+      background: #dc2626;
+    }
+
+    .btn-sm {
+      font-size: 11px;
+      padding: 6px 12px;
+    }
+
+    /* ===== PROGRESS BAR ===== */
+    .progress-section {
+      margin: 20px 0;
+      display: none;
+    }
+
+    .progress-section.visible { display: block; }
+
+    .progress-label {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+
+    .progress-bar-track {
+      background: var(--border);
+      border-radius: 8px;
+      height: 12px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .progress-bar-fill {
+      background: linear-gradient(90deg, var(--primary) 0%, var(--accent-teal) 100%);
+      height: 100%;
+      border-radius: 8px;
+      transition: width 0.4s cubic-bezier(.4,0,.2,1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill::after {
+      content: '';
+      position: absolute;
+      top: 0; left: -100%;
+      width: 60%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent);
+      animation: shimmer 1.5s infinite;
+    }
+
+    @keyframes shimmer {
+      0% { left: -60%; }
+      100% { left: 120%; }
+    }
+
+    /* ===== KPI CARDS ===== */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin: 24px 0;
+    }
+
+    .kpi-card {
+      background: var(--white);
+      border-radius: var(--radius);
+      padding: 20px;
+      text-align: center;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .kpi-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-hover); }
+
+    .kpi-card-icon {
+      font-size: 28px;
+      margin-bottom: 8px;
+      line-height: 1;
+    }
+
+    .kpi-card-value {
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 800;
+      font-size: 36px;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+
+    .kpi-card-label {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .kpi-card.green { border-top: 4px solid var(--accent-green); }
+    .kpi-card.green .kpi-card-value { color: #276221; }
+    .kpi-card.green .kpi-card-label { color: #276221; }
+
+    .kpi-card.orange { border-top: 4px solid #f59e0b; }
+    .kpi-card.orange .kpi-card-value { color: #9C5700; }
+    .kpi-card.orange .kpi-card-label { color: #9C5700; }
+
+    .kpi-card.red { border-top: 4px solid #ef4444; }
+    .kpi-card.red .kpi-card-value { color: #9C0006; }
+    .kpi-card.red .kpi-card-label { color: #9C0006; }
+
+    .kpi-card.grey { border-top: 4px solid #9ca3af; }
+    .kpi-card.grey .kpi-card-value { color: #555; }
+    .kpi-card.grey .kpi-card-label { color: #555; }
+
+    /* ===== CONFORMITY BAR ===== */
+    .conformity-section {
+      background: var(--white);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+      margin-bottom: 20px;
+    }
+
+    .conformity-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .conformity-label {
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--text-dark);
+    }
+
+    .conformity-pct {
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 800;
+      font-size: 22px;
+      color: var(--primary);
+    }
+
+    .conformity-bar-track {
+      background: var(--border);
+      border-radius: 8px;
+      height: 16px;
+      overflow: hidden;
+    }
+
+    .conformity-bar-fill {
+      height: 100%;
+      border-radius: 8px;
+      transition: width 1s cubic-bezier(.4,0,.2,1);
+    }
+
+    .conformity-bar-fill.high { background: linear-gradient(90deg, var(--accent-green), #66bb6a); }
+    .conformity-bar-fill.medium { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+    .conformity-bar-fill.low { background: linear-gradient(90deg, #ef4444, #f87171); }
+
+    .conformity-message {
+      margin-top: 12px;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .conformity-message.msg-green { background: var(--status-green-bg); color: var(--status-green-text); }
+    .conformity-message.msg-yellow { background: var(--status-orange-bg); color: var(--status-orange-text); }
+    .conformity-message.msg-red { background: var(--status-red-bg); color: var(--status-red-text); }
+
+    /* ===== RESULTS DASHBOARD ===== */
+    .results-section {
+      display: none;
+    }
+
+    .results-section.visible { display: block; }
+
+    /* ===== RAPPORT TABLE ===== */
+    .report-table-wrap {
+      overflow-x: auto;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+    }
+
+    .report-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .report-table thead tr {
+      background: var(--primary);
+      color: white;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .report-table thead th {
+      padding: 13px 14px;
+      text-align: left;
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 700;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+    }
+
+    .report-table tbody tr:nth-child(even) { background: rgba(27,63,139,0.025); }
+    .report-table tbody tr:nth-child(odd) { background: var(--white); }
+    .report-table tbody tr:hover { background: rgba(0,188,212,0.06); }
+
+    .report-table td {
+      padding: 11px 14px;
+      vertical-align: middle;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .report-table td:first-child {
+      font-weight: 700;
+      color: var(--text-muted);
+      font-size: 11px;
+    }
+
+    .rapport-section-row td {
+      background: linear-gradient(90deg, #2d4e9e 0%, #1b3f8b 100%);
+      color: #ffffff;
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 700;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+      padding: 9px 16px;
+      border-top: 3px solid #00BCD4;
+      border-bottom: 2px solid #1b3f8b;
+    }
+    .rapport-section-count {
+      font-weight: 400;
+      font-size: 10px;
+      opacity: 0.70;
+      margin-left: 8px;
+    }
+
+    .status-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-weight: 700;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    .status-vert { background: var(--status-green-bg); color: var(--status-green-text); }
+    .status-orange { background: var(--status-orange-bg); color: var(--status-orange-text); }
+    .status-rouge { background: var(--status-red-bg); color: var(--status-red-text); }
+    .status-manquant { background: var(--status-grey-bg); color: var(--status-grey-text); }
+
+    /* ===== MISSING FIELDS SECTION ===== */
+    .missing-section {
+      margin-top: 28px;
+    }
+
+    .missing-card {
+      display: grid;
+      grid-template-columns: auto 1fr 1fr;
+      gap: 12px;
+      align-items: start;
+      background: var(--white);
+      border-radius: var(--radius);
+      padding: 14px 18px;
+      box-shadow: var(--shadow);
+      border: 1px solid #e5e7eb;
+      margin-bottom: 10px;
+    }
+
+    .missing-card-id {
+      background: var(--status-grey-bg);
+      color: var(--status-grey-text);
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 700;
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: 6px;
+    }
+
+    .missing-card-field {
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--text-dark);
+    }
+
+    .missing-card-cat {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .missing-card-suggestion {
+      font-size: 12px;
+      color: #9C5700;
+      background: var(--status-orange-bg);
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-style: italic;
+    }
+
+    /* ===== PARAMETRES ===== */
+    .params-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+
+    .params-card {
+      background: var(--white);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+      padding: 24px;
+    }
+
+    .params-card-title {
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--primary);
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* ===== REFERENTIEL TABLE ===== */
+    .ref-table-wrap {
+      overflow-x: auto;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      margin: 16px 0;
+      max-height: 420px;
+      overflow-y: auto;
+    }
+
+    .ref-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      min-width: 720px;
+    }
+
+    .ref-table thead tr {
+      background: var(--bg-light);
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+
+    .ref-table thead th {
+      padding: 10px 10px;
+      text-align: left;
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 700;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      border-bottom: 2px solid var(--border);
+    }
+
+    .score-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-weight: 700;
+      font-size: 12px;
+      font-family: 'Montserrat', sans-serif;
+    }
+    .score-high { background: #C6EFCE; color: #276221; }
+    .score-mid  { background: #FFEB9C; color: #7A4A00; }
+    .score-low  { background: #FFC7CE; color: #820000; }
+
+    .history-filename {
+      font-size: 11px;
+      color: var(--primary);
+      font-weight: 600;
+      word-break: break-all;
+    }
+    .history-no-export {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-style: italic;
+    }
+    .dl-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 4px;
+      padding: 3px 9px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--primary);
+      background: rgba(27,63,139,0.07);
+      border: 1px solid rgba(27,63,139,0.25);
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .dl-btn:hover { background: rgba(27,63,139,0.15); }
+    #history-tbody tr:hover { background: var(--bg-light); }
+    #history-tbody td { vertical-align: middle; padding: 9px 10px; font-size: 12px; }
+
+    .ref-section-row td {
+      background: linear-gradient(90deg, #e8eef8 0%, #f0f4fb 100%);
+      padding: 7px 12px;
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 700;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--primary);
+      border-top: 2px solid var(--primary-light);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .ref-table tbody tr { border-bottom: 1px solid var(--border); }
+    .ref-table tbody tr:nth-child(even) { background: rgba(27,63,139,0.018); }
+    .ref-table tbody tr:hover { background: rgba(0,188,212,0.05); }
+
+    .ref-table td { padding: 8px 10px; vertical-align: middle; }
+
+    .ref-table td[contenteditable="true"] {
+      outline: none;
+      border-radius: 4px;
+      transition: background 0.15s;
+      cursor: text;
+      min-width: 60px;
+    }
+
+    .ref-table td[contenteditable="true"]:focus {
+      background: rgba(27,63,139,0.06);
+      box-shadow: inset 0 0 0 2px var(--primary-light);
+    }
+
+    .ref-table select {
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: 11px;
+      font-family: 'Nunito', sans-serif;
+      background: var(--white);
+      color: var(--text-dark);
+      cursor: pointer;
+    }
+
+    .ref-table .del-btn {
+      background: none;
+      border: none;
+      color: #ef4444;
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 4px;
+      transition: background 0.15s;
+    }
+
+    .ref-table .del-btn:hover { background: rgba(239,68,68,0.1); }
+
+    /* ===== FORM ELEMENTS ===== */
+    .form-group { margin-bottom: 16px; }
+
+    .form-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-dark);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .form-input {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      font-family: 'Nunito', sans-serif;
+      font-size: 13px;
+      color: var(--text-dark);
+      background: var(--white);
+      transition: border-color 0.2s, box-shadow 0.2s;
+      outline: none;
+    }
+
+    .form-input:focus {
+      border-color: var(--primary-light);
+      box-shadow: 0 0 0 3px rgba(27,63,139,0.10);
+    }
+
+    .form-select {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      font-family: 'Nunito', sans-serif;
+      font-size: 13px;
+      color: var(--text-dark);
+      background: var(--white);
+      cursor: pointer;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .form-select:focus { border-color: var(--primary-light); }
+
+    .input-group {
+      position: relative;
+      display: flex;
+    }
+
+    .input-group .form-input { border-radius: 8px 0 0 8px; flex: 1; }
+
+    .input-group-btn {
+      border: 1.5px solid var(--border);
+      border-left: none;
+      border-radius: 0 8px 8px 0;
+      background: var(--bg-light);
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 0 12px;
+      transition: background 0.2s;
+    }
+
+    .input-group-btn:hover { background: var(--border); }
+
+    .radio-group { display: flex; gap: 16px; align-items: center; }
+
+    .radio-option {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .radio-option input { cursor: pointer; accent-color: var(--primary); }
+
+    /* ===== LEXIQUE SUGGESTIONS ===== */
+    .suggestion-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--bg-light);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 8px;
+    }
+
+    .suggestion-term {
+      font-weight: 700;
+      font-size: 13px;
+      color: var(--text-dark);
+    }
+
+    .suggestion-field {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .suggestion-actions { display: flex; gap: 8px; }
+
+    /* ===== ALERTS ===== */
+    .alert {
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .alert-warning {
+      background: var(--status-orange-bg);
+      color: var(--status-orange-text);
+      border: 1px solid #fbbf24;
+    }
+
+    .alert-error {
+      background: var(--status-red-bg);
+      color: var(--status-red-text);
+      border: 1px solid #fca5a5;
+    }
+
+    .alert-info {
+      background: rgba(0,188,212,0.08);
+      color: var(--primary);
+      border: 1px solid rgba(0,188,212,0.3);
+    }
+
+    .alert-success {
+      background: var(--status-green-bg);
+      color: var(--status-green-text);
+      border: 1px solid #86efac;
+    }
+
+    /* ===== CONNECTION TEST ===== */
+    .connection-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 12px;
+      border-radius: 20px;
+      margin-left: 10px;
+    }
+
+    .connection-status.ok { background: var(--status-green-bg); color: var(--status-green-text); }
+    .connection-status.fail { background: var(--status-red-bg); color: var(--status-red-text); }
+    .connection-status.testing { background: var(--status-orange-bg); color: var(--status-orange-text); }
+
+    /* ===== ANALYZE BUTTON AREA ===== */
+    .analyze-section {
+      background: var(--white);
+      border-radius: var(--radius);
+      padding: 24px;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .analyze-status-text {
+      font-size: 13px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--border);
+      display: inline-block;
+    }
+
+    .status-dot.ok { background: var(--accent-green); }
+    .status-dot.missing { background: #ef4444; }
+
+    /* ===== FULL-WIDTH PARAMS ===== */
+    .params-full {
+      margin-top: 24px;
+    }
+
+    /* ===== FOOTER ===== */
+    .app-footer {
+      text-align: center;
+      padding: 20px;
+      color: var(--text-muted);
+      font-size: 11px;
+      border-top: 1px solid var(--border);
+      margin-top: 40px;
+    }
+
+    /* ===== SCROLLBAR ===== */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg-light); }
+    ::-webkit-scrollbar-thumb { background: #c0cce0; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--primary-light); }
+
+    /* ===== UPLOAD ZONE REFERENTIEL ===== */
+    .upload-ref-zone {
+      border: 2px dashed var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 12px;
+    }
+
+    .upload-ref-zone:hover {
+      border-color: var(--primary-light);
+      background: rgba(27,63,139,0.02);
+    }
+
+    .upload-ref-zone p {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 6px;
+    }
+
+    /* ===== EMPTY STATE ===== */
+    .empty-state {
+      text-align: center;
+      padding: 48px 24px;
+      color: var(--text-muted);
+    }
+
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 12px;
+      opacity: 0.3;
+    }
+
+    .empty-state-title {
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 700;
+      font-size: 16px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .empty-state-sub {
+      font-size: 13px;
+    }
+
+    /* ===== TOOLBAR ===== */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+
+    /* ===== CHIPS ===== */
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    /* ===== SPINNER ===== */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(27,63,139,0.2);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: inline-block;
+    }
+
+    /* ===== REPORT TOP BAR ===== */
+    .report-topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .filter-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .filter-btn {
+      border: 1.5px solid var(--border);
+      background: var(--white);
+      border-radius: 20px;
+      padding: 5px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      font-family: 'Montserrat', sans-serif;
+    }
+
+    .filter-btn.active-vert { border-color: #276221; background: var(--status-green-bg); color: #276221; }
+    .filter-btn.active-orange { border-color: #9C5700; background: var(--status-orange-bg); color: #9C5700; }
+    .filter-btn.active-rouge { border-color: #9C0006; background: var(--status-red-bg); color: #9C0006; }
+    .filter-btn.active-manquant { border-color: #555; background: var(--status-grey-bg); color: #555; }
+    .filter-btn.active-all { border-color: var(--primary); background: var(--primary); color: white; }
+
+    /* ===== IA MODEL SELECT ===== */
+    .model-select-wrap {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .hidden { display: none !important; }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 1024px) {
+      .drop-zones-row { grid-template-columns: 1fr; }
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+      .params-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ===== HEADER ===== -->
+  <header class="app-header">
+    <div class="header-logo">
+      <div class="logo-svg-wrap">
+        <img src="data:image/jpeg;base64,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" alt="OT Energie" style="height:48px;width:auto;object-fit:contain;"/>
+      </div>
+      <div class="header-title">
+        <span class="header-title-main">Revue audit énergétique</span>
+        <span class="header-title-sub">OT Énergie</span>
+      </div>
+    </div>
+    <span class="header-badge">v1.0 — Analyse IA</span>
+  </header>
+
+  <!-- ===== NAV TABS ===== -->
+  <nav class="nav-bar">
+    <button class="nav-tab active" data-tab="comparaison" onclick="switchTab('comparaison')">
+      <i data-lucide="git-compare" style="width:15px;height:15px"></i>
+      Comparaison
+    </button>
+    <button class="nav-tab" data-tab="rapport" onclick="switchTab('rapport')">
+      <i data-lucide="file-text" style="width:15px;height:15px"></i>
+      Rapport
+    </button>
+    <button class="nav-tab" data-tab="parametres" onclick="switchTab('parametres')">
+      <i data-lucide="settings" style="width:15px;height:15px"></i>
+      Paramètres
+    </button>
+    <button class="nav-tab" data-tab="historique" onclick="switchTab('historique')">
+      <i data-lucide="clock" style="width:15px;height:15px"></i>
+      Historique
+    </button>
+  </nav>
+
+  <!-- ===== MAIN CONTENT ===== -->
+  <main class="main-content">
+
+    <!-- ============================= ONGLET COMPARAISON ============================= -->
+    <div id="tab-comparaison" class="tab-panel active">
+
+      <p class="section-title">Chargement des documents</p>
+
+      <!-- Drop Zones -->
+      <div class="drop-zones-row">
+        <!-- Zone Audit (Maître) -->
+        <div class="drop-zone-wrapper">
+          <span class="drop-zone-badge badge-master">MAÎTRE</span>
+          <div class="drop-zone" id="dz-audit" ondragover="handleDragOver(event,'audit')" ondragleave="handleDragLeave(event,'audit')" ondrop="handleDrop(event,'audit')" onclick="document.getElementById('file-audit').click()">
+            <div class="drop-zone-icon" id="dz-audit-icon">
+              <i data-lucide="file-search" style="width:40px;height:40px"></i>
+            </div>
+            <div class="drop-zone-title" id="dz-audit-title">Audit Énergétique [MAÎTRE]</div>
+            <div class="drop-zone-hint" id="dz-audit-hint">Glisser le PDF ici ou cliquer pour parcourir</div>
+            <div class="drop-zone-filename hidden" id="dz-audit-name"></div>
+            <div class="drop-zone-filesize hidden" id="dz-audit-size"></div>
+          </div>
+          <input type="file" id="file-audit" class="file-input" accept=".pdf" onchange="handleFileSelect(event,'audit')" />
+        </div>
+
+        <!-- Zone VT (à comparer) -->
+        <div class="drop-zone-wrapper">
+          <span class="drop-zone-badge badge-compare">À COMPARER</span>
+          <div class="drop-zone" id="dz-vt" ondragover="handleDragOver(event,'vt')" ondragleave="handleDragLeave(event,'vt')" ondrop="handleDrop(event,'vt')" onclick="document.getElementById('file-vt').click()">
+            <div class="drop-zone-icon" id="dz-vt-icon">
+              <i data-lucide="clipboard-check" style="width:40px;height:40px"></i>
+            </div>
+            <div class="drop-zone-title" id="dz-vt-title">Visite Technique [À Comparer]</div>
+            <div class="drop-zone-hint" id="dz-vt-hint">Glisser le PDF ici ou cliquer pour parcourir</div>
+            <div class="drop-zone-filename hidden" id="dz-vt-name"></div>
+            <div class="drop-zone-filesize hidden" id="dz-vt-size"></div>
+          </div>
+          <input type="file" id="file-vt" class="file-input" accept=".pdf" onchange="handleFileSelect(event,'vt')" />
+        </div>
+      </div>
+
+      <!-- Analyse section -->
+      <div class="analyze-section">
+        <div>
+          <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:14px;color:var(--text-dark);margin-bottom:8px;">Vérification des prérequis</div>
+          <div class="analyze-status-text" id="prereq-audit">
+            <span class="status-dot missing" id="dot-audit"></span>
+            Audit PDF : <span id="status-audit" style="font-weight:700">En attente</span>
+          </div>
+          <div class="analyze-status-text" style="margin-top:5px" id="prereq-vt">
+            <span class="status-dot missing" id="dot-vt"></span>
+            Visite Technique PDF : <span id="status-vt" style="font-weight:700">En attente</span>
+          </div>
+          <div class="analyze-status-text" style="margin-top:5px" id="prereq-ref">
+            <span class="status-dot missing" id="dot-ref"></span>
+            Référentiel : <span id="status-ref" style="font-weight:700">En attente</span>
+          </div>
+          <div class="analyze-status-text" style="margin-top:5px" id="prereq-api">
+            <span class="status-dot missing" id="dot-api"></span>
+            Configuration IA : <span id="status-api" style="font-weight:700">Non configuré</span>
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <button class="btn btn-primary" id="btn-analyze" disabled onclick="startAnalysis()" style="font-size:14px;padding:14px 28px;">
+            <i data-lucide="search" style="width:16px;height:16px"></i>
+            Lancer l'analyse
+          </button>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:8px;">Les 2 PDFs et le référentiel sont requis</div>
+        </div>
+      </div>
+
+      <!-- Progress Section -->
+      <div class="progress-section" id="progress-section">
+        <div class="card">
+          <div class="progress-label" id="progress-label">Initialisation de l'analyse...</div>
+          <div class="progress-bar-track">
+            <div class="progress-bar-fill" id="progress-bar" style="width:0%"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-top:8px;">
+            <span style="font-size:11px;color:var(--text-muted)" id="progress-detail">Préparation...</span>
+            <span style="font-size:11px;font-weight:700;color:var(--primary)" id="progress-pct">0%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Alerts area -->
+      <div id="alerts-area"></div>
+
+      <!-- Results Section -->
+      <div class="results-section" id="results-section">
+        <p class="section-title">Résultats de l'analyse</p>
+
+        <!-- KPI Cards -->
+        <div class="kpi-grid">
+          <div class="kpi-card green">
+            <div class="kpi-card-icon">✅</div>
+            <div class="kpi-card-value" id="kpi-conformes">—</div>
+            <div class="kpi-card-label">Conformes</div>
+          </div>
+          <div class="kpi-card orange">
+            <div class="kpi-card-icon">⚠️</div>
+            <div class="kpi-card-value" id="kpi-approx">—</div>
+            <div class="kpi-card-label">Approximatifs</div>
+          </div>
+          <div class="kpi-card red">
+            <div class="kpi-card-icon">❌</div>
+            <div class="kpi-card-value" id="kpi-nonconf">—</div>
+            <div class="kpi-card-label">Non conformes</div>
+          </div>
+          <div class="kpi-card grey">
+            <div class="kpi-card-icon">🔲</div>
+            <div class="kpi-card-value" id="kpi-manquants">—</div>
+            <div class="kpi-card-label">Manquants</div>
+          </div>
+        </div>
+
+        <!-- Conformity Bar -->
+        <div class="conformity-section">
+          <div class="conformity-header">
+            <span class="conformity-label">Taux de conformité global</span>
+            <span class="conformity-pct" id="conformity-pct">—%</span>
+          </div>
+          <div class="conformity-bar-track">
+            <div class="conformity-bar-fill" id="conformity-bar" style="width:0%"></div>
+          </div>
+          <div class="conformity-message" id="conformity-message" style="display:none"></div>
+        </div>
+
+        <!-- View Rapport Button -->
+        <div style="text-align:center;margin-top:20px;">
+          <button class="btn btn-primary" onclick="switchTab('rapport')" style="font-size:14px;padding:14px 28px;">
+            <i data-lucide="bar-chart-2" style="width:16px;height:16px"></i>
+            Voir le rapport détaillé
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ============================= ONGLET RAPPORT ============================= -->
+    <div id="tab-rapport" class="tab-panel">
+
+      <div id="rapport-empty" class="empty-state">
+        <div class="empty-state-icon">📋</div>
+        <div class="empty-state-title">Aucune analyse disponible</div>
+        <div class="empty-state-sub">Lancez une analyse depuis l'onglet Comparaison pour voir le rapport détaillé.</div>
+      </div>
+
+      <div id="rapport-content" class="hidden">
+        <!-- Top bar -->
+        <div class="report-topbar">
+          <div>
+            <div class="section-title" style="margin-bottom:4px">Rapport de conformité détaillé</div>
+            <div style="font-size:12px;color:var(--text-muted)" id="rapport-subtitle"></div>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+            <div class="filter-row">
+              <button class="filter-btn active-all" onclick="setFilter('all')">Tous</button>
+              <button class="filter-btn" onclick="setFilter('VERT')" id="filter-vert">✅ Conformes</button>
+              <button class="filter-btn" onclick="setFilter('ORANGE')" id="filter-orange">⚠️ Approximatifs</button>
+              <button class="filter-btn" onclick="setFilter('ROUGE')" id="filter-rouge">❌ Non conformes</button>
+              <button class="filter-btn" onclick="setFilter('MANQUANT')" id="filter-manquant">🔲 Manquants</button>
+            </div>
+            <button class="btn btn-success" onclick="exportExcel()">
+              <i data-lucide="download" style="width:14px;height:14px"></i>
+              Télécharger Excel
+            </button>
+          </div>
+        </div>
+
+        <!-- Main Table -->
+        <div class="report-table-wrap">
+          <table class="report-table" id="rapport-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Champ Audit</th>
+                <th>Valeur Audit</th>
+                <th>Valeur VT</th>
+                <th>Statut</th>
+                <th>Commentaire IA</th>
+              </tr>
+            </thead>
+            <tbody id="rapport-tbody"></tbody>
+          </table>
+        </div>
+
+        <!-- Missing Fields Section -->
+        <div class="missing-section" id="missing-section">
+          <p class="section-title" style="margin-top:24px">Champs manquants obligatoires</p>
+          <div id="missing-cards-container"></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ============================= ONGLET PARAMETRES ============================= -->
+    <div id="tab-parametres" class="tab-panel">
+
+      <div class="params-grid">
+
+        <!-- === COLONNE GAUCHE : Configuration IA === -->
+        <div>
+          <div class="params-card">
+            <div class="params-card-title">
+              <i data-lucide="cpu" style="width:16px;height:16px"></i>
+              Configuration IA
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Fournisseur</label>
+              <div class="radio-group">
+                <label class="radio-option">
+                  <input type="radio" name="provider" value="openai" id="radio-openai" onchange="onProviderChange()" checked />
+                  OpenAI
+                </label>
+                <label class="radio-option">
+                  <input type="radio" name="provider" value="openrouter" id="radio-openrouter" onchange="onProviderChange()" />
+                  OpenRouter
+                </label>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Clé API</label>
+              <div class="input-group">
+                <input type="password" id="api-key-input" class="form-input" placeholder="sk-..." autocomplete="off" oninput="onConfigChange()" />
+                <button class="input-group-btn" onclick="toggleApiKeyVisibility()" title="Afficher/masquer">
+                  <i data-lucide="eye" style="width:14px;height:14px" id="eye-icon"></i>
+                </button>
+              </div>
+            </div>
+
+            <div class="form-group" id="model-select-group">
+              <label class="form-label">Modèle (OpenAI)</label>
+              <select class="form-select" id="model-select" onchange="onModelChange()">
+                <option value="gpt-4o-mini">gpt-4o-mini (défaut, économique)</option>
+                <option value="gpt-4o">gpt-4o</option>
+                <option value="gpt-4.1">gpt-4.1</option>
+                <option value="o1-mini">o1-mini</option>
+                <option value="custom">Saisie libre...</option>
+              </select>
+            </div>
+
+            <div class="form-group hidden" id="model-custom-group">
+              <label class="form-label">Modèle personnalisé</label>
+              <input type="text" id="model-custom-input" class="form-input" placeholder="ex: openai/gpt-4o" oninput="onConfigChange()" />
+            </div>
+
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:8px;">
+              <button class="btn btn-outline" onclick="testConnection()">
+                <i data-lucide="zap" style="width:14px;height:14px"></i>
+                Tester la connexion
+              </button>
+              <span id="connection-status" class="hidden"></span>
+            </div>
+
+            <div style="margin-top:16px;display:flex;gap:10px;">
+              <button class="btn btn-primary btn-sm" onclick="saveConfig()">
+                <i data-lucide="save" style="width:12px;height:12px"></i>
+                Sauvegarder
+              </button>
+              <button class="btn btn-danger btn-sm" onclick="clearConfig()">
+                <i data-lucide="trash-2" style="width:12px;height:12px"></i>
+                Effacer
+              </button>
+            </div>
+          </div>
+
+          <!-- === Suggestions Lexique IA === -->
+          <div class="params-card" style="margin-top:20px;">
+            <div class="params-card-title">
+              <i data-lucide="book-open" style="width:16px;height:16px"></i>
+              Suggestions Lexique IA
+            </div>
+
+            <div id="suggestions-empty" style="font-size:13px;color:var(--text-muted);padding:12px 0;">
+              Aucune suggestion pour l'instant. Lancez une analyse pour que l'IA propose des nouveaux termes VT.
+            </div>
+
+            <div id="suggestions-container"></div>
+
+            <div id="suggestions-actions" class="hidden" style="margin-top:12px;">
+              <button class="btn btn-success btn-sm" onclick="acceptAllSuggestions()">
+                <i data-lucide="check-circle" style="width:12px;height:12px"></i>
+                Tout accepter
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- === COLONNE DROITE : Référentiel === -->
+        <div>
+          <div class="params-card">
+            <div class="params-card-title">
+              <i data-lucide="database" style="width:16px;height:16px"></i>
+              Référentiel des champs
+            </div>
+
+            <!-- Zone d'alertes locale à l'onglet Paramètres -->
+            <div id="alerts-area-params" style="margin-bottom:10px;"></div>
+
+            <div class="upload-ref-zone" onclick="document.getElementById('file-ref').click()">
+              <i data-lucide="upload" style="width:24px;height:24px;color:var(--primary-light);display:inline-block"></i>
+              <p>Charger <strong>Champs_Audit_Energetique.xlsx</strong></p>
+              <p style="font-size:11px;margin-top:2px">Ou éditez manuellement le tableau ci-dessous</p>
+              <p style="font-size:10px;margin-top:4px;color:#9c5700;">⏳ Le chargement peut prendre 5 à 15 secondes — si Chrome affiche "Page ne répondant pas", cliquez sur <strong>Attendre</strong></p>
+            </div>
+            <input type="file" id="file-ref" class="file-input" accept=".xlsx,.xls" onchange="handleRefFile(event)" />
+
+            <div class="toolbar">
+              <button class="btn btn-outline btn-sm" onclick="addRefRow()">
+                <i data-lucide="plus" style="width:12px;height:12px"></i>
+                Ajouter une ligne
+              </button>
+              <button class="btn btn-primary btn-sm" onclick="saveReferentiel()">
+                <i data-lucide="save" style="width:12px;height:12px"></i>
+                Sauvegarder
+              </button>
+              <button class="btn btn-danger btn-sm" onclick="resetReferentiel()">
+                <i data-lucide="rotate-ccw" style="width:12px;height:12px"></i>
+                Réinitialiser
+              </button>
+              <button class="btn btn-outline btn-sm" onclick="downloadRefExcel()">
+                <i data-lucide="download" style="width:12px;height:12px"></i>
+                Exporter
+              </button>
+            </div>
+
+            <div class="ref-table-wrap">
+              <table class="ref-table">
+                <thead>
+                  <tr>
+                    <th style="width:32px;text-align:center">#</th>
+                    <th>Nom du champ</th>
+                    <th>Check</th>
+                    <th>Lex. F</th>
+                    <th>Lex. G</th>
+                    <th>Lex. H</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="ref-tbody"></tbody>
+              </table>
+            </div>
+
+            <div style="font-size:11px;color:var(--text-muted);margin-top:8px;">
+              <strong>Check :</strong> valeur extraite de la col. D du fichier xlsx — détermine si le champ est analysé par l'IA<br>
+              <strong>Lex. F/G/H :</strong> colonnes F, G, H du fichier — termes équivalents dans la Visite Technique
+            </div>
+
+            <div style="margin-top:12px;font-size:12px;font-weight:600;color:var(--text-muted);" id="ref-count-label">0 champ(s) chargé(s)</div>
+          </div>
+        </div>
+
+      </div><!-- end params-grid -->
+
+    </div><!-- end tab-parametres -->
+
+    <!-- ============================= ONGLET HISTORIQUE ============================= -->
+    <div id="tab-historique" class="tab-panel">
+
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <p class="section-title" style="margin:0">Historique des analyses</p>
+        <button class="btn btn-danger btn-sm" onclick="clearHistory()">
+          <i data-lucide="trash-2" style="width:12px;height:12px"></i>
+          Tout effacer
+        </button>
+      </div>
+
+      <div id="history-empty" class="empty-state">
+        <i data-lucide="clock" style="width:40px;height:40px;color:var(--text-muted);margin-bottom:12px"></i>
+        <p style="color:var(--text-muted)">Aucune analyse enregistrée.<br>Lancez une analyse pour commencer l'historique.</p>
+      </div>
+
+      <div id="history-table-wrap" class="ref-table-wrap hidden">
+        <table class="ref-table" style="width:100%">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Heure</th>
+              <th>Audit (Maître)</th>
+              <th>Visite Technique</th>
+              <th>Score</th>
+              <th style="color:#276221">✅</th>
+              <th style="color:#7A4A00">⚠️</th>
+              <th style="color:#820000">❌</th>
+              <th style="color:#444">—</th>
+              <th>Fichier exporté</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="history-tbody"></tbody>
+        </table>
+      </div>
+
+    </div><!-- end tab-historique -->
+
+  </main>
+
+  <footer class="app-footer">
+    OT Énergie — AuditVT Comparator v1.0 &nbsp;|&nbsp; Analyse locale et sécurisée — aucune donnée envoyée sans votre consentement &nbsp;|&nbsp; 2026
+  </footer>
+
+  <!-- ===== JAVASCRIPT ===== -->
+  <script>
+    'use strict';
+
+    // =====================================================================
+    // STATE
+    // =====================================================================
+    const state = {
+      auditText: null,
+      auditFileName: null,
+      auditFileSize: null,
+      vtText: null,
+      vtFileName: null,
+      vtFileSize: null,
+      referentiel: [],
+      checkOptions: [],
+      analysisResults: [],
+      lexiqueSuggestions: [],
+      config: {
+        provider: 'openai',
+        apiKey: '',
+        model: 'gpt-4o-mini',
+        customModel: ''
+      },
+      analysisRunning: false
+    };
+
+    const STORAGE_KEY_CONFIG  = 'otenergie_config';
+    const STORAGE_KEY_REF     = 'otenergie_referentiel';
+    const STORAGE_KEY_HISTORY = 'otenergie_history';
+
+    // =====================================================================
+    // INIT
+    // =====================================================================
+    document.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      loadConfig();
+      loadReferentielFromStorage();
+      loadHistory();
+      updatePrereqs();
+    });
+
+    // =====================================================================
+    // TAB NAVIGATION
+    // =====================================================================
+    function switchTab(name) {
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+      document.getElementById('tab-' + name).classList.add('active');
+      document.querySelector('[data-tab="' + name + '"]').classList.add('active');
+      lucide.createIcons();
+    }
+
+    // =====================================================================
+    // FILE DROP / UPLOAD — PDFs
+    // =====================================================================
+    function handleDragOver(e, side) {
+      e.preventDefault();
+      document.getElementById('dz-' + side).classList.add('drag-over');
+    }
+
+    function handleDragLeave(e, side) {
+      document.getElementById('dz-' + side).classList.remove('drag-over');
+    }
+
+    function handleDrop(e, side) {
+      e.preventDefault();
+      const dz = document.getElementById('dz-' + side);
+      dz.classList.remove('drag-over');
+      const files = e.dataTransfer.files;
+      if (files.length > 0) processPdfFile(files[0], side);
+    }
+
+    function handleFileSelect(e, side) {
+      if (e.target.files.length > 0) {
+        const file = e.target.files[0];
+        e.target.value = '';  // Reset so même fichier peut être re-sélectionné
+        processPdfFile(file, side);
+      }
+    }
+
+    function processPdfFile(file, side) {
+      if (!file.type.includes('pdf') && !file.name.toLowerCase().endsWith('.pdf')) {
+        showAlert('alerts-area', 'error', 'Fichier non supporté. Seuls les fichiers PDF sont acceptés.');
+        return;
+      }
+      setDropZoneLoading(side, file.name, file.size);
+      const reader = new FileReader();
+      reader.onload = async function(ev) {
+        try {
+          const arrayBuffer = ev.target.result;
+          const text = await extractPdfText(arrayBuffer);
+          if (side === 'audit') {
+            state.auditText = text;
+            state.auditFileName = file.name;
+            state.auditFileSize = file.size;
+          } else {
+            state.vtText = text;
+            state.vtFileName = file.name;
+            state.vtFileSize = file.size;
+          }
+          setDropZoneLoaded(side, file.name, file.size, text);
+          updatePrereqs();
+        } catch (err) {
+          setDropZoneError(side);
+          showAlert('alerts-area', 'error', 'Erreur lors de la lecture du PDF : ' + err.message);
+        }
+      };
+      reader.onerror = function() {
+        setDropZoneError(side);
+        showAlert('alerts-area', 'error', 'Impossible de lire le fichier "' + file.name + '". Vérifiez qu\'il n\'est pas corrompu ou déjà ouvert.');
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    async function extractPdfText(arrayBuffer) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      let fullText = '';
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        const pageText = content.items.map(item => item.str).join(' ');
+        fullText += pageText + '\n';
+      }
+      return fullText.trim();
+    }
+
+    function setDropZoneLoading(side, name, size) {
+      const dz = document.getElementById('dz-' + side);
+      dz.classList.remove('loaded');
+      const hint = document.getElementById('dz-' + side + '-hint');
+      hint.textContent = 'Extraction du texte en cours...';
+      hint.classList.remove('hidden');
+      document.getElementById('dz-' + side + '-name').classList.add('hidden');
+      document.getElementById('dz-' + side + '-size').classList.add('hidden');
+    }
+
+    function setDropZoneLoaded(side, name, size, text) {
+      const dz = document.getElementById('dz-' + side);
+      dz.classList.add('loaded');
+      document.getElementById('dz-' + side + '-title').textContent = side === 'audit' ? 'Audit Énergétique [MAÎTRE]' : 'Visite Technique [À Comparer]';
+      document.getElementById('dz-' + side + '-hint').classList.add('hidden');
+
+      const fnEl = document.getElementById('dz-' + side + '-name');
+      fnEl.textContent = name;
+      fnEl.classList.remove('hidden');
+
+      const szEl = document.getElementById('dz-' + side + '-size');
+      szEl.textContent = formatSize(size) + ' — ' + countWords(text) + ' mots extraits';
+      szEl.classList.remove('hidden');
+
+      const wordCount = countWords(text);
+      if (wordCount < 100) {
+        showAlert('alerts-area', 'warning', 'PDF ' + (side === 'audit' ? 'Audit' : 'Visite Technique') + ' : extraction partielle — le document est peut-être scanné ou protégé (' + wordCount + ' mots extraits).');
+      }
+
+      lucide.createIcons();
+    }
+
+    function setDropZoneError(side) {
+      const hint = document.getElementById('dz-' + side + '-hint');
+      hint.textContent = 'Erreur de lecture. Réessayez.';
+      hint.classList.remove('hidden');
+    }
+
+    // =====================================================================
+    // PREREQS + ANALYZE BUTTON
+    // =====================================================================
+    function updatePrereqs() {
+      const auditOk = !!state.auditText;
+      const vtOk    = !!state.vtText;
+      const refOk   = state.referentiel.length > 0;
+      const apiOk   = !!state.config.apiKey;
+
+      setPrereq('audit', auditOk, auditOk ? state.auditFileName : 'En attente');
+      setPrereq('vt', vtOk, vtOk ? state.vtFileName : 'En attente');
+      setPrereq('ref', refOk, refOk ? state.referentiel.length + ' champ(s)' : 'Non chargé — voir Paramètres');
+      setPrereq('api', apiOk, apiOk ? 'Configuré' : 'Non configuré — voir Paramètres');
+
+      const canAnalyze = auditOk && vtOk && refOk;
+      document.getElementById('btn-analyze').disabled = !canAnalyze || state.analysisRunning;
+    }
+
+    function setPrereq(id, ok, label) {
+      document.getElementById('dot-' + id).className = 'status-dot ' + (ok ? 'ok' : 'missing');
+      document.getElementById('status-' + id).textContent = label;
+    }
+
+    // =====================================================================
+    // ANALYSIS
+    // =====================================================================
+    async function startAnalysis() {
+      if (state.analysisRunning) return;
+      clearAlerts();
+
+      const refFields = state.referentiel.filter(r => (r.check || '').toUpperCase() === 'OUI');
+      if (refFields.length === 0) {
+        showAlert('alerts-area', 'warning', 'Aucun champ avec statut CHECK = OUI dans le référentiel. Activez des champs dans l\'onglet Paramètres.');
+        return;
+      }
+
+      // Vérification clé API obligatoire
+      if (!state.config.apiKey || !state.config.apiKey.trim()) {
+        showAlert('alerts-area', 'error', 'Clé API manquante — rendez-vous dans l\'onglet Paramètres pour configurer votre clé OpenAI ou OpenRouter avant de lancer l\'analyse.');
+        return;
+      }
+
+      state.analysisRunning = true;
+      document.getElementById('btn-analyze').disabled = true;
+      document.getElementById('results-section').classList.remove('visible');
+      showProgress(true);
+      updateProgress(0, 'Initialisation de l\'analyse...', 'Préparation des données...');
+
+      state.analysisResults = [];
+      state.lexiqueSuggestions = [];
+
+      // Step 1: Prepare text excerpts
+      const auditExcerpt = state.auditText.substring(0, 15000);
+      const vtExcerpt    = state.vtText.substring(0, 15000);
+
+      const batchSize = 5;
+      const batches = chunkArray(refFields, batchSize);
+      let processed = 0;
+
+      for (let b = 0; b < batches.length; b++) {
+        const batch = batches[b];
+        const batchStart = b * batchSize;
+        const progressPct = Math.round((processed / refFields.length) * 90);
+        updateProgress(
+          progressPct,
+          'Analyse du champ ' + (batchStart + 1) + '–' + Math.min(batchStart + batchSize, refFields.length) + ' / ' + refFields.length + ' : ' + batch[0].nom,
+          'Lot ' + (b + 1) + ' / ' + batches.length + ' — Interrogation IA...'
+        );
+
+        let batchResults;
+        try {
+          batchResults = await callAI(batch, auditExcerpt, vtExcerpt);
+        } catch (err) {
+          console.error('Erreur IA batch ' + b + ':', err);
+          showProgress(false);
+          state.analysisRunning = false;
+          document.getElementById('btn-analyze').disabled = false;
+          showAlert('alerts-area', 'error',
+            'Erreur API IA (lot ' + (b + 1) + '/' + batches.length + ') : ' + err.message +
+            ' — Vérifiez votre clé API, le modèle sélectionné, et votre connexion internet.');
+          return;
+        }
+
+        state.analysisResults.push(...batchResults.resultats);
+        if (batchResults.nouveaux_termes) {
+          state.lexiqueSuggestions.push(...batchResults.nouveaux_termes);
+        }
+
+        processed += batch.length;
+        await sleep(100);
+      }
+
+      updateProgress(95, 'Compilation des résultats...', 'Calcul des indicateurs...');
+      await sleep(200);
+
+      updateProgress(100, 'Analyse terminée !', 'Rapport prêt.');
+      await sleep(400);
+
+      showProgress(false);
+      renderResults();
+      renderRapport();
+      renderSuggestions();
+      saveAnalysisToHistory();
+      state.analysisRunning = false;
+      document.getElementById('btn-analyze').disabled = false;
+    }
+
+    async function callAI(fields, auditText, vtText) {
+      const systemPrompt = `Tu es Sonia, assistante experte en audit énergétique de bâtiments pour OT Énergie.
+Tu analyses des documents d'audit énergétique et des visites techniques (VT) pour vérifier leur conformité.
+
+RÈGLE ABSOLUE : Le document Audit est le MAÎTRE. Tu compares la VT à l'Audit, jamais l'inverse.
+
+Pour chaque champ fourni (issu du référentiel) :
+1. Localise la (ou les) valeur(s) dans l'Audit
+2. Cherche la (ou les) valeur(s) correspondante(s) dans la VT en utilisant le lexique de synonymes
+3. Compare et retourne un statut :
+   - "VERT" : correspondance exacte ou quasi-exacte
+   - "ORANGE" : même sens mais formulation/unité/arrondi différent
+   - "ROUGE" : valeurs contradictoires ou incompatibles
+   - "MANQUANT" : champ non trouvé dans la VT
+4. Fournis un commentaire bref et factuel (max 120 caractères)
+5. Si tu identifies un terme VT non présent dans le lexique, signale-le dans "nouveaux_termes"
+
+RÈGLE MULTI-INSTANCES (CRITIQUE) :
+Certains champs peuvent avoir plusieurs instances dans l'Audit : plusieurs parois (murs, planchers, toitures),
+plusieurs menuiseries (fenêtres, portes), plusieurs équipements (chaudières, VMC, etc.).
+- Si un champ a N instances distinctes dans l'Audit → retourne N résultats séparés pour ce champ.
+- Chaque résultat doit avoir un "instance_label" décrivant précisément l'élément (ex: "Mur Nord", "Fenêtre façade Sud", "Plancher bas sur cave", "Chaudière principale").
+- Vérifie CHAQUE instance dans la VT SÉPARÉMENT et indépendamment.
+- Si une instance spécifique de l'Audit est absente de la VT → statut "MANQUANT" pour cette instance.
+- Si le champ n'a qu'une seule instance → retourne 1 résultat avec instance_label = null.
+- Ne regroupe JAMAIS plusieurs instances en un seul résultat.
+
+Réponds UNIQUEMENT en JSON valide, sans markdown, sans commentaire.`;
+
+      const userContent = `TEXTE DE L'AUDIT ÉNERGÉTIQUE (MAÎTRE) :
+${auditText}
+
+---
+
+TEXTE DE LA VISITE TECHNIQUE (À COMPARER) :
+${vtText}
+
+---
+
+CHAMPS À ANALYSER :
+${JSON.stringify(fields.map(f => ({
+  id_champ: f.id,
+  nom: f.nom,
+  categorie: f.categorie,
+  description: f.description,
+  lexique_vt: f.lexique
+})), null, 2)}
+
+FORMAT DE RÉPONSE (JSON strict) :
+{
+  "resultats": [
+    {
+      "id_champ": "...",
+      "instance_label": "...",
+      "valeur_audit": "...",
+      "valeur_vt": "...",
+      "statut": "VERT|ORANGE|ROUGE|MANQUANT",
+      "commentaire": "..."
+    }
+  ],
+  "nouveaux_termes": [
+    { "champ_id": "...", "terme_suggere": "..." }
+  ]
+}
+RAPPEL : instance_label = null si le champ n'a qu'une instance. Si plusieurs instances, chaque instance a son propre objet dans "resultats" avec le même id_champ et un instance_label distinct.`;
+
+      const endpoint = state.config.provider === 'openai'
+        ? 'https://api.openai.com/v1/chat/completions'
+        : 'https://openrouter.ai/api/v1/chat/completions';
+
+      const model = state.config.model === 'custom'
+        ? state.config.customModel
+        : state.config.model;
+
+      const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + state.config.apiKey
+      };
+
+      if (state.config.provider === 'openrouter') {
+        headers['HTTP-Referer'] = window.location.href;
+        headers['X-Title'] = 'AuditVT Comparator - OT Energie';
+      }
+
+      // AbortSignal compatible avec tous navigateurs
+      const abortCtrl = new AbortController();
+      const timeoutId = setTimeout(function() { abortCtrl.abort(); }, 30000);
+
+      let resp;
+      try {
+        resp = await fetch(endpoint, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            model: model,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userContent }
+            ],
+            temperature: 0.1,
+            max_tokens: 3500
+          }),
+          signal: abortCtrl.signal
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
+
+      if (!resp.ok) {
+        const errText = await resp.text();
+        throw new Error('API HTTP ' + resp.status + ' : ' + errText.substring(0, 300));
+      }
+
+      const data = await resp.json();
+      const raw = data.choices[0].message.content.trim();
+
+      // Strip markdown si présent
+      let jsonStr = raw;
+      if (raw.startsWith('```')) {
+        jsonStr = raw.replace(/^```[a-z]*\n?/, '').replace(/\n?```$/, '');
+      }
+
+      let parsed;
+      try {
+        parsed = JSON.parse(jsonStr);
+      } catch (parseErr) {
+        throw new Error('Réponse IA non JSON valide. Début reçu : ' + jsonStr.substring(0, 150));
+      }
+      return parsed;
+    }
+
+    function generateFallbackResults(fields) {
+      const statuses = ['MANQUANT', 'MANQUANT', 'MANQUANT'];
+      return {
+        resultats: fields.map((f, i) => ({
+          id_champ: f.id,
+          valeur_audit: '— (analyse IA indisponible)',
+          valeur_vt: '— (analyse IA indisponible)',
+          statut: 'MANQUANT',
+          commentaire: 'Analyse IA non disponible — configurez la clé API'
+        })),
+        nouveaux_termes: []
+      };
+    }
+
+    // =====================================================================
+    // RENDER RESULTS (Onglet Comparaison)
+    // =====================================================================
+    function renderResults() {
+      const results = state.analysisResults;
+      const total     = results.length;
+      const conformes = results.filter(r => r.statut === 'VERT').length;
+      const approx    = results.filter(r => r.statut === 'ORANGE').length;
+      const nonconf   = results.filter(r => r.statut === 'ROUGE').length;
+      const manquants = results.filter(r => r.statut === 'MANQUANT').length;
+
+      document.getElementById('kpi-conformes').textContent = conformes;
+      document.getElementById('kpi-approx').textContent = approx;
+      document.getElementById('kpi-nonconf').textContent = nonconf;
+      document.getElementById('kpi-manquants').textContent = manquants;
+
+      const pct = total > 0 ? Math.round((conformes / total) * 100) : 0;
+      document.getElementById('conformity-pct').textContent = pct + '%';
+
+      const barEl = document.getElementById('conformity-bar');
+      barEl.style.width = pct + '%';
+      barEl.className = 'conformity-bar-fill ' + (pct >= 95 ? 'high' : pct >= 80 ? 'medium' : 'low');
+
+      const msgEl = document.getElementById('conformity-message');
+      msgEl.style.display = 'flex';
+      if (pct >= 95) {
+        msgEl.className = 'conformity-message msg-green';
+        msgEl.innerHTML = '🟢 <strong>Dossier probablement recevable</strong> — Taux de conformité excellent (' + pct + '%)';
+      } else if (pct >= 80) {
+        msgEl.className = 'conformity-message msg-yellow';
+        msgEl.innerHTML = '🟡 <strong>Dossier à vérifier</strong> — Quelques écarts à corriger (' + pct + '%)';
+      } else {
+        msgEl.className = 'conformity-message msg-red';
+        msgEl.innerHTML = '🔴 <strong>Dossier non conforme</strong> — Corrections importantes requises (' + pct + '%)';
+      }
+
+      document.getElementById('results-section').classList.add('visible');
+      lucide.createIcons();
+    }
+
+    // =====================================================================
+    // RENDER RAPPORT (Onglet Rapport)
+    // =====================================================================
+    let currentFilter = 'all';
+
+    function renderRapport() {
+      if (state.analysisResults.length === 0) {
+        document.getElementById('rapport-empty').classList.remove('hidden');
+        document.getElementById('rapport-content').classList.add('hidden');
+        return;
+      }
+
+      document.getElementById('rapport-empty').classList.add('hidden');
+      document.getElementById('rapport-content').classList.remove('hidden');
+
+      const date = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
+      document.getElementById('rapport-subtitle').textContent =
+        (state.auditFileName || 'Audit') + ' vs ' + (state.vtFileName || 'VT') + ' — ' + date;
+
+      renderTable(currentFilter);
+      renderMissingCards();
+      lucide.createIcons();
+    }
+
+    function renderTable(filter) {
+      const tbody = document.getElementById('rapport-tbody');
+      tbody.innerHTML = '';
+
+      const filtered = filter === 'all'
+        ? state.analysisResults
+        : state.analysisResults.filter(r => r.statut === filter);
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:28px;color:var(--text-muted);font-style:italic;">Aucun résultat pour ce filtre.</td></tr>';
+        return;
+      }
+
+      // Ordre des sections depuis le référentiel
+      const sectionOrder = [];
+      const sectionSeen = new Set();
+      state.referentiel.forEach(function(r) {
+        const s = r.parentSection || r.section || '';
+        if (s && !sectionSeen.has(s)) { sectionSeen.add(s); sectionOrder.push(s); }
+      });
+
+      // Grouper les résultats filtrés par section
+      const bySection = {};
+      const noSection = [];
+      filtered.forEach(function(r) {
+        const sec = getFieldSection(r.id_champ) || '';
+        if (!sec) { noSection.push(r); return; }
+        if (!bySection[sec]) bySection[sec] = [];
+        bySection[sec].push(r);
+      });
+
+      let rowNum = 0;
+
+      function appendDataRows(rows) {
+        rows.forEach(function(r) {
+          rowNum++;
+          const row = document.createElement('tr');
+          const instanceTag = r.instance_label
+            ? '<br><span style="display:inline-block;margin-top:3px;padding:1px 7px;background:rgba(27,63,139,0.08);border-radius:10px;font-size:10px;color:var(--primary);font-weight:600">' + escHtml(r.instance_label) + '</span>'
+            : '';
+          row.innerHTML =
+            '<td>' + rowNum + '</td>' +
+            '<td><strong>' + escHtml(r.id_champ || '') + '</strong><br><span style="font-size:11px;color:var(--text-muted)">' + escHtml(getFieldNom(r.id_champ)) + '</span>' + instanceTag + '</td>' +
+            '<td style="max-width:180px;font-size:12px">' + escHtml(r.valeur_audit || '\u2014') + '</td>' +
+            '<td style="max-width:180px;font-size:12px">' + escHtml(r.valeur_vt || '\u2014') + '</td>' +
+            '<td>' + statusChip(r.statut) + '</td>' +
+            '<td style="max-width:200px;font-size:12px;color:var(--text-muted)">' + escHtml(r.commentaire || '\u2014') + '</td>';
+          tbody.appendChild(row);
+        });
+      }
+
+      // Sections dans l'ordre du référentiel
+      sectionOrder.forEach(function(sec) {
+        const rows = bySection[sec];
+        if (!rows || !rows.length) return;
+        const secRow = document.createElement('tr');
+        secRow.className = 'rapport-section-row';
+        secRow.innerHTML = '<td colspan="6">&#9656; ' + escHtml(sec) + '<span class="rapport-section-count">(' + rows.length + ' champ' + (rows.length > 1 ? 's' : '') + ')</span></td>';
+        tbody.appendChild(secRow);
+        appendDataRows(rows);
+      });
+
+      // Champs sans section (fallback)
+      if (noSection.length > 0) {
+        appendDataRows(noSection);
+      }
+    }
+
+    function renderMissingCards() {
+      const missingSection = document.getElementById('missing-section');
+      const container = document.getElementById('missing-cards-container');
+      container.innerHTML = '';
+
+      const missing = state.analysisResults.filter(r => r.statut === 'MANQUANT');
+      if (missing.length === 0) {
+        missingSection.style.display = 'none';
+        return;
+      }
+
+      missingSection.style.display = 'block';
+
+      missing.forEach(r => {
+        const field = state.referentiel.find(f => f.id === r.id_champ) || {};
+        const div = document.createElement('div');
+        div.className = 'missing-card';
+        div.innerHTML = `
+          <span class="missing-card-id">${escHtml(r.id_champ || '—')}</span>
+          <div>
+            <div class="missing-card-field">${escHtml(field.nom || r.id_champ || '—')}${r.instance_label ? ' <span style="font-size:10px;font-weight:600;background:rgba(27,63,139,0.1);padding:1px 6px;border-radius:8px;color:var(--primary)">' + escHtml(r.instance_label) + '</span>' : ''}</div>
+            <div class="missing-card-cat">${escHtml(field.categorie || getFieldSection(r.id_champ) || '—')}</div>
+          </div>
+          <div class="missing-card-suggestion">
+            ${escHtml(r.commentaire || 'Ce champ est absent ou non identifiable dans la Visite Technique.')}
+          </div>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function setFilter(f) {
+      currentFilter = f;
+      document.querySelectorAll('.filter-btn').forEach(b => {
+        b.className = 'filter-btn';
+      });
+
+      if (f === 'all') {
+        document.querySelector('.filter-btn').className = 'filter-btn active-all';
+      } else {
+        const map = { 'VERT': 'active-vert', 'ORANGE': 'active-orange', 'ROUGE': 'active-rouge', 'MANQUANT': 'active-manquant' };
+        const id = { 'VERT': 'filter-vert', 'ORANGE': 'filter-orange', 'ROUGE': 'filter-rouge', 'MANQUANT': 'filter-manquant' };
+        if (id[f]) document.getElementById(id[f]).className = 'filter-btn ' + map[f];
+      }
+
+      renderTable(f);
+    }
+
+    function statusChip(statut) {
+      const map = {
+        'VERT':     ['status-vert', '✅', 'Conforme'],
+        'ORANGE':   ['status-orange', '⚠️', 'Approximatif'],
+        'ROUGE':    ['status-rouge', '❌', 'Non conforme'],
+        'MANQUANT': ['status-manquant', '🔲', 'Manquant']
+      };
+      const [cls, icon, label] = map[statut] || ['status-manquant', '🔲', statut];
+      return `<span class="status-chip ${cls}">${icon} ${label}</span>`;
+    }
+
+    function getFieldNom(id) {
+      const f = state.referentiel.find(r => r.id === id);
+      return f ? f.nom : '';
+    }
+
+    function getFieldSection(id) {
+      const f = state.referentiel.find(r => r.id === id);
+      return f ? (f.parentSection || f.section || '') : '';
+    }
+
+    // Propage le nom de section des lignes-titre vers les lignes de données
+    function enrichReferentielSections() {
+      let currentSection = '';
+      state.referentiel.forEach(function(r) {
+        if (r.section && !r.nom) {
+          currentSection = r.section; // ligne titre de section
+          r.parentSection = r.section;
+        } else {
+          r.parentSection = currentSection; // ligne de données hérite la section courante
+        }
+      });
+    }
+
+    // =====================================================================
+    // EXPORT EXCEL
+    // =====================================================================
+    function exportExcel() {
+      if (state.analysisResults.length === 0) {
+        showAlert('alerts-area', 'warning', 'Aucune donnee a exporter. Lancez d\'abord une analyse.');
+        return;
+      }
+
+      const wb   = XLSX.utils.book_new();
+      const date = new Date().toLocaleDateString('fr-FR');
+
+      // ── Palette de base ──────────────────────────────────────────────────
+      const BLU_DARK = '1B3F8B';   // Bleu OT Énergie foncé (titres, headers)
+      const BLU_MED  = '2D5096';   // Bleu medium (sous-titres)
+      const BLU_SECT = '3F5F9E';   // Bleu acier (titres de section)
+      const WHT      = 'FFFFFF';
+      const GRY_META = 'EEF2FA';   // Gris bleuté très clair (lignes meta)
+      const GRY_LINE = 'C0CBE0';   // Bordures
+
+      // Pastels statut — fond de ligne clair + badge coloré pour la colonne Statut
+      const GRP = {
+        VERT:     { rowBg: 'E2F4E2', rowFg: '1A4D1A', badgeBg: '2E7D32' },
+        ORANGE:   { rowBg: 'FFF0D6', rowFg: '7F3D00', badgeBg: 'EF6C00' },
+        ROUGE:    { rowBg: 'FFE4E4', rowFg: 'B71C1C', badgeBg: 'C62828' },
+        MANQUANT: { rowBg: 'E8ECF2', rowFg: '37474F', badgeBg: '546E7A' },
+      };
+
+      // ── Stats globales ────────────────────────────────────────────────────
+      const conformes  = state.analysisResults.filter(r => r.statut === 'VERT').length;
+      const total      = state.analysisResults.length;
+      const pct        = total > 0 ? Math.round((conformes / total) * 100) : 0;
+
+      // Couleur de la ligne score selon résultat
+      const SCORE_BG = pct >= 95 ? 'D9F2D9' : pct >= 80 ? 'FFF0D6' : 'FFE4E4';
+      const SCORE_FG = pct >= 95 ? '1A4D1A' : pct >= 80 ? '7F3D00' : 'B71C1C';
+      const SCORE_BD = pct >= 95 ? '2E7D32' : pct >= 80 ? 'EF6C00' : 'C62828';
+
+      // ── Helpers ──────────────────────────────────────────────────────────
+      function bdr(rgb, thick) {
+        const s = { style: thick ? 'medium' : 'thin', color: { rgb: rgb } };
+        return { top: s, bottom: s, left: { style: 'thin', color: { rgb: GRY_LINE } }, right: { style: 'thin', color: { rgb: GRY_LINE } } };
+      }
+
+      function cs(bg, fg, bold, wrap, sz, align, italic) {
+        return {
+          fill: { patternType: 'solid', fgColor: { rgb: bg } },
+          font: { name: 'Calibri', sz: sz || 10, color: { rgb: fg }, bold: !!bold, italic: !!italic },
+          border: { top: { style: 'thin', color: { rgb: GRY_LINE } }, bottom: { style: 'thin', color: { rgb: GRY_LINE } },
+                    left: { style: 'thin', color: { rgb: GRY_LINE } }, right: { style: 'thin', color: { rgb: GRY_LINE } } },
+          alignment: { vertical: 'center', wrapText: !!wrap, horizontal: align || 'left' }
+        };
+      }
+
+      function applyRow(ws, r, nCols, style) {
+        for (let c = 0; c < nCols; c++) {
+          const ref = XLSX.utils.encode_cell({ r, c });
+          if (!ws[ref]) ws[ref] = { v: '', t: 's' };
+          ws[ref].s = style;
+        }
+      }
+
+      function applyCell(ws, r, c, style) {
+        const ref = XLSX.utils.encode_cell({ r, c });
+        if (!ws[ref]) ws[ref] = { v: '', t: 's' };
+        ws[ref].s = style;
+      }
+
+      // ── Onglet 1 : Rapport de conformité ─────────────────────────────────
+      const N1 = 5; // Libellé | Valeur Audit | Valeur VT | Statut | Commentaire
+
+      const sectionOrder = [];
+      const sectionSeen  = new Set();
+      state.referentiel.forEach(function(r) {
+        const s = r.parentSection || r.section || '';
+        if (s && !sectionSeen.has(s)) { sectionSeen.add(s); sectionOrder.push(s); }
+      });
+
+      // Bloc titre (7 lignes) — META1 = 7
+      const ws1Rows = [
+        ['OT \u00C9NERGIE', '', '', '', ''],
+        ['Rapport de Conformit\u00E9  \u2014  Revue Audit \u00C9nerg\u00E9tique', '', '', '', ''],
+        ['Rapport g\u00E9n\u00E9r\u00E9 le :', date, '', '', ''],
+        ['Audit (Ma\u00EEtre) :', state.auditFileName || '-', '', '', ''],
+        ['Visite Technique :', state.vtFileName || '-', '', '', ''],
+        ['Score global : ' + pct + '% de conformit\u00E9  \u2014  ' + conformes + ' champs conformes sur ' + total, '', '', '', ''],
+        ['Libell\u00E9', 'Valeur Audit', 'Valeur VT', 'Statut', 'Commentaire IA'],
+      ];
+      const META1   = ws1Rows.length; // 7
+      const ws1Meta = [];
+
+      function pushSection(secName, rows) {
+        if (!rows.length) return;
+        ws1Rows.push(['\u25B8  ' + secName.toUpperCase() + '   (' + rows.length + ' champ' + (rows.length > 1 ? 's' : '') + ')', '', '', '', '']);
+        ws1Meta.push({ type: 'section' });
+        rows.forEach(function(r) {
+          const libelle = r.instance_label ? getFieldNom(r.id_champ) + ' \u2014 ' + r.instance_label : getFieldNom(r.id_champ);
+          ws1Rows.push([libelle, r.valeur_audit || '-', r.valeur_vt || '-', r.statut, r.commentaire || '']);
+          ws1Meta.push({ type: 'data', statut: r.statut });
+        });
+      }
+
+      sectionOrder.forEach(function(sec) {
+        pushSection(sec, state.analysisResults.filter(r => getFieldSection(r.id_champ) === sec));
+      });
+      const noSec = state.analysisResults.filter(r => !getFieldSection(r.id_champ));
+      if (noSec.length) pushSection('Autres', noSec);
+
+      const ws1 = XLSX.utils.aoa_to_sheet(ws1Rows);
+      ws1['!cols'] = [{ wch:32 }, { wch:22 }, { wch:22 }, { wch:13 }, { wch:46 }];
+      ws1['!views'] = [{ state: 'frozen', xSplit: 0, ySplit: META1 }];
+
+      // Row 0 : Nom société — grand, bleu foncé, blanc, gras
+      applyRow(ws1, 0, N1, cs(BLU_DARK, WHT, true, false, 14, 'left'));
+
+      // Row 1 : Sous-titre — bleu medium, blanc, italique
+      applyRow(ws1, 1, N1, cs(BLU_MED, WHT, false, false, 11, 'left', true));
+
+      // Rows 2-4 : Meta — fond gris bleuté, label gras
+      for (let r = 2; r <= 4; r++) {
+        applyCell(ws1, r, 0, cs(GRY_META, BLU_DARK, true, false, 10, 'left'));
+        for (let c = 1; c < N1; c++) applyCell(ws1, r, c, cs(GRY_META, '2C3E70', false, false, 10, 'left'));
+      }
+
+      // Row 5 : Score global — couleur selon résultat, gras, bordure colorée
+      applyRow(ws1, 5, N1, cs(SCORE_BG, SCORE_FG, true, false, 11, 'left'));
+      for (let c = 0; c < N1; c++) {
+        const ref = XLSX.utils.encode_cell({ r: 5, c });
+        if (ws1[ref]) ws1[ref].s.border = {
+          top:    { style: 'medium', color: { rgb: SCORE_BD } },
+          bottom: { style: 'medium', color: { rgb: SCORE_BD } },
+          left:   { style: 'thin',   color: { rgb: GRY_LINE  } },
+          right:  { style: 'thin',   color: { rgb: GRY_LINE  } }
+        };
+      }
+
+      // Row 6 : En-tête colonnes — bleu foncé, blanc, gras, centré
+      applyRow(ws1, 6, N1, cs(BLU_DARK, WHT, true, false, 10, 'center'));
+
+      // Hauteurs
+      const heights1 = [];
+      for (let i = 0; i < META1 + ws1Meta.length; i++) {
+        if      (i === 0) heights1.push({ hpt: 26 });
+        else if (i === 1) heights1.push({ hpt: 20 });
+        else if (i === 5) heights1.push({ hpt: 19 });
+        else if (i === 6) heights1.push({ hpt: 18 });
+        else { const m = ws1Meta[i - META1]; heights1.push({ hpt: m && m.type === 'section' ? 17 : 14 }); }
+      }
+      ws1['!rows'] = heights1;
+
+      // Lignes de données
+      ws1Meta.forEach(function(m, i) {
+        const ri = META1 + i;
+        if (m.type === 'section') {
+          applyRow(ws1, ri, N1, cs(BLU_SECT, WHT, true, false, 10, 'left'));
+        } else {
+          const g = GRP[m.statut] || GRP.MANQUANT;
+          for (let c = 0; c < N1; c++) {
+            if (c === 3) {
+              // Colonne Statut : badge coloré plein, blanc, gras, centré
+              applyCell(ws1, ri, c, cs(g.badgeBg, WHT, true, false, 10, 'center'));
+            } else {
+              // Autres colonnes : fond pastel, libellé en gras
+              applyCell(ws1, ri, c, cs(g.rowBg, g.rowFg, c === 0, c === 4, 10, 'left'));
+            }
+          }
+        }
+      });
+
+      // Merges : nom société (0), sous-titre (1), score (5), sections
+      const merges1 = [
+        { s:{r:0,c:0}, e:{r:0,c:N1-1} },
+        { s:{r:1,c:0}, e:{r:1,c:N1-1} },
+        { s:{r:5,c:0}, e:{r:5,c:N1-1} },
+      ];
+      ws1Meta.forEach(function(m, i) {
+        if (m.type === 'section') merges1.push({ s:{r:META1+i,c:0}, e:{r:META1+i,c:N1-1} });
+      });
+      ws1['!merges'] = merges1;
+
+      XLSX.utils.book_append_sheet(wb, ws1, 'Rapport conformite');
+
+      // ── Onglet 2 : Champs manquants ──────────────────────────────────────
+      const missing = state.analysisResults.filter(r => r.statut === 'MANQUANT');
+      const N2  = 3;
+      const GM  = GRP.MANQUANT;
+      const ws2Rows = [
+        ['OT \u00C9NERGIE', '', ''],
+        ['Champs manquants dans la Visite Technique', '', ''],
+        ['Audit (Ma\u00EEtre) :', state.auditFileName || '-', ''],
+        ['Visite Technique :', state.vtFileName || '-', ''],
+        ['Section', 'Libell\u00E9', 'Suggestion IA'],
+      ];
+      const META2 = ws2Rows.length; // 5
+      missing.forEach(function(r) {
+        const libelle2 = r.instance_label ? getFieldNom(r.id_champ) + ' \u2014 ' + r.instance_label : getFieldNom(r.id_champ);
+        ws2Rows.push([getFieldSection(r.id_champ) || '-', libelle2, r.commentaire || '']);
+      });
+
+      const ws2 = XLSX.utils.aoa_to_sheet(ws2Rows);
+      ws2['!cols'] = [{ wch:24 }, { wch:30 }, { wch:56 }];
+      ws2['!views'] = [{ state: 'frozen', xSplit: 0, ySplit: META2 }];
+
+      applyRow(ws2, 0, N2, cs(BLU_DARK, WHT, true, false, 14, 'left'));
+      applyRow(ws2, 1, N2, cs(GM.badgeBg, WHT, false, false, 11, 'left', true));
+      for (let r = 2; r <= 3; r++) {
+        applyCell(ws2, r, 0, cs(GRY_META, BLU_DARK, true, false, 10, 'left'));
+        for (let c = 1; c < N2; c++) applyCell(ws2, r, c, cs(GRY_META, '2C3E70', false, false, 10, 'left'));
+      }
+      applyRow(ws2, 4, N2, cs(BLU_DARK, WHT, true, false, 10, 'center'));
+
+      // Lignes données avec alternance douce
+      for (let ri = META2; ri < ws2Rows.length; ri++) {
+        const altBg = (ri - META2) % 2 === 0 ? GM.rowBg : 'F2F4F8';
+        applyCell(ws2, ri, 0, cs(altBg, GM.rowFg, false, false, 10, 'left'));
+        applyCell(ws2, ri, 1, cs(altBg, GM.rowFg, true,  false, 10, 'left'));
+        applyCell(ws2, ri, 2, cs(altBg, GM.rowFg, false, true,  10, 'left'));
+      }
+      ws2['!merges'] = [
+        { s:{r:0,c:0}, e:{r:0,c:N2-1} },
+        { s:{r:1,c:0}, e:{r:1,c:N2-1} },
+      ];
+      ws2['!rows'] = [{ hpt:26 }, { hpt:20 }].concat(Array(ws2Rows.length - 2).fill({ hpt: 14 }));
+
+      XLSX.utils.book_append_sheet(wb, ws2, 'Champs manquants');
+
+      // ── Onglet 3 : Synthèse ───────────────────────────────────────────────
+      const approx    = state.analysisResults.filter(r => r.statut === 'ORANGE').length;
+      const nonconf   = state.analysisResults.filter(r => r.statut === 'ROUGE').length;
+      const manqTotal = state.analysisResults.filter(r => r.statut === 'MANQUANT').length;
+      const N3 = 3;
+
+      const ws3Rows = [
+        ['OT \u00C9NERGIE \u2014 Synth\u00E8se de l\'Analyse', '', ''],
+        ['', '', ''],
+        ['Indicateur', 'Valeur', '% du total'],
+        ['Total champs analys\u00E9s',  total,    '100%'],
+        ['Conformes (VERT)',        conformes, total ? Math.round(conformes/total*100)+'%' : '-'],
+        ['Approximatifs (ORANGE)',  approx,    total ? Math.round(approx/total*100)+'%'    : '-'],
+        ['Non conformes (ROUGE)',   nonconf,   total ? Math.round(nonconf/total*100)+'%'   : '-'],
+        ['Manquants',               manqTotal, total ? Math.round(manqTotal/total*100)+'%' : '-'],
+        ['', '', ''],
+        ['Score global', pct + '%', ''],
+        ['Verdict', pct >= 95 ? 'Dossier probablement recevable' : pct >= 80 ? 'Dossier \u00E0 v\u00E9rifier' : 'Dossier non conforme', ''],
+      ];
+
+      const ws3 = XLSX.utils.aoa_to_sheet(ws3Rows);
+      ws3['!cols'] = [{ wch:34 }, { wch:14 }, { wch:14 }];
+
+      applyRow(ws3, 0, N3, cs(BLU_DARK, WHT, true, false, 14, 'left'));
+      applyRow(ws3, 2, N3, cs(BLU_DARK, WHT, true, false, 10, 'center'));
+
+      const synthRows = [
+        null, null, null,
+        { bg: 'F2F4F9', fg: '2C3E70', badge: null },
+        { bg: GRP.VERT.rowBg,     fg: GRP.VERT.rowFg,     badge: GRP.VERT.badgeBg },
+        { bg: GRP.ORANGE.rowBg,   fg: GRP.ORANGE.rowFg,   badge: GRP.ORANGE.badgeBg },
+        { bg: GRP.ROUGE.rowBg,    fg: GRP.ROUGE.rowFg,    badge: GRP.ROUGE.badgeBg },
+        { bg: GRP.MANQUANT.rowBg, fg: GRP.MANQUANT.rowFg, badge: GRP.MANQUANT.badgeBg },
+        null,
+        { bg: SCORE_BG, fg: SCORE_FG, badge: null },
+        { bg: SCORE_BG, fg: SCORE_FG, badge: null },
+      ];
+      synthRows.forEach(function(c, ri) {
+        if (!c) return;
+        applyCell(ws3, ri, 0, cs(c.bg, c.fg, true, false, 10, 'left'));
+        applyCell(ws3, ri, 1, cs(c.badge || c.bg, c.badge ? WHT : c.fg, true, false, 11, 'center'));
+        applyCell(ws3, ri, 2, cs(c.bg, c.fg, false, false, 10, 'center'));
+      });
+      ws3['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:N3-1} }];
+      ws3['!rows'] = [{ hpt:26 }, { hpt:8 }].concat(Array(ws3Rows.length - 2).fill({ hpt: 14 }));
+
+      XLSX.utils.book_append_sheet(wb, ws3, 'Synthese');
+
+      const dateFile       = new Date().toISOString().slice(0, 10);
+      const exportFilename = 'OTEnergie_Rapport_AuditVT_' + dateFile + '.xlsx';
+      XLSX.writeFile(wb, exportFilename, { cellStyles: true });
+      updateHistoryExport(exportFilename);
+    }
+
+    // =====================================================================
+    // HISTORIQUE
+    // =====================================================================
+    let historyData = [];
+    let lastAnalysisHistoryId = null;
+
+    function loadHistory() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY_HISTORY);
+        historyData = saved ? JSON.parse(saved) : [];
+      } catch (e) {
+        historyData = [];
+      }
+      renderHistory();
+    }
+
+    function saveAnalysisToHistory() {
+      const results = state.analysisResults;
+      if (!results || results.length === 0) return;
+      const conformes  = results.filter(r => r.statut === 'VERT').length;
+      const oranges    = results.filter(r => r.statut === 'ORANGE').length;
+      const rouges     = results.filter(r => r.statut === 'ROUGE').length;
+      const manquants  = results.filter(r => r.statut === 'MANQUANT').length;
+      const total      = results.length;
+      const pct        = total > 0 ? Math.round((conformes / total) * 100) : 0;
+      const now        = new Date();
+      const entry = {
+        id:         now.getTime(),
+        date:       now.toLocaleDateString('fr-FR'),
+        time:       now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+        auditFile:  state.auditFileName || '—',
+        vtFile:     state.vtFileName    || '—',
+        score:      pct,
+        total:      total,
+        conformes:  conformes,
+        oranges:    oranges,
+        rouges:     rouges,
+        manquants:  manquants,
+        exportFile: null,
+        results: JSON.stringify(state.analysisResults)
+      };
+      historyData.unshift(entry); // plus récent en premier
+      lastAnalysisHistoryId = entry.id;
+      persistHistory();
+      renderHistory();
+    }
+
+    function downloadHistoryEntry(id) {
+      const entry = historyData.find(function(e) { return e.id === id; });
+      if (!entry || !entry.results) {
+        showAlert('alerts-area', 'warning', 'Données non disponibles pour cette entrée (analyse trop ancienne).');
+        return;
+      }
+      const savedResults   = state.analysisResults;
+      const savedAuditName = state.auditFileName;
+      const savedVtName    = state.vtFileName;
+      try {
+        state.analysisResults = JSON.parse(entry.results);
+        state.auditFileName   = entry.auditFile;
+        state.vtFileName      = entry.vtFile;
+        exportExcel();
+      } finally {
+        state.analysisResults = savedResults;
+        state.auditFileName   = savedAuditName;
+        state.vtFileName      = savedVtName;
+      }
+    }
+
+    function updateHistoryExport(filename) {
+      if (!lastAnalysisHistoryId) return;
+      const entry = historyData.find(function(e) { return e.id === lastAnalysisHistoryId; });
+      if (entry) {
+        entry.exportFile = filename;
+        persistHistory();
+        renderHistory();
+      }
+    }
+
+    function persistHistory() {
+      try {
+        // Garder les 50 dernières entrées max
+        if (historyData.length > 50) historyData = historyData.slice(0, 50);
+        localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(historyData));
+      } catch (e) { /* localStorage plein */ }
+    }
+
+    function deleteHistoryEntry(id) {
+      historyData = historyData.filter(function(e) { return e.id !== id; });
+      persistHistory();
+      renderHistory();
+    }
+
+    function clearHistory() {
+      if (!confirm('Effacer tout l\'historique des analyses ?')) return;
+      historyData = [];
+      localStorage.removeItem(STORAGE_KEY_HISTORY);
+      renderHistory();
+    }
+
+    function renderHistory() {
+      const empty = document.getElementById('history-empty');
+      const wrap  = document.getElementById('history-table-wrap');
+      const tbody = document.getElementById('history-tbody');
+      if (!historyData || historyData.length === 0) {
+        empty.classList.remove('hidden');
+        wrap.classList.add('hidden');
+        return;
+      }
+      empty.classList.add('hidden');
+      wrap.classList.remove('hidden');
+      tbody.innerHTML = historyData.map(function(e) {
+        const scoreClass = e.score >= 90 ? 'score-high' : e.score >= 70 ? 'score-mid' : 'score-low';
+        const dlBtn = e.results
+          ? '<button class="dl-btn" onclick="downloadHistoryEntry(' + e.id + ')" title="Re-t\u00E9l\u00E9charger le fichier Excel">&#8659; T\u00E9l\u00E9charger</button>'
+          : '';
+        const exportCell = e.exportFile
+          ? '<span class="history-filename">&#128196; ' + escHtml(e.exportFile) + '</span>' + dlBtn
+          : (e.results ? dlBtn : '<span class="history-no-export">Non export\u00E9</span>');
+        const auditShort = e.auditFile.length > 35 ? e.auditFile.slice(0, 33) + '…' : e.auditFile;
+        const vtShort    = e.vtFile.length > 35    ? e.vtFile.slice(0, 33) + '…'    : e.vtFile;
+        return '<tr>' +
+          '<td style="white-space:nowrap;font-weight:600">' + escHtml(e.date) + '</td>' +
+          '<td style="white-space:nowrap;color:var(--text-muted)">' + escHtml(e.time) + '</td>' +
+          '<td title="' + escHtml(e.auditFile) + '">' + escHtml(auditShort) + '</td>' +
+          '<td title="' + escHtml(e.vtFile) + '">' + escHtml(vtShort) + '</td>' +
+          '<td><span class="score-badge ' + scoreClass + '">' + e.score + '%</span></td>' +
+          '<td style="text-align:center;color:#276221;font-weight:700">' + e.conformes + '</td>' +
+          '<td style="text-align:center;color:#7A4A00;font-weight:700">' + e.oranges + '</td>' +
+          '<td style="text-align:center;color:#820000;font-weight:700">' + e.rouges + '</td>' +
+          '<td style="text-align:center;color:#444;font-weight:700">' + e.manquants + '</td>' +
+          '<td>' + exportCell + '</td>' +
+          '<td><button class="del-btn" onclick="deleteHistoryEntry(' + e.id + ')" title="Supprimer" style="font-size:14px;padding:2px 5px">&times;</button></td>' +
+          '</tr>';
+      }).join('');
+    }
+
+    // =====================================================================
+    // REFERENTIEL
+    // =====================================================================
+    async function loadReferentielFromStorage() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY_REF);
+        if (saved) {
+          state.referentiel = JSON.parse(saved).map(function(r, idx) {
+            return Object.assign({}, r, { id: String(idx) }); // Réassigner IDs uniques
+          });
+          enrichReferentielSections();
+          await yield_();
+          renderRefTable();
+          updatePrereqs();
+        } else {
+          renderRefTable();
+        }
+      } catch (e) {
+        renderRefTable();
+      }
+    }
+
+    function yield_() { return new Promise(function(r) { setTimeout(r, 0); }); }
+
+    // ── Parseur xlsx natif (sans XLSX library) ──────────────────────────────
+    function col2idx(col) {
+      let n = 0;
+      for (let i = 0; i < col.length; i++) n = n * 26 + col.charCodeAt(i) - 64;
+      return n - 1;
+    }
+    async function inflateRaw(data) {
+      const ds = new DecompressionStream('deflate-raw');
+      const w = ds.writable.getWriter(); const r = ds.readable.getReader();
+      w.write(data); w.close();
+      const chunks = []; for (;;) { const {value, done} = await r.read(); if (done) break; chunks.push(value); }
+      const len = chunks.reduce(function(a,c){return a+c.length;},0);
+      const out = new Uint8Array(len); let off = 0;
+      for (const c of chunks) { out.set(c, off); off += c.length; }
+      return out;
+    }
+    async function readZipEntry(buffer, entry) {
+      const b = new Uint8Array(buffer);
+      const lv = new DataView(buffer, entry.loff);
+      const lfn = lv.getUint16(26, true); const lex = lv.getUint16(28, true);
+      const start = entry.loff + 30 + lfn + lex;
+      const comp = b.slice(start, start + entry.csize);
+      const raw = (entry.method === 8) ? await inflateRaw(comp) : comp;
+      return new TextDecoder('utf-8').decode(raw);
+    }
+    function readZipDir(buffer) {
+      const view = new DataView(buffer); const b = new Uint8Array(buffer);
+      let eocd = -1;
+      for (let i = b.length - 22; i >= Math.max(0, b.length - 65536); i--) {
+        if (view.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+      }
+      if (eocd < 0) throw new Error('Fichier ZIP invalide');
+      const cdOff = view.getUint32(eocd + 16, true); const cdSz = view.getUint32(eocd + 12, true);
+      const entries = {}; let p = cdOff;
+      while (p < cdOff + cdSz) {
+        if (view.getUint32(p, true) !== 0x02014b50) break;
+        const method = view.getUint16(p + 10, true);
+        const csize  = view.getUint32(p + 20, true);
+        const fnLen  = view.getUint16(p + 28, true);
+        const exLen  = view.getUint16(p + 30, true);
+        const cmLen  = view.getUint16(p + 32, true);
+        const loff   = view.getUint32(p + 42, true);
+        const name   = new TextDecoder().decode(b.slice(p + 46, p + 46 + fnLen));
+        entries[name] = { method, csize, loff };
+        p += 46 + fnLen + exLen + cmLen;
+      }
+      return entries;
+    }
+    function parseSST(xml) {
+      const doc = new DOMParser().parseFromString(xml, 'application/xml');
+      return Array.from(doc.querySelectorAll('sst > si')).map(function(si) {
+        return Array.from(si.querySelectorAll('t')).map(function(t){return t.textContent;}).join('');
+      });
+    }
+    function parseSheetXml(xml, ss) {
+      const doc = new DOMParser().parseFromString(xml, 'application/xml');
+      const rows = [];
+      doc.querySelectorAll('sheetData > row').forEach(function(rowEl) {
+        const cells = {}; let maxCol = 0;
+        rowEl.querySelectorAll('c').forEach(function(c) {
+          const ref = c.getAttribute('r') || ''; const col = col2idx(ref.replace(/\d/g,''));
+          maxCol = Math.max(maxCol, col);
+          const t = c.getAttribute('t'); const v = c.querySelector('v'); const ist = c.querySelector('is t');
+          let val = '';
+          if (ist) val = ist.textContent;
+          else if (v) val = (t === 's') ? (ss[parseInt(v.textContent)] || '') : v.textContent;
+          cells[col] = val;
+        });
+        const row = []; for (let i = 0; i <= maxCol; i++) row.push(cells[i] || '');
+        rows.push(row);
+      });
+      return rows;
+    }
+    async function parseXlsxNative(buffer) {
+      const entries = readZipDir(buffer);
+      const names = Object.keys(entries);
+      // Shared strings
+      let ss = [];
+      if (entries['xl/sharedStrings.xml']) ss = parseSST(await readZipEntry(buffer, entries['xl/sharedStrings.xml']));
+      // Toutes les feuilles, triées par numéro
+      const sheetPaths = names.filter(function(n){return /^xl\/worksheets\/sheet\d+\.xml$/.test(n);})
+        .sort(function(a,b){return parseInt(a.match(/\d+/)[0]) - parseInt(b.match(/\d+/)[0]);});
+      let allRows = [];
+      for (const path of sheetPaths) {
+        await yield_();
+        const xml = await readZipEntry(buffer, entries[path]);
+        const rows = parseSheetXml(xml, ss);
+        // Détecter la ligne d'en-tête
+        let hdr = -1;
+        for (let r = 0; r < Math.min(rows.length, 15); r++) {
+          const s = rows[r].map(function(c){return String(c).toLowerCase();}).join('|');
+          if (s.includes('champ') || s.includes('section') || s.includes('check')) { hdr = r; break; }
+        }
+        const start = hdr >= 0 ? hdr + 1 : 0;
+        allRows = allRows.concat(rows.slice(start).filter(function(r){
+          return r.some(function(c){return String(c).trim() !== '';});
+        }));
+      }
+      return allRows;
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
+    function handleRefFile(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      showAlert('alerts-area-params', 'success', 'Lecture de "' + file.name + '" en cours...');
+      const reader = new FileReader();
+      reader.onload = async function(ev) {
+        try {
+          await yield_();
+          const allRows = await parseXlsxNative(ev.target.result);
+
+          state.referentiel = allRows.map(function(r) { return {
+            section: String(r[0] || '').trim(), // Col A — Section
+            nom:     String(r[1] || '').trim(), // Col B — Nom du champ
+            check:   String(r[3] || '').trim(), // Col D — Check
+            lexF:    String(r[5] || '').trim(), // Col F — Lex DVT
+            lexG:    String(r[6] || '').trim(), // Col G — Lex DVT
+            lexH:    String(r[7] || '').trim(), // Col H — Lex DVT
+            lexique: [String(r[5]||''),String(r[6]||''),String(r[7]||'')].filter(Boolean).join(';')
+          }; }).filter(function(r){ return r.section || r.nom; })
+            .filter(function(r) {
+              // Exclure la ligne d'en-tête Excel si elle a passé la détection
+              const s = r.section.toLowerCase(), n = r.nom.toLowerCase();
+              return !(s === 'section' && (n === 'champ' || n === 'nom du champ' || n === ''));
+            })
+            .map(function(r, idx) { return Object.assign({ id: String(idx) }, r); }); // ID unique par champ
+
+          // Extraire toutes les valeurs uniques du champ Check
+          state.checkOptions = Array.from(new Set(
+            state.referentiel.map(function(r){ return r.check; }).filter(Boolean)
+          )).sort();
+
+          enrichReferentielSections();
+          await yield_();
+          saveReferentiel(false);
+          await yield_();
+          renderRefTable();
+          updatePrereqs();
+          showAlert('alerts-area-params', 'success', 'Référentiel chargé : ' + state.referentiel.length + ' champ(s) importé(s) depuis ' + file.name);
+        } catch (err) {
+          showAlert('alerts-area-params', 'error', 'Erreur lors de la lecture du fichier XLSX : ' + err.message);
+        }
+      };
+      reader.onerror = function() {
+        showAlert('alerts-area-params', 'error', 'Impossible de lire le fichier "' + file.name + '". Vérifiez qu\'il n\'est pas corrompu ou ouvert dans Excel.');
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function renderRefTable() {
+      const tbody = document.getElementById('ref-tbody');
+
+      if (state.referentiel.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text-muted);font-style:italic;">Aucun champ. Cliquez sur "Ajouter une ligne" ou importez un fichier XLSX.</td></tr>';
+      } else {
+        const opts = state.checkOptions.length ? state.checkOptions : ['OUI', 'NON'];
+        const html = state.referentiel.map(function(r, idx) {
+          // Ligne de titre de section (section remplie, nom vide)
+          if (r.section && !r.nom) {
+            return '<tr class="ref-section-row">' +
+              '<td colspan="7">&#9656; ' + escHtml(r.section) + '</td>' +
+              '</tr>';
+          }
+          // Cellule Check : dropdown si check rempli, vide sinon
+          const checkCell = r.check
+            ? '<select onchange="updateRef(' + idx + ',\'check\',this)">' +
+              opts.map(function(o) {
+                return '<option value="' + escHtml(o) + '"' + (r.check === o ? ' selected' : '') + '>' + escHtml(o) + '</option>';
+              }).join('') + '</select>'
+            : '';
+          return '<tr data-idx="' + idx + '">' +
+            '<td style="text-align:center;font-size:10px;font-weight:700;color:var(--text-muted);font-family:monospace;min-width:28px">' + escHtml(r.id) + '</td>' +
+            '<td contenteditable="true" onblur="updateRef(' + idx + ',\'nom\',this)">' + escHtml(r.nom) + '</td>' +
+            '<td>' + checkCell + '</td>' +
+            '<td style="font-size:11px;color:var(--text-muted)">' + escHtml(r.lexF) + '</td>' +
+            '<td style="font-size:11px;color:var(--text-muted)">' + escHtml(r.lexG) + '</td>' +
+            '<td style="font-size:11px;color:var(--text-muted)">' + escHtml(r.lexH) + '</td>' +
+            '<td><button class="del-btn" onclick="deleteRefRow(' + idx + ')" title="Supprimer" style="font-size:14px;line-height:1;padding:2px 5px">&times;</button></td>' +
+            '</tr>';
+        }).join('');
+        tbody.innerHTML = html;
+      }
+
+      const total = state.referentiel.length;
+      const checkVals = state.checkOptions.filter(function(o){ return o && o.toUpperCase() !== 'NON'; });
+      const activeCount = state.referentiel.filter(function(r){ return checkVals.length ? checkVals.includes(r.check) : (r.check || '').toUpperCase() === 'OUI'; }).length;
+      document.getElementById('ref-count-label').innerHTML =
+        '<span style="font-size:15px;font-weight:700;color:var(--primary)">' + total + '</span> champs chargés — ' +
+        '<span style="color:var(--accent-green);font-weight:700">' + activeCount + '</span> actifs';
+
+      updatePrereqs();
+    }
+
+    function updateRef(idx, field, el) {
+      const val = el.tagName === 'SELECT' ? el.value : (el.textContent || '').trim();
+      state.referentiel[idx][field] = val;
+    }
+
+    function addRefRow() {
+      const newId = String(state.referentiel.length); // ID unique = index suivant
+      state.referentiel.push({ id: newId, nom: '', section: '', check: 'OUI', lexF: '', lexG: '', lexH: '', lexique: '' });
+      renderRefTable();
+      // Scroll to bottom
+      const wrap = document.querySelector('.ref-table-wrap');
+      if (wrap) wrap.scrollTop = wrap.scrollHeight;
+    }
+
+    function deleteRefRow(idx) {
+      state.referentiel.splice(idx, 1);
+      renderRefTable();
+    }
+
+    function saveReferentiel(notify = true) {
+      try {
+        localStorage.setItem(STORAGE_KEY_REF, JSON.stringify(state.referentiel));
+        if (notify) showAlert('alerts-area-params', 'success', 'Référentiel sauvegardé (' + state.referentiel.length + ' champs).');
+      } catch (e) {
+        showAlert('alerts-area-params', 'error', 'Erreur de sauvegarde localStorage : ' + e.message);
+      }
+    }
+
+    function resetReferentiel() {
+      if (!confirm('Réinitialiser le référentiel ? Cette action supprime tous les champs.')) return;
+      state.referentiel = [];
+      localStorage.removeItem(STORAGE_KEY_REF);
+      renderRefTable();
+      updatePrereqs();
+    }
+
+    function downloadRefExcel() {
+      const ws = XLSX.utils.aoa_to_sheet([
+        ['ID Champ', 'Nom du champ audit', 'Section/Catégorie', 'Description', 'Statut CHECK', 'Lexique VT'],
+        ...state.referentiel.map(r => [r.id, r.nom, r.categorie, r.description, r.check, r.lexique])
+      ]);
+      ws['!cols'] = [{ wch: 14 }, { wch: 28 }, { wch: 20 }, { wch: 30 }, { wch: 12 }, { wch: 40 }];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Référentiel');
+      XLSX.writeFile(wb, 'Champs_Audit_Energetique.xlsx');
+    }
+
+    // =====================================================================
+    // CONFIG IA
+    // =====================================================================
+    function loadConfig() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY_CONFIG);
+        if (saved) {
+          const cfg = JSON.parse(saved);
+          state.config = { ...state.config, ...cfg };
+          applyConfigToUI();
+        }
+      } catch (e) {}
+    }
+
+    function applyConfigToUI() {
+      const c = state.config;
+      document.getElementById('radio-' + (c.provider || 'openai')).checked = true;
+      document.getElementById('api-key-input').value = c.apiKey || '';
+      const modelSel = document.getElementById('model-select');
+      const validOpts = ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1', 'o1-mini'];
+      if (validOpts.includes(c.model)) {
+        modelSel.value = c.model;
+      } else if (c.model) {
+        modelSel.value = 'custom';
+        document.getElementById('model-custom-input').value = c.model;
+        document.getElementById('model-custom-group').classList.remove('hidden');
+      }
+      onProviderChange();
+      updatePrereqs();
+    }
+
+    function onConfigChange() {
+      state.config.apiKey = document.getElementById('api-key-input').value.trim();
+      updatePrereqs();
+    }
+
+    function onProviderChange() {
+      const provider = document.querySelector('input[name="provider"]:checked').value;
+      state.config.provider = provider;
+
+      const modelGroup = document.getElementById('model-select-group');
+      const label = modelGroup.querySelector('.form-label');
+
+      if (provider === 'openai') {
+        label.textContent = 'Modèle (OpenAI)';
+        document.getElementById('model-select').innerHTML = `
+          <option value="gpt-4o-mini">gpt-4o-mini (défaut, économique)</option>
+          <option value="gpt-4o">gpt-4o</option>
+          <option value="gpt-4.1">gpt-4.1</option>
+          <option value="o1-mini">o1-mini</option>
+          <option value="custom">Saisie libre...</option>
+        `;
+      } else {
+        label.textContent = 'Modèle (OpenRouter)';
+        document.getElementById('model-select').innerHTML = `
+          <option value="openai/gpt-4o-mini">openai/gpt-4o-mini</option>
+          <option value="openai/gpt-4o">openai/gpt-4o</option>
+          <option value="anthropic/claude-3-haiku">anthropic/claude-3-haiku</option>
+          <option value="anthropic/claude-3.5-sonnet">anthropic/claude-3.5-sonnet</option>
+          <option value="custom">Saisie libre...</option>
+        `;
+      }
+
+      onModelChange();
+    }
+
+    function onModelChange() {
+      const val = document.getElementById('model-select').value;
+      const customGroup = document.getElementById('model-custom-group');
+      if (val === 'custom') {
+        customGroup.classList.remove('hidden');
+        state.config.model = document.getElementById('model-custom-input').value || '';
+      } else {
+        customGroup.classList.add('hidden');
+        state.config.model = val;
+      }
+    }
+
+    function toggleApiKeyVisibility() {
+      const input = document.getElementById('api-key-input');
+      const icon = document.getElementById('eye-icon');
+      if (input.type === 'password') {
+        input.type = 'text';
+        icon.setAttribute('data-lucide', 'eye-off');
+      } else {
+        input.type = 'password';
+        icon.setAttribute('data-lucide', 'eye');
+      }
+      lucide.createIcons();
+    }
+
+    async function testConnection() {
+      const statusEl = document.getElementById('connection-status');
+      statusEl.className = 'connection-status testing';
+      statusEl.innerHTML = '<span class="spinner"></span> Test en cours...';
+      statusEl.classList.remove('hidden');
+
+      const apiKey = document.getElementById('api-key-input').value.trim();
+      if (!apiKey) {
+        statusEl.className = 'connection-status fail';
+        statusEl.textContent = '✗ Clé API manquante';
+        return;
+      }
+
+      try {
+        const provider = state.config.provider;
+        const endpoint = provider === 'openai'
+          ? 'https://api.openai.com/v1/models'
+          : 'https://openrouter.ai/api/v1/models';
+
+        const headers = {
+          'Authorization': 'Bearer ' + apiKey
+        };
+        if (provider === 'openrouter') {
+          headers['HTTP-Referer'] = window.location.href;
+        }
+
+        const resp = await fetch(endpoint, {
+          method: 'GET',
+          headers,
+          signal: AbortSignal.timeout(10000)
+        });
+
+        if (resp.ok) {
+          statusEl.className = 'connection-status ok';
+          statusEl.textContent = '✓ Connexion réussie';
+        } else {
+          statusEl.className = 'connection-status fail';
+          statusEl.textContent = '✗ Erreur ' + resp.status;
+        }
+      } catch (err) {
+        statusEl.className = 'connection-status fail';
+        statusEl.textContent = '✗ ' + (err.message.length > 40 ? err.message.substring(0, 40) + '...' : err.message);
+      }
+    }
+
+    function saveConfig() {
+      state.config.apiKey     = document.getElementById('api-key-input').value.trim();
+      state.config.provider   = document.querySelector('input[name="provider"]:checked').value;
+      const modelSel = document.getElementById('model-select').value;
+      if (modelSel === 'custom') {
+        state.config.model = document.getElementById('model-custom-input').value.trim();
+        state.config.customModel = state.config.model;
+      } else {
+        state.config.model = modelSel;
+        state.config.customModel = '';
+      }
+
+      try {
+        localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(state.config));
+        updatePrereqs();
+        // Show brief success on button
+        const btn = document.querySelector('[onclick="saveConfig()"]');
+        const orig = btn.innerHTML;
+        btn.innerHTML = '<i data-lucide="check" style="width:12px;height:12px"></i> Sauvegardé';
+        lucide.createIcons();
+        setTimeout(() => { btn.innerHTML = orig; lucide.createIcons(); }, 1800);
+      } catch (e) {
+        showAlert('alerts-area-params', 'error', 'Erreur localStorage : ' + e.message);
+      }
+    }
+
+    function clearConfig() {
+      if (!confirm('Effacer la configuration IA (clé API) ?')) return;
+      localStorage.removeItem(STORAGE_KEY_CONFIG);
+      state.config = { provider: 'openai', apiKey: '', model: 'gpt-4o-mini', customModel: '' };
+      applyConfigToUI();
+      document.getElementById('api-key-input').value = '';
+      updatePrereqs();
+    }
+
+    // =====================================================================
+    // SUGGESTIONS LEXIQUE
+    // =====================================================================
+    function renderSuggestions() {
+      const container = document.getElementById('suggestions-container');
+      const empty     = document.getElementById('suggestions-empty');
+      const actions   = document.getElementById('suggestions-actions');
+      container.innerHTML = '';
+
+      if (state.lexiqueSuggestions.length === 0) {
+        empty.style.display = 'block';
+        actions.classList.add('hidden');
+        return;
+      }
+
+      empty.style.display = 'none';
+      actions.classList.remove('hidden');
+
+      state.lexiqueSuggestions.forEach((s, i) => {
+        const div = document.createElement('div');
+        div.className = 'suggestion-card';
+        div.id = 'sug-' + i;
+        div.innerHTML = `
+          <div>
+            <div class="suggestion-term">${escHtml(s.terme_suggere)}</div>
+            <div class="suggestion-field">Champ <strong>#${escHtml(s.champ_id)}</strong>${getFieldNom(s.champ_id) ? ' — ' + escHtml(getFieldNom(s.champ_id)) : ''}</div>
+          </div>
+          <div class="suggestion-actions">
+            <button class="btn btn-success btn-sm" onclick="acceptSuggestion(${i})">
+              <i data-lucide="check" style="width:11px;height:11px"></i>
+              Accepter
+            </button>
+            <button class="btn btn-outline btn-sm" onclick="ignoreSuggestion(${i})" style="border-color:#9ca3af;color:#9ca3af;">
+              <i data-lucide="x" style="width:11px;height:11px"></i>
+              Ignorer
+            </button>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+
+      lucide.createIcons();
+    }
+
+    function acceptSuggestion(i) {
+      const s = state.lexiqueSuggestions[i];
+      const field = state.referentiel.find(f => f.id === s.champ_id);
+      if (field) {
+        const existing = (field.lexique || '').split(';').map(x => x.trim()).filter(Boolean);
+        if (!existing.includes(s.terme_suggere)) {
+          existing.push(s.terme_suggere);
+          field.lexique = existing.join(';');
+        }
+      }
+      const el = document.getElementById('sug-' + i);
+      if (el) {
+        el.style.opacity = '0.4';
+        el.querySelector('.suggestion-actions').innerHTML = '<span style="font-size:12px;color:var(--accent-green);font-weight:700">✓ Accepté</span>';
+      }
+      renderRefTable();
+    }
+
+    function ignoreSuggestion(i) {
+      const el = document.getElementById('sug-' + i);
+      if (el) {
+        el.style.opacity = '0.3';
+        el.querySelector('.suggestion-actions').innerHTML = '<span style="font-size:12px;color:var(--text-muted)">Ignoré</span>';
+      }
+    }
+
+    function acceptAllSuggestions() {
+      state.lexiqueSuggestions.forEach((s, i) => acceptSuggestion(i));
+      saveReferentiel(false);
+    }
+
+    // =====================================================================
+    // PROGRESS
+    // =====================================================================
+    function showProgress(visible) {
+      const el = document.getElementById('progress-section');
+      if (visible) el.classList.add('visible');
+      else el.classList.remove('visible');
+    }
+
+    function updateProgress(pct, label, detail) {
+      document.getElementById('progress-bar').style.width = pct + '%';
+      document.getElementById('progress-label').textContent = label;
+      document.getElementById('progress-detail').textContent = detail;
+      document.getElementById('progress-pct').textContent = pct + '%';
+    }
+
+    // =====================================================================
+    // ALERTS
+    // =====================================================================
+    function showAlert(containerId, type, message) {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+      const icons = { warning: 'alert-triangle', error: 'alert-circle', info: 'info', success: 'check-circle' };
+      const classes = { warning: 'alert-warning', error: 'alert-error', info: 'alert-info', success: 'alert-success' };
+      const div = document.createElement('div');
+      div.className = 'alert ' + (classes[type] || 'alert-info');
+      div.innerHTML = `<i data-lucide="${icons[type] || 'info'}" style="width:16px;height:16px;flex-shrink:0"></i><span>${escHtml(message)}</span>`;
+      container.appendChild(div);
+      lucide.createIcons();
+      setTimeout(() => { if (div.parentNode) div.remove(); }, 7000);
+    }
+
+    function clearAlerts() {
+      const container = document.getElementById('alerts-area');
+      if (container) container.innerHTML = '';
+    }
+
+    // =====================================================================
+    // UTILITIES
+    // =====================================================================
+    function formatSize(bytes) {
+      if (bytes < 1024) return bytes + ' o';
+      if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' Ko';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' Mo';
+    }
+
+    function countWords(text) {
+      return (text || '').split(/\s+/).filter(Boolean).length;
+    }
+
+    function escHtml(str) {
+      return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function sleep(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    function chunkArray(arr, size) {
+      const chunks = [];
+      for (let i = 0; i < arr.length; i += size) {
+        chunks.push(arr.slice(i, i + size));
+      }
+      return chunks;
+    }
+  </script>
+</body>
+</html>
