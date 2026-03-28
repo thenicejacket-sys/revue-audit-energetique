@@ -1,0 +1,6 @@
+# Copies locales des restore points (les tags git suffisent)
+restore_points/
+
+# OS
+.DS_Store
+Thumbs.db
