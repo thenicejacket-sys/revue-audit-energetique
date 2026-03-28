@@ -1477,24 +1477,17 @@
               Configuration IA
             </div>
 
-            <div class="form-group">
-              <label class="form-label">Fournisseur</label>
-              <div class="radio-group">
-                <label class="radio-option">
-                  <input type="radio" name="provider" value="openai" id="radio-openai" onchange="onProviderChange()" checked />
-                  OpenAI
-                </label>
-                <label class="radio-option">
-                  <input type="radio" name="provider" value="openrouter" id="radio-openrouter" onchange="onProviderChange()" />
-                  OpenRouter
-                </label>
-              </div>
+            <!-- Radios cachés pour compatibilité JS — provider auto-détecté depuis la clé -->
+            <div style="display:none">
+              <input type="radio" name="provider" value="openai" id="radio-openai" checked />
+              <input type="radio" name="provider" value="openrouter" id="radio-openrouter" />
             </div>
 
             <div class="form-group">
               <label class="form-label">Clé API</label>
+              <div style="font-size:11px;color:#64748b;margin-bottom:6px" id="provider-detected-label"></div>
               <div class="input-group">
-                <input type="password" id="api-key-input" class="form-input" placeholder="sk-..." autocomplete="off" oninput="onConfigChange()" />
+                <input type="password" id="api-key-input" class="form-input" placeholder="sk-... (OpenAI) ou sk-or-... (OpenRouter)" autocomplete="off" oninput="onConfigChange()" />
                 <button class="input-group-btn" onclick="toggleApiKeyVisibility()" title="Afficher/masquer">
                   <i data-lucide="eye" style="width:14px;height:14px" id="eye-icon"></i>
                 </button>
@@ -2947,7 +2940,29 @@ RAPPEL : instance_label = null si le champ n'a qu'une instance. Si plusieurs ins
     }
 
     function onConfigChange() {
-      state.config.apiKey = document.getElementById('api-key-input').value.trim();
+      const key = document.getElementById('api-key-input').value.trim();
+      state.config.apiKey = key;
+
+      // Auto-détection du provider depuis le format de la clé
+      const detectedLabel = document.getElementById('provider-detected-label');
+      let detectedProvider = null;
+      if (key.startsWith('sk-or-')) {
+        detectedProvider = 'openrouter';
+        detectedLabel.innerHTML = '🔑 Fournisseur détecté : <strong>OpenRouter</strong>';
+      } else if (key.startsWith('sk-')) {
+        detectedProvider = 'openai';
+        detectedLabel.innerHTML = '🔑 Fournisseur détecté : <strong>OpenAI</strong>';
+      } else if (key.length > 0) {
+        detectedLabel.innerHTML = '<span style="color:#e65100">⚠ Format non reconnu — OpenAI ou OpenRouter attendu</span>';
+      } else {
+        detectedLabel.innerHTML = '';
+      }
+
+      if (detectedProvider && detectedProvider !== state.config.provider) {
+        document.getElementById('radio-' + detectedProvider).checked = true;
+        onProviderChange();
+      }
+
       updatePrereqs();
     }
 
