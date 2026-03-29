@@ -1888,9 +1888,9 @@
       if (state.analysisRunning) return;
       clearAlerts();
 
-      const refFields = state.referentiel.filter(r => (r.check || '').toUpperCase() === 'OUI');
+      const refFields = state.referentiel.filter(r => { const c=(r.check||'').trim().toUpperCase(); return c && c !== 'NON'; });
       if (refFields.length === 0) {
-        showAlert('alerts-area', 'warning', 'Aucun champ avec statut CHECK = OUI dans le référentiel. Activez des champs dans l\'onglet Paramètres.');
+        showAlert('alerts-area', 'warning', 'Aucun champ actif dans le référentiel. Activez des champs (Oui / Si applicable / Si isolé / Si présent) dans l'onglet Paramètres.');
         return;
       }
 
@@ -2743,6 +2743,10 @@ RAPPEL : instance_label = null si le champ n'a qu'une instance. Si plusieurs ins
           state.referentiel = JSON.parse(saved).map(function(r, idx) {
             return Object.assign({}, r, { id: String(idx) }); // Réassigner IDs uniques
           });
+          // Reconstruire checkOptions depuis les données sauvegardées
+          state.checkOptions = Array.from(new Set(
+            state.referentiel.map(function(r){ return r.check; }).filter(Boolean)
+          )).sort();
           enrichReferentielSections();
           await yield_();
           renderRefTable();
