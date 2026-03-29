@@ -1962,6 +1962,18 @@
         await sleep(100);
       }
 
+      // Post-filtre : champs conditionnels (Si applicable / Si isolé / Si présent)
+      // -> exclure des résultats s'ils ne sont pas trouvés dans l'audit (non applicable, pas une erreur)
+      // -> seuls les champs 'Oui' restent MANQUANT s'ils sont absents
+      state.analysisResults = state.analysisResults.filter(function(rv) {
+        var rf = state.referentiel.find(function(r){ return r.id === rv.id_champ; });
+        if (!rf) return true;
+        var chk = (rf.check || '').trim().toUpperCase();
+        if (chk === 'OUI') return true; // obligatoire : toujours inclus (même si MANQUANT)
+        // conditionnel : inclure uniquement si trouvé dans l'audit
+        return !!(rv.valeur_audit && rv.valeur_audit.trim() && rv.valeur_audit.trim() !== '-');
+      });
+
       updateProgress(95, 'Compilation des résultats...', 'Calcul des indicateurs...');
       await sleep(200);
 
