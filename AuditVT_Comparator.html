@@ -2520,6 +2520,72 @@ RAPPEL : instance_label = null si le champ n'a qu'une instance. Si plusieurs ins
       ws3.mergeCells(vRow.number,2,vRow.number,3);
       sc(vRow.getCell(1),SCORE_BG,SCORE_FG,{bold:true,sz:11}); sc(vRow.getCell(2),SCORE_BG,SCORE_FG,{bold:true,sz:11,wrap:true}); sc(vRow.getCell(3),SCORE_BG,SCORE_FG,{});
 
+
+      // ── ONGLET 4 : Référentiel vs Audit ──────────────────────────────────
+      var ws4=wb.addWorksheet('R\u00e9f\u00e9rentiel vs Audit');
+      ws4.columns=[{width:32},{width:40},{width:30},{width:14}];
+      ws4.views=[{state:'frozen',xSplit:0,ySplit:7}];
+      var N4=4;
+      var C4P_HDR='FF2E7D32', C4P_ROW='FFEBF7EB', C4P_TXT='FF1A4D1A', C4P_SECT='FFC8E6C9';
+      var C4A_HDR='FFB71C1C', C4A_ROW='FFFFEBEE', C4A_TXT='FFB71C1C', C4A_SECT='FFFFCDD2';
+      var auditPresent4=state.analysisResults.filter(function(rv){
+        return rv.valeur_audit&&rv.valeur_audit.trim()&&rv.valeur_audit.trim()!=='-';
+      });
+      var auditAbsent4=state.analysisResults.filter(function(rv){
+        return !rv.valeur_audit||!rv.valeur_audit.trim()||rv.valeur_audit.trim()==='-';
+      });
+      var totRef4=state.analysisResults.length;
+      mrow(ws4,['OT \u00c9NERGIE','','',''],N4,C.BLU_DARK,C.WHT,{bold:true,sz:14},26);
+      mrow(ws4,['Contr\u00f4le R\u00e9f\u00e9rentiel  \u2014  Champs obligatoires vs Audit \u00c9nerg\u00e9tique','','',''],N4,C.BLU_MED,C.WHT,{sz:11,italic:true},20);
+      [['Rapport g\u00e9n\u00e9r\u00e9 le :',date,'',''],
+       ['Audit (Ma\u00eetre) :',state.auditFileName||'-','','']].forEach(function(v){
+        var r=ws4.addRow(v); r.height=14;
+        sc(r.getCell(1),C.GRY_META,C.BLU_DARK,{bold:true});
+        for(var c=2;c<=N4;c++)sc(r.getCell(c),C.GRY_META,'FF2C3E70',{});
+      });
+      var summRow4=ws4.addRow([totRef4+' champ'+(totRef4>1?'s':'')+ ' obligatoires dans le r\u00e9f\u00e9rentiel  \u2014  '+auditPresent4.length+' pr\u00e9sents  /  '+auditAbsent4.length+' absents de l\'audit','','','']);
+      summRow4.height=20; ws4.mergeCells(summRow4.number,1,summRow4.number,N4);
+      sr(summRow4,'FFEEF2FA',C.BLU_DARK,{bold:true,sz:10},N4);
+      var hdr4=ws4.addRow(['Section','Libell\u00e9 du champ','Valeur trouv\u00e9e dans l\'Audit','Statut']); hdr4.height=18;
+      sr(hdr4,C.BLU_DARK,C.WHT,{bold:true,align:'center'},N4);
+      // ---- Groupe PRÉSENTS ----
+      mrow(ws4,['\u2714  PR\u00c9SENTS DANS L\'AUDIT  \u2014  '+auditPresent4.length+' champ'+(auditPresent4.length>1?'s':''),'','',''],N4,C4P_HDR,C.WHT,{bold:true,sz:11},22);
+      var lastSec4p='';
+      auditPresent4.forEach(function(rv){
+        var sec=getFieldSection(rv.id_champ)||'-';
+        var lib=rv.instance_label?getFieldNom(rv.id_champ)+' \u2014 '+rv.instance_label:getFieldNom(rv.id_champ);
+        if(sec!==lastSec4p){
+          lastSec4p=sec;
+          var s4p=ws4.addRow(['   \u203a  '+sec,'','','']); s4p.height=16;
+          ws4.mergeCells(s4p.number,1,s4p.number,N4);
+          sc(s4p.getCell(1),C4P_SECT,C4P_TXT,{bold:true,sz:10,italic:true});
+        }
+        var r=ws4.addRow([sec,lib,rv.valeur_audit,'PR\u00c9SENT']); r.height=14;
+        sc(r.getCell(1),C4P_ROW,C4P_TXT,{});
+        sc(r.getCell(2),C4P_ROW,C4P_TXT,{bold:true});
+        sc(r.getCell(3),C4P_ROW,C4P_TXT,{});
+        sc(r.getCell(4),C4P_HDR,C.WHT,{bold:true,align:'center'});
+      });
+      ws4.addRow(['','','','']).height=6;
+      // ---- Groupe ABSENTS ----
+      mrow(ws4,['\u26a0  ABSENTS DE L\'AUDIT  \u2014  '+auditAbsent4.length+' champ'+(auditAbsent4.length>1?'s':''),'','',''],N4,C4A_HDR,C.WHT,{bold:true,sz:11},22);
+      var lastSec4a='';
+      auditAbsent4.forEach(function(rv){
+        var sec=getFieldSection(rv.id_champ)||'-';
+        var lib=rv.instance_label?getFieldNom(rv.id_champ)+' \u2014 '+rv.instance_label:getFieldNom(rv.id_champ);
+        if(sec!==lastSec4a){
+          lastSec4a=sec;
+          var s4a=ws4.addRow(['   \u203a  '+sec,'','','']); s4a.height=16;
+          ws4.mergeCells(s4a.number,1,s4a.number,N4);
+          sc(s4a.getCell(1),C4A_SECT,C4A_TXT,{bold:true,sz:10,italic:true});
+        }
+        var r=ws4.addRow([sec,lib,'-','ABSENT']); r.height=14;
+        sc(r.getCell(1),C4A_ROW,C4A_TXT,{});
+        sc(r.getCell(2),C4A_ROW,C4A_TXT,{bold:true});
+        sc(r.getCell(3),C4A_ROW,C4A_TXT,{});
+        sc(r.getCell(4),C4A_HDR,C.WHT,{bold:true,align:'center'});
+      });
+
       var dateFile='OTEnergie_Rapport_AuditVT_'+new Date().toISOString().slice(0,10)+'.xlsx';
       var buffer=await wb.xlsx.writeBuffer();
       var blob=new Blob([buffer],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
