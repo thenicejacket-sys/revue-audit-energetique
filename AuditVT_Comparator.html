@@ -1890,7 +1890,7 @@
 
       const refFields = state.referentiel.filter(r => { const c=(r.check||'').trim().toUpperCase(); return c && c !== 'NON'; });
       if (refFields.length === 0) {
-        showAlert('alerts-area', 'warning', 'Aucun champ actif dans le référentiel. Activez des champs (Oui / Si applicable / Si isolé / Si présent) dans l'onglet Paramètres.');
+        showAlert('alerts-area', 'warning', "Aucun champ actif dans le référentiel. Activez des champs (Oui / Si applicable / Si isolé / Si présent) dans l'onglet Paramètres.");
         return;
       }
 
