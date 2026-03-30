@@ -2425,9 +2425,42 @@ RAPPEL : instance_label = null si le champ n'a qu'une instance. Si plusieurs ins
       });
 
       // ── ONGLET 1 ──────────────────────────────────────────────────────────
-      var ws1=wb.addWorksheet('Rapport conformite');
-      ws1.columns=[{width:36},{width:22},{width:22},{width:15},{width:48}];
-      ws1.views=[{state:'frozen',xSplit:0,ySplit:7}];
+      var ws1=wb.addWorksheet('Synthese');
+      ws1.columns=[{width:44},{width:28},{width:16}];
+      var approx=state.analysisResults.filter(function(rv){return rv.statut==='ORANGE';}).length;
+      var nonconf=state.analysisResults.filter(function(rv){return rv.statut==='ROUGE';}).length;
+      var manqTotal=state.analysisResults.filter(function(rv){return rv.statut==='MANQUANT';}).length;
+      mrow(ws3,["OT \u00c9NERGIE \u2014 Synth\u00e8se de l'Analyse",'',''],3,C.BLU_DARK,C.WHT,{bold:true,sz:14},30);
+      ws1.addRow(['','','']).height=6;
+      var hdr3=ws1.addRow(['Indicateur','Valeur','% du total']); hdr3.height=24;
+      sr(hdr3,C.BLU_DARK,C.WHT,{bold:true,align:'center'},3);
+      [['Total champs analys\u00e9s',total,'100%','FFF2F4F9','FF2C3E70',null],
+       ['Conformes (VERT)',conformes,total?Math.round(conformes/total*100)+'%':'-',C.VERT_ROW,C.VERT_TXT,C.VERT_BADGE],
+       ['Approximatifs (ORANGE)',approx,total?Math.round(approx/total*100)+'%':'-',C.ORA_ROW,C.ORA_TXT,C.ORA_BADGE],
+       ['Non conformes (ROUGE)',nonconf,total?Math.round(nonconf/total*100)+'%':'-',C.RGE_ROW,C.RGE_TXT,C.RGE_BADGE],
+       ['Manquants',manqTotal,total?Math.round(manqTotal/total*100)+'%':'-',C.MAN_ROW,C.MAN_TXT,C.MAN_BADGE],
+      ].forEach(function(d){
+        var r=ws1.addRow([d[0],d[1],d[2]]); r.height=22;
+        sc(r.getCell(1),d[3],d[4],{bold:true,sz:11});
+        sc(r.getCell(2),d[5]||d[3],d[5]?C.WHT:d[4],{bold:true,align:'center',sz:13});
+        sc(r.getCell(3),d[3],d[4],{align:'center',sz:11});
+      });
+      ws1.addRow(['','','']).height=8;
+      var scRow=ws1.addRow(['Score global',pct+'%','']); scRow.height=26;
+      ws1.mergeCells(scRow.number,2,scRow.number,3);
+      sc(scRow.getCell(1),SCORE_BG,SCORE_FG,{bold:true,sz:12});
+      sc(scRow.getCell(2),SCORE_BD,C.WHT,{bold:true,align:'center',sz:16});
+      sc(scRow.getCell(3),SCORE_BG,SCORE_FG,{});
+      var verdict=pct>=95?'Dossier probablement recevable':pct>=80?'Dossier \u00e0 v\u00e9rifier':'Dossier non conforme';
+      var vRow=ws1.addRow(['Verdict',verdict,'']); vRow.height=22;
+      ws1.mergeCells(vRow.number,2,vRow.number,3);
+      sc(vRow.getCell(1),SCORE_BG,SCORE_FG,{bold:true,sz:11}); sc(vRow.getCell(2),SCORE_BG,SCORE_FG,{bold:true,sz:11,wrap:true}); sc(vRow.getCell(3),SCORE_BG,SCORE_FG,{});
+
+
+      // ── ONGLET 2 ──────────────────────────────────────────────────────────
+      var ws2=wb.addWorksheet('Rapport conformite');
+      ws2.columns=[{width:36},{width:22},{width:22},{width:15},{width:48}];
+      ws2.views=[{state:'frozen',xSplit:0,ySplit:7}];
       const N1=5;
 
       mrow(ws1,['OT \u00c9NERGIE','','','',''],N1,C.BLU_DARK,C.WHT,{bold:true,sz:14},26);
@@ -2435,18 +2468,18 @@ RAPPEL : instance_label = null si le champ n'a qu'une instance. Si plusieurs ins
       [['Rapport g\u00e9n\u00e9r\u00e9 le :',date,'','',''],
        ['Audit (Ma\u00eetre) :',state.auditFileName||'-','','',''],
        ['Visite Technique :',state.vtFileName||'-','','','']].forEach(function(v){
-        var r=ws1.addRow(v); r.height=14;
+        var r=ws2.addRow(v); r.height=14;
         sc(r.getCell(1),C.GRY_META,C.BLU_DARK,{bold:true});
         for(var c=2;c<=N1;c++)sc(r.getCell(c),C.GRY_META,'FF2C3E70',{});
       });
 
-      var sRow=ws1.addRow(['Score global : '+pct+'%  \u2014  '+conformes+' champs conformes sur '+total,'','','','']);
-      sRow.height=20; ws1.mergeCells(sRow.number,1,sRow.number,N1); sr(sRow,SCORE_BG,SCORE_FG,{bold:true,sz:11},N1);
+      var sRow=ws2.addRow(['Score global : '+pct+'%  \u2014  '+conformes+' champs conformes sur '+total,'','','','']);
+      sRow.height=20; ws2.mergeCells(sRow.number,1,sRow.number,N1); sr(sRow,SCORE_BG,SCORE_FG,{bold:true,sz:11},N1);
       for(var sc2=1;sc2<=N1;sc2++){sRow.getCell(sc2).border={
         top:{style:'medium',color:{argb:SCORE_BD}},bottom:{style:'medium',color:{argb:SCORE_BD}},
         left:{style:'thin',color:{argb:C.GRY_LINE}},right:{style:'thin',color:{argb:C.GRY_LINE}}};}
 
-      var hdrRow=ws1.addRow(['Libell\u00e9','Valeur Audit','Valeur VT','Statut','Commentaire IA']);
+      var hdrRow=ws2.addRow(['Libell\u00e9','Valeur Audit','Valeur VT','Statut','Commentaire IA']);
       hdrRow.height=18; sr(hdrRow,C.BLU_DARK,C.WHT,{bold:true,align:'center'},N1);
 
       STATUS_ORDER.forEach(function(statut){
@@ -2460,7 +2493,7 @@ RAPPEL : instance_label = null si le champ n'a qu'une instance. Si plusieurs ins
           mrow(ws1,['   \u203a  '+sec,'','','',''],N1,g.sect,g.stxt,{bold:true,sz:10,italic:true},16);
           secR.forEach(function(rv){
             var lib=rv.instance_label?getFieldNom(rv.id_champ)+' \u2014 '+rv.instance_label:getFieldNom(rv.id_champ);
-            var dr=ws1.addRow([lib,rv.valeur_audit||'-',rv.valeur_vt||'-',rv.statut,rv.commentaire||'']); dr.height=14;
+            var dr=ws2.addRow([lib,rv.valeur_audit||'-',rv.valeur_vt||'-',rv.statut,rv.commentaire||'']); dr.height=14;
             sc(dr.getCell(1),g.row,g.rtxt,{bold:true}); sc(dr.getCell(2),g.row,g.rtxt,{});
             sc(dr.getCell(3),g.row,g.rtxt,{}); sc(dr.getCell(4),g.badge,C.WHT,{bold:true,align:'center'});
             sc(dr.getCell(5),g.row,g.rtxt,{wrap:true});
@@ -2471,30 +2504,30 @@ RAPPEL : instance_label = null si le champ n'a qu'une instance. Si plusieurs ins
           mrow(ws1,['   \u203a  Autres','','','',''],N1,g.sect,g.stxt,{bold:true,sz:10,italic:true},16);
           ns.forEach(function(rv){
             var lib=rv.instance_label?getFieldNom(rv.id_champ)+' \u2014 '+rv.instance_label:getFieldNom(rv.id_champ);
-            var dr=ws1.addRow([lib,rv.valeur_audit||'-',rv.valeur_vt||'-',rv.statut,rv.commentaire||'']); dr.height=14;
+            var dr=ws2.addRow([lib,rv.valeur_audit||'-',rv.valeur_vt||'-',rv.statut,rv.commentaire||'']); dr.height=14;
             sc(dr.getCell(1),g.row,g.rtxt,{bold:true}); sc(dr.getCell(2),g.row,g.rtxt,{});
             sc(dr.getCell(3),g.row,g.rtxt,{}); sc(dr.getCell(4),g.badge,C.WHT,{bold:true,align:'center'});
             sc(dr.getCell(5),g.row,g.rtxt,{wrap:true});
           });
         }
-        var sep=ws1.addRow(['','','','','']); sep.height=6;
+        var sep=ws2.addRow(['','','','','']); sep.height=6;
       });
 
-      // ── ONGLET 2 ──────────────────────────────────────────────────────────
-      var ws2=wb.addWorksheet('Champs manquants');
-      ws2.columns=[{width:28},{width:46},{width:58}];
-      ws2.views=[{state:'frozen',xSplit:0,ySplit:5}];
+      // ── ONGLET 3 ──────────────────────────────────────────────────────────
+      var ws3=wb.addWorksheet('Champs manquants');
+      ws3.columns=[{width:28},{width:46},{width:58}];
+      ws3.views=[{state:'frozen',xSplit:0,ySplit:5}];
       var missing=state.analysisResults.filter(function(rv){return rv.statut==='MANQUANT';});
       var MAN=GRP.MANQUANT;
       mrow(ws2,['OT \u00c9NERGIE','',''],3,C.BLU_DARK,C.WHT,{bold:true,sz:14},26);
       mrow(ws2,['Champs absents de la Visite Technique  \u2014  '+missing.length+' champ'+(missing.length>1?'s':''),'',''],3,MAN.hdr,C.WHT,{sz:11,italic:true},20);
       [['Audit (Ma\u00eetre) :',state.auditFileName||'-',''],
        ['Visite Technique :',state.vtFileName||'-','']].forEach(function(v){
-        var r=ws2.addRow(v); r.height=14;
+        var r=ws3.addRow(v); r.height=14;
         sc(r.getCell(1),C.GRY_META,C.BLU_DARK,{bold:true});
         sc(r.getCell(2),C.GRY_META,'FF2C3E70',{}); sc(r.getCell(3),C.GRY_META,'FF2C3E70',{});
       });
-      var hdr2=ws2.addRow(['Section','Libell\u00e9 du champ manquant','Commentaire IA (suggestion de localisation)']); hdr2.height=18;
+      var hdr2=ws3.addRow(['Section','Libell\u00e9 du champ manquant','Commentaire IA (suggestion de localisation)']); hdr2.height=18;
       sr(hdr2,C.BLU_DARK,C.WHT,{bold:true,align:'center'},3);
       var lastSec2='';
       missing.forEach(function(rv,idx){
@@ -2503,49 +2536,16 @@ RAPPEL : instance_label = null si le champ n'a qu'une instance. Si plusieurs ins
         // Insérer un sous-titre de section quand elle change
         if(sec!==lastSec2){
           lastSec2=sec;
-          var sr2=ws2.addRow(['   \u203a  '+sec,'','']); sr2.height=16;
-          ws2.mergeCells(sr2.number,1,sr2.number,3);
+          var sr2=ws3.addRow(['   \u203a  '+sec,'','']); sr2.height=16;
+          ws3.mergeCells(sr2.number,1,sr2.number,3);
           sc(sr2.getCell(1),MAN.sect,MAN.stxt,{bold:true,sz:10,italic:true});
         }
         var alt=idx%2===0?MAN.row:'FFF2F4F8';
-        var r=ws2.addRow(['',lib,rv.commentaire||'']); r.height=32;
+        var r=ws3.addRow(['',lib,rv.commentaire||'']); r.height=32;
         sc(r.getCell(1),alt,MAN.rtxt,{});
         sc(r.getCell(2),alt,MAN.rtxt,{bold:true,wrap:true});
         sc(r.getCell(3),alt,MAN.rtxt,{wrap:true});
       });
-
-      // ── ONGLET 3 ──────────────────────────────────────────────────────────
-      var ws3=wb.addWorksheet('Synthese');
-      ws3.columns=[{width:44},{width:28},{width:16}];
-      var approx=state.analysisResults.filter(function(rv){return rv.statut==='ORANGE';}).length;
-      var nonconf=state.analysisResults.filter(function(rv){return rv.statut==='ROUGE';}).length;
-      var manqTotal=state.analysisResults.filter(function(rv){return rv.statut==='MANQUANT';}).length;
-      mrow(ws3,["OT \u00c9NERGIE \u2014 Synth\u00e8se de l'Analyse",'',''],3,C.BLU_DARK,C.WHT,{bold:true,sz:14},30);
-      ws3.addRow(['','','']).height=6;
-      var hdr3=ws3.addRow(['Indicateur','Valeur','% du total']); hdr3.height=24;
-      sr(hdr3,C.BLU_DARK,C.WHT,{bold:true,align:'center'},3);
-      [['Total champs analys\u00e9s',total,'100%','FFF2F4F9','FF2C3E70',null],
-       ['Conformes (VERT)',conformes,total?Math.round(conformes/total*100)+'%':'-',C.VERT_ROW,C.VERT_TXT,C.VERT_BADGE],
-       ['Approximatifs (ORANGE)',approx,total?Math.round(approx/total*100)+'%':'-',C.ORA_ROW,C.ORA_TXT,C.ORA_BADGE],
-       ['Non conformes (ROUGE)',nonconf,total?Math.round(nonconf/total*100)+'%':'-',C.RGE_ROW,C.RGE_TXT,C.RGE_BADGE],
-       ['Manquants',manqTotal,total?Math.round(manqTotal/total*100)+'%':'-',C.MAN_ROW,C.MAN_TXT,C.MAN_BADGE],
-      ].forEach(function(d){
-        var r=ws3.addRow([d[0],d[1],d[2]]); r.height=22;
-        sc(r.getCell(1),d[3],d[4],{bold:true,sz:11});
-        sc(r.getCell(2),d[5]||d[3],d[5]?C.WHT:d[4],{bold:true,align:'center',sz:13});
-        sc(r.getCell(3),d[3],d[4],{align:'center',sz:11});
-      });
-      ws3.addRow(['','','']).height=8;
-      var scRow=ws3.addRow(['Score global',pct+'%','']); scRow.height=26;
-      ws3.mergeCells(scRow.number,2,scRow.number,3);
-      sc(scRow.getCell(1),SCORE_BG,SCORE_FG,{bold:true,sz:12});
-      sc(scRow.getCell(2),SCORE_BD,C.WHT,{bold:true,align:'center',sz:16});
-      sc(scRow.getCell(3),SCORE_BG,SCORE_FG,{});
-      var verdict=pct>=95?'Dossier probablement recevable':pct>=80?'Dossier \u00e0 v\u00e9rifier':'Dossier non conforme';
-      var vRow=ws3.addRow(['Verdict',verdict,'']); vRow.height=22;
-      ws3.mergeCells(vRow.number,2,vRow.number,3);
-      sc(vRow.getCell(1),SCORE_BG,SCORE_FG,{bold:true,sz:11}); sc(vRow.getCell(2),SCORE_BG,SCORE_FG,{bold:true,sz:11,wrap:true}); sc(vRow.getCell(3),SCORE_BG,SCORE_FG,{});
-
 
       // ── ONGLET 4 : Référentiel vs Audit ──────────────────────────────────
       var ws4=wb.addWorksheet('R\u00e9f\u00e9rentiel vs Audit');
