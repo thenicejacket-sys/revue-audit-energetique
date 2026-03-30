@@ -538,7 +538,7 @@
 
     .conformity-bar-fill.high { background: linear-gradient(90deg, var(--accent-green), #66bb6a); }
     .conformity-bar-fill.medium { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
-    .conformity-bar-fill.low { background: linear-gradient(90deg, #ef4444, #f87171); }
+    .conformity-bar-fill.low { background: linear-gradient(90deg, #f97316, #fb923c); }
 
     .conformity-message {
       margin-top: 12px;
@@ -553,7 +553,7 @@
 
     .conformity-message.msg-green { background: var(--status-green-bg); color: var(--status-green-text); }
     .conformity-message.msg-yellow { background: var(--status-orange-bg); color: var(--status-orange-text); }
-    .conformity-message.msg-red { background: var(--status-red-bg); color: var(--status-red-text); }
+    .conformity-message.msg-red { background: #FFF0D6; color: #92400e; border: 1px solid #f97316; }
 
     /* ===== RESULTS DASHBOARD ===== */
     .results-section {
@@ -2181,7 +2181,7 @@ RAPPEL : instance_label = null si le champ n'a qu'une instance. Si plusieurs ins
         msgEl.innerHTML = '🟡 <strong>Dossier à vérifier</strong> — Quelques écarts à corriger (' + pct + '%)';
       } else {
         msgEl.className = 'conformity-message msg-red';
-        msgEl.innerHTML = '🔴 <strong>Dossier non conforme</strong> — Corrections importantes requises (' + pct + '%)';
+        msgEl.innerHTML = '🟠 <strong>Dossier à corriger</strong> — Corrections importantes requises (' + pct + '%)';
       }
 
       document.getElementById('results-section').classList.add('visible');
