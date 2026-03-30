@@ -1941,15 +1941,29 @@
           return;
         }
 
-        // Normalisation silencieuse : département = 2 premiers chars si 5 chiffres (code postal)
+        // Regle departement : extrait les 2 premiers chars du code postal VT pour determiner le dept
+        // Si le dept VT (extrait) == dept Audit (normalise) => statut VERT
         const normalizedBatch = batchResults.resultats.map(function(rv) {
           const fieldNom = (getFieldNom(rv.id_champ) || '').toLowerCase();
           if (fieldNom.includes('d\u00e9partement') || fieldNom.includes('departement')) {
-            const fixVal = function(v) {
-              if (v && /^\d{5}$/.test(String(v).trim())) return String(v).trim().slice(0, 2);
-              return v;
+            const toDept = function(v) {
+              var s = String(v || '').trim();
+              if (/^\d{5}$/.test(s)) return s.slice(0, 2); // code postal 5 chiffres -> 2 premiers
+              if (/^\d{2,3}$/.test(s)) return s.padStart(2, '0'); // deja un dept
+              return s;
             };
-            return Object.assign({}, rv, { valeur_audit: fixVal(rv.valeur_audit), valeur_vt: fixVal(rv.valeur_vt) });
+            var deptVT    = rv.valeur_vt    ? toDept(rv.valeur_vt)    : rv.valeur_vt;
+            var deptAudit = rv.valeur_audit ? toDept(rv.valeur_audit) : rv.valeur_audit;
+            var newStatut = rv.statut;
+            var newComment = rv.commentaire || '';
+            if (deptVT && deptAudit && deptVT === deptAudit) {
+              newStatut = 'VERT';
+              newComment = 'D\u00e9partement conforme : code postal VT ' + (rv.valeur_vt||'') + ' -> dept ' + deptVT + ' correspond au d\u00e9partement Audit (' + deptAudit + ').';
+            } else if (deptVT && deptAudit && deptVT !== deptAudit) {
+              newStatut = 'ROUGE';
+              newComment = 'D\u00e9partement non conforme : code postal VT ' + (rv.valeur_vt||'') + ' -> dept ' + deptVT + ' ne correspond pas au d\u00e9partement Audit (' + deptAudit + ').';
+            }
+            return Object.assign({}, rv, { valeur_vt: deptVT, valeur_audit: deptAudit, statut: newStatut, commentaire: newComment });
           }
           return rv;
         });
