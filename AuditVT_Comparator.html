@@ -1336,11 +1336,44 @@
         </div>
       </div>
 
+      <!-- Nom de dossier -->
+      <div style="margin-top:18px;margin-bottom:4px;">
+        <label for="input-dossier" class="section-title" style="margin-bottom:8px;">
+          Nom de dossier
+          <span style="font-size:11px;font-weight:600;color:#B71C1C;margin-left:6px;font-family:'Nunito',sans-serif;">* requis</span>
+        </label>
+        <input
+          id="input-dossier"
+          type="text"
+          placeholder="Ex : DUPONT_123_Appartement_Paris15"
+          maxlength="80"
+          autocomplete="new-password"
+          data-form-type="other"
+          data-lpignore="true"
+          data-1p-ignore="true"
+          oninput="state.dossierName=this.value.trim();updatePrereqs();"
+          style="width:100%;max-width:520px;padding:10px 14px;font-size:13px;font-family:'Nunito',sans-serif;border:1.5px solid var(--border);border-radius:8px;outline:none;transition:border-color 0.2s;background:#fff;color:var(--text-dark);"
+          onfocus="this.style.borderColor='var(--primary)'"
+          onblur="this.style.borderColor='var(--border)'"
+        />
+        <div id="dossier-hint" style="font-size:11px;color:var(--text-muted);margin-top:4px;">Ce nom sera utilisé pour identifier l'analyse dans l'historique.</div>
+      </div>
+
+      <!-- Debug texte extrait -->
+      <div id="debug-text-bar" class="hidden" style="display:flex;gap:12px;margin-top:8px;justify-content:flex-start">
+        <button id="debug-audit-btn" class="hidden" onclick="showTextModal('audit')" style="font-size:12px;padding:4px 12px;background:#e8f0fe;border:1px solid #1B3F8B;border-radius:6px;cursor:pointer;color:#1B3F8B;font-weight:600">🔍 Voir texte Audit extrait</button>
+        <button id="debug-vt-btn" class="hidden" onclick="showTextModal('vt')" style="font-size:12px;padding:4px 12px;background:#e8f0fe;border:1px solid #1B3F8B;border-radius:6px;cursor:pointer;color:#1B3F8B;font-weight:600">🔍 Voir texte VT extrait</button>
+      </div>
+
       <!-- Analyse section -->
       <div class="analyze-section">
         <div>
-          <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:14px;color:var(--text-dark);margin-bottom:8px;">Vérification des prérequis</div>
-          <div class="analyze-status-text" id="prereq-audit">
+          <p class="section-title" style="margin-bottom:10px;">Vérification des prérequis</p>
+          <div class="analyze-status-text" id="prereq-dossier">
+            <span class="status-dot missing" id="dot-dossier"></span>
+            Nom de dossier : <span id="status-dossier" style="font-weight:700">Non renseigné</span>
+          </div>
+          <div class="analyze-status-text" style="margin-top:5px" id="prereq-audit">
             <span class="status-dot missing" id="dot-audit"></span>
             Audit PDF : <span id="status-audit" style="font-weight:700">En attente</span>
           </div>
@@ -1362,7 +1395,7 @@
             <i data-lucide="search" style="width:16px;height:16px"></i>
             Lancer l'analyse
           </button>
-          <div style="font-size:11px;color:var(--text-muted);margin-top:8px;">Les 2 PDFs et le référentiel sont requis</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:8px;">Le nom de dossier, les 2 PDFs et le référentiel sont requis</div>
         </div>
       </div>
 
@@ -1483,9 +1516,13 @@
         </div>
 
         <!-- Missing Fields Section -->
-        <div class="missing-section" id="missing-section">
-          <p class="section-title" style="margin-top:24px">Champs manquants obligatoires</p>
-          <div id="missing-cards-container"></div>
+        <div class="missing-section" id="missing-section" style="display:none">
+          <div onclick="toggleMissingSection()" style="cursor:pointer;display:flex;align-items:center;gap:10px;margin-top:24px;padding:6px 4px;border-radius:8px;transition:background 0.15s;" onmouseover="this.style.background='rgba(27,63,139,0.05)'" onmouseout="this.style.background='transparent'">
+            <p class="section-title" style="margin:0;flex:1;pointer-events:none">Champs manquants obligatoires</p>
+            <span id="missing-count-badge" style="font-size:11px;font-weight:700;background:#546E7A;color:#fff;border-radius:10px;padding:2px 10px;flex-shrink:0;"></span>
+            <i data-lucide="chevron-down" id="missing-chevron" style="width:18px;height:18px;color:var(--primary);transition:transform 0.25s;flex-shrink:0;"></i>
+          </div>
+          <div id="missing-cards-container" style="display:none"></div>
         </div>
       </div>
 
@@ -1658,6 +1695,26 @@
         </button>
       </div>
 
+      <!-- Barre de recherche par nom de dossier -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+        <div style="position:relative;flex:1;min-width:220px;max-width:380px;">
+          <i data-lucide="search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);width:14px;height:14px;color:var(--text-muted);pointer-events:none"></i>
+          <input
+            id="history-search"
+            type="text"
+            placeholder="Rechercher un dossier…"
+            oninput="renderHistory()"
+            style="width:100%;padding:8px 12px 8px 32px;font-size:13px;font-family:'Nunito',sans-serif;border:1.5px solid var(--border);border-radius:8px;outline:none;background:#fff;color:var(--text-dark);"
+            onfocus="this.style.borderColor='var(--primary)'"
+            onblur="this.style.borderColor='var(--border)'"
+          />
+        </div>
+        <button onclick="document.getElementById('history-search').value='';renderHistory();" title="Effacer le filtre" style="background:none;border:none;cursor:pointer;padding:6px 8px;border-radius:7px;color:var(--text-muted);display:flex;align-items:center;transition:color 0.15s,background 0.15s;" onmouseover="this.style.color='#B71C1C';this.style.background='rgba(183,28,28,0.08)'" onmouseout="this.style.color='var(--text-muted)';this.style.background='none'">
+          <i data-lucide="trash-2" style="width:16px;height:16px"></i>
+        </button>
+        <span id="history-filter-count" style="font-size:12px;color:var(--text-muted);"></span>
+      </div>
+
       <div id="history-empty" class="empty-state">
         <i data-lucide="clock" style="width:40px;height:40px;color:var(--text-muted);margin-bottom:12px"></i>
         <p style="color:var(--text-muted)">Aucune analyse enregistrée.<br>Lancez une analyse pour commencer l'historique.</p>
@@ -1667,6 +1724,7 @@
         <table class="ref-table" style="width:100%">
           <thead>
             <tr>
+              <th>Dossier</th>
               <th>Date</th>
               <th>Heure</th>
               <th>Audit (Maître)</th>
@@ -1706,6 +1764,7 @@
       vtText: null,
       vtFileName: null,
       vtFileSize: null,
+      dossierName: '',
       referentiel: [],
       checkOptions: [],
       analysisResults: [],
@@ -1727,6 +1786,9 @@
     // INIT
     // =====================================================================
     document.addEventListener('DOMContentLoaded', () => {
+      // Vider le champ "Nom de dossier" à chaque chargement de page (évite la restauration navigateur)
+      var dossierInput = document.getElementById('input-dossier');
+      if (dossierInput) { dossierInput.value = ''; state.dossierName = ''; }
       lucide.createIcons();
       loadConfig();
       loadReferentielFromStorage();
@@ -1783,7 +1845,7 @@
       reader.onload = async function(ev) {
         try {
           const arrayBuffer = ev.target.result;
-          const text = await extractPdfText(arrayBuffer);
+          const text = await extractPdfText(arrayBuffer, side);
           if (side === 'audit') {
             state.auditText = text;
             state.auditFileName = file.name;
@@ -1807,15 +1869,38 @@
       reader.readAsArrayBuffer(file);
     }
 
-    async function extractPdfText(arrayBuffer) {
+    async function extractPdfText(arrayBuffer, side) {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
       let fullText = '';
+      const pageLog = [];
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const content = await page.getTextContent();
-        const pageText = content.items.map(item => item.str).join(' ');
+        // Préserver les vrais sauts de ligne : hasEOL + delta vertical entre items
+        const pageItems = content.items.filter(item => typeof item.str === 'string');
+        let pageText = '';
+        for (let k = 0; k < pageItems.length; k++) {
+          const it = pageItems[k];
+          pageText += it.str;
+          if (it.hasEOL) {
+            pageText += '\n';
+          } else if (k + 1 < pageItems.length) {
+            const nx = pageItems[k + 1];
+            const yDiff = (it.transform && nx.transform) ? Math.abs(nx.transform[5] - it.transform[5]) : 0;
+            pageText += (yDiff > 3) ? '\n' : ' ';
+          }
+        }
+        const charsBefore = fullText.length;
         fullText += pageText + '\n';
+        pageLog.push({ page: i, chars: pageText.length, offset: charsBefore });
+        if (i === 26) {
+          console.log('[PDF ' + (side||'') + '] PAGE 26 — offset: ' + charsBefore + ' chars, contenu (' + pageText.length + ' chars):\n' + pageText.substring(0, 500));
+        }
+      }
+      const p26 = pageLog.find(p => p.page === 26);
+      if (p26) {
+        console.log('[PDF ' + (side||'') + '] Résumé: ' + pdf.numPages + ' pages, total ' + fullText.length + ' chars. Page 26 commence à offset ' + p26.offset + (p26.offset > 90000 ? ' ⚠️ AU-DELÀ DE LA LIMITE 90000' : ' ✅ dans la limite'));
       }
       return fullText.trim();
     }
@@ -1841,8 +1926,12 @@
       fnEl.classList.remove('hidden');
 
       const szEl = document.getElementById('dz-' + side + '-size');
-      szEl.textContent = formatSize(size) + ' — ' + countWords(text) + ' mots extraits';
+      const charCount = text.length;
+      const limitOk = charCount <= 90000;
+      szEl.textContent = formatSize(size) + ' — ' + countWords(text) + ' mots — ' + charCount.toLocaleString() + ' chars' + (limitOk ? ' ✅' : ' ⚠️ tronqué à 90 000');
       szEl.classList.remove('hidden');
+      const dbgBtn = document.getElementById('debug-' + side + '-btn');
+      if (dbgBtn) { dbgBtn.classList.remove('hidden'); document.getElementById('debug-text-bar').classList.remove('hidden'); }
 
       const wordCount = countWords(text);
       if (wordCount < 100) {
@@ -1862,17 +1951,19 @@
     // PREREQS + ANALYZE BUTTON
     // =====================================================================
     function updatePrereqs() {
+      const dossierOk = state.dossierName && state.dossierName.length > 0;
       const auditOk = !!state.auditText;
       const vtOk    = !!state.vtText;
       const refOk   = state.referentiel.length > 0;
       const apiOk   = !!state.config.apiKey;
 
+      setPrereq('dossier', dossierOk, dossierOk ? state.dossierName : 'Non renseigné');
       setPrereq('audit', auditOk, auditOk ? state.auditFileName : 'En attente');
       setPrereq('vt', vtOk, vtOk ? state.vtFileName : 'En attente');
       setPrereq('ref', refOk, refOk ? state.referentiel.length + ' champ(s)' : 'Non chargé — voir Paramètres');
       setPrereq('api', apiOk, apiOk ? 'Configuré' : 'Non configuré — voir Paramètres');
 
-      const canAnalyze = auditOk && vtOk && refOk;
+      const canAnalyze = dossierOk && auditOk && vtOk && refOk;
       document.getElementById('btn-analyze').disabled = !canAnalyze || state.analysisRunning;
     }
 
@@ -1910,26 +2001,445 @@
       state.lexiqueSuggestions = [];
 
       // Step 1: Prepare text excerpts
-      const auditExcerpt = state.auditText.substring(0, 15000);
-      const vtExcerpt    = state.vtText.substring(0, 15000);
+      const auditFull = state.auditText;
+      const vtFull    = state.vtText;
 
+      // Pré-extraction BATIAUDIT : [Label] Observé/Mesuré [Valeur]
+      function extractBatiauditValue(text, label) {
+        // Génère des variantes du label (sans unités, sans tirets, etc.)
+        var candidates = [label];
+        candidates.push(label.replace(/\s*\([^)]*\)/g, '').trim());
+        candidates.push(label.replace(/-/g, ' '));
+        var lower = text.toLowerCase();
+        for (var c = 0; c < candidates.length; c++) {
+          var lbl = candidates[c].toLowerCase().trim();
+          if (lbl.length < 4) continue;
+          var idx = lower.indexOf(lbl);
+          while (idx !== -1) {
+            // Cherche "Observé/Mesuré" dans les 200 chars après le label
+            var after = text.substring(idx + lbl.length, idx + lbl.length + 200);
+            var omIdx = after.toLowerCase().indexOf('observ');
+            if (omIdx !== -1 && omIdx < 100) {
+              // Extrait la valeur après "Observé/Mesuré ..."
+              var afterOm = after.substring(omIdx);
+              var valMatch = afterOm.match(/observ[^a-z]*[\/]?\s*[Mm]esur[eé][^a-z]*\s+([^\n]{1,80})/i);
+              if (valMatch) {
+                var val = valMatch[1].trim();
+                // Stoppe à la prochaine entrée (mot suivi de Observé/Mesuré)
+                val = val.split(/\s+[A-ZÀ-Ÿ][a-zà-ÿ]/)[0].trim();
+                if (val) return val;
+              }
+            }
+            idx = lower.indexOf(lbl, idx + 1);
+          }
+        }
+        return null;
+      }
+
+      // ---- Pré-extraction VT via lexique de composition (formules "A + B + C") ----
+      // ---- Pré-détection des instances de parois — multi-format, multi-pass ----
+      function detectBatiauditInstances(text) {
+        var murs=[], planchers=[], toitures=[], menuiseries=[];
+        var lines = text.split(/\r?\n/);
+
+        // Helpers
+        function addUniq(arr, val) { if (arr.indexOf(val) < 0) arr.push(val); }
+        function catFromLabel(lbl) {
+          if (lbl.match(/fen[eê]tre|ouvrant|baie|velux|porte.fen[eê]tre|vitr[eé]/)) return 'menuiseries';
+          if (lbl.match(/plancher|dalle\s*(?:bas|sol)|vide.san|terre.plein/)) return 'planchers';
+          if (lbl.match(/toiture|comble|toit|couverture|plancher\s*haut|plafond\s*haut/)) return 'toitures';
+          return null; // indéterminé → laisser au contexte de section
+        }
+        function pushToCategory(label, sectionCtx) {
+          var lbl = label.toLowerCase();
+          // Menuiseries prioritaire
+          if (lbl.match(/fen[eê]tre|ouvrant|baie|velux|porte.fen|vitr[eé]/) || sectionCtx === 'menuiseries') {
+            return addUniq(menuiseries, label);
+          }
+          if (lbl.match(/plancher|dalle|vide.san|terre.plein/) || sectionCtx === 'planchers') {
+            return addUniq(planchers, label);
+          }
+          if (lbl.match(/toiture|comble|toit|couverture|plancher\s*haut|plafond\s*haut/) || sectionCtx === 'toitures') {
+            return addUniq(toitures, label);
+          }
+          // Porte seule → menuiserie si dans section menuiseries, sinon mur par défaut
+          if (lbl.match(/^porte(?!\s*fen)/) && sectionCtx === 'menuiseries') {
+            return addUniq(menuiseries, label);
+          }
+          addUniq(murs, label);
+        }
+
+        // Détecteurs de sections
+        var SECT_HDRS = {
+          murs:        /^(?:murs?|parois?\s+verticales?|parois?\s+opaques?|fa[çc]ades?)\s*$/i,
+          planchers:   /^(?:planchers?(?:\s+bas)?|dalles?\s*(?:bas|de\s+sol)?|vide[\s-]sanitaires?|terre[\s-]pleins?)\s*$/i,
+          toitures:    /^(?:toitures?|combles?|planchers?\s+hauts?|plafonds?\s+hauts?|couvertures?)\s*$/i,
+          menuiseries: /^(?:menuiseries?|ouvrants?|baies?\s*vitr[eé]es?)\s*$/i
+        };
+        function detectSection(line) {
+          for (var s in SECT_HDRS) if (SECT_HDRS[s].test(line)) return s;
+          return null;
+        }
+        var MAIN_SECT_EXIT = /^(?:ventilation|chauffage|b[âa]timent|enveloppe|bilan|r[eé]sultat|garde|escalier|cave|garage|annexe|note|conclusion)\s*/i;
+
+        // ===== PASS 0 (PRIORITAIRE) : format tableau récapitulatif page 6
+        // Format : "[Catégorie] Description Isolation" → "Paroi NN [description]" / "(L×H) Fen.bat. ..."
+        // Le plus fiable : lit exactement ce qui est dans le résumé "État initial du logement"
+        var CAT_HDR0 = /^(murs?|planchers?(?:\s+bas)?|toitures?|combles?|menuiseries?|ouvrants?)\s+(?:description|isolat)/i;
+        var PAROI_RE0 = /^[Pp]aroi\s+0*(\d+[a-z]?)\s*(?:\([^)]{0,12}\))?\s*(.*)/;
+        var SECT_EXIT0 = /^(?:observations?|plan\s+ou|sc[eé]narios?|annexe|audit\s+[eé]nerg|\d+\s*\.\s*[A-Z\u00c0-\u00ff])/i;
+        var curCat0=null, fenC0=0, porteC0=0, baieC0=0;
+        for (var i0=0; i0<lines.length; i0++) {
+          var l0 = lines[i0].trim();
+          if (!l0) continue;
+          var ch0 = l0.match(CAT_HDR0);
+          if (ch0) {
+            var cn0 = ch0[1].toLowerCase();
+            if (/^men|^ouv/.test(cn0)) curCat0='menuiseries';
+            else if (/^mur/.test(cn0)) curCat0='murs';
+            else if (/^plan/.test(cn0)) curCat0='planchers';
+            else curCat0='toitures';
+            fenC0=0; porteC0=0; baieC0=0; continue;
+          }
+          // Fallback PASS 0b: accepte aussi un nom de catégorie seul (PDF.js peut séparer l'en-tête)
+          // IMPORTANT : pas de condition !curCat0 → permet la transition entre catégories
+          if (!ch0) {
+            var _nc0 = null;
+            if (/^menuiseries?\s*$/i.test(l0)) _nc0 = 'menuiseries';
+            else if (/^murs?\s*$|^parois?\s+opaques?\s*$/i.test(l0)) _nc0 = 'murs';
+            else if (/^planchers?(?:\s+bas)?\s*$/i.test(l0)) _nc0 = 'planchers';
+            else if (/^(?:toitures?|combles?)\s*$/i.test(l0)) _nc0 = 'toitures';
+            if (_nc0) { curCat0 = _nc0; fenC0=0; porteC0=0; baieC0=0; continue; }
+          }
+          if (curCat0 && SECT_EXIT0.test(l0)) { curCat0=null; break; }
+          if (!curCat0) continue;
+          if (curCat0 === 'menuiseries') {
+            var dm0 = l0.match(/^\(\s*(\d+[,.]?\d*)\s*[xX×]\s*(\d+[,.]?\d*)\s*\)\s*(.*)/);
+            if (!dm0) continue;
+            var W0=dm0[1].replace(',','.'), H0=dm0[2].replace(',','.');
+            if (parseFloat(W0)<0.2||parseFloat(W0)>5||parseFloat(H0)<0.2||parseFloat(H0)>5) continue;
+            var d0=dm0[3].toLowerCase(), lbl0;
+            if (d0.match(/porte(?!\s*fen)/)) { porteC0++; lbl0='Porte'+(porteC0>1?' '+porteC0:'')+' ('+W0+'\u00d7'+H0+')'; }
+            else if (d0.match(/baie|couliss/)) { baieC0++; lbl0='Baie vitr\u00e9e'+(baieC0>1?' '+baieC0:'')+' ('+W0+'\u00d7'+H0+')'; }
+            else { fenC0++; lbl0='Fen\u00eatre '+fenC0+' ('+W0+'\u00d7'+H0+')'; }
+            addUniq(menuiseries, lbl0);
+          } else {
+            var pm0 = l0.match(PAROI_RE0);
+            if (!pm0) continue;
+            var desc0 = pm0[2].trim().split(/\s{3,}|\t/)[0].trim().substring(0,50);
+            var lblp0 = desc0 ? 'Paroi '+pm0[1]+' \u2014 '+desc0 : 'Paroi '+pm0[1];
+            if (curCat0==='murs') addUniq(murs, lblp0);
+            else if (curCat0==='planchers') addUniq(planchers, lblp0);
+            else if (curCat0==='toitures') addUniq(toitures, lblp0);
+          }
+        }
+
+        // ===== PASS 1 (fallback) : BATIAUDIT "Référence [type] Observé/Mesuré [label]"
+        // Ne s'exécute que si PASS 0 n'a rien trouvé (format non-standard sans tableau récap)
+        var pass0Total = murs.length + planchers.length + toitures.length + menuiseries.length;
+        if (pass0Total === 0) {
+          var sectionCtx1 = null;
+          for (var i=0; i<lines.length; i++) {
+            var line = lines[i].trim();
+            var sec = detectSection(line);
+            if (sec) { sectionCtx1 = sec; continue; }
+            var m1 = line.match(/(?:[Rr][eé]f[eé]rence\s+)?(?:paroi|mur|plancher|toiture|couverture|menuiserie|ouvrant|baie|fen[eê]tre|porte)\s*(?:0*\d+\s*)?[Oo]bserv[^\/\n]{0,30}\/\s*[Mm]esur[eé][eé]?\s+(.+)/i);
+            if (!m1) continue;
+            var label = m1[1].trim().split(/\s{3,}|\t/)[0].trim();
+            if (!label || label.length < 2 || label.length > 100) continue;
+            pushToCategory(label, sectionCtx1);
+          }
+        }
+
+        // ===== PASS 2 (fallback) : format "(W x H)" — section menuiseries UNIQUEMENT
+        // Limité à la section pour éviter de compter les doublons des pages BATIAUDIT détail
+        if (menuiseries.length === 0) {
+          var tableRe = /\(\s*(\d+[,.]?\d*)\s*[xX×]\s*(\d+[,.]?\d*)\s*\)/;
+          var fenCnt2=0, porteCnt2=0, baieCnt2=0, inMenuiSect2=false;
+          for (var j=0; j<lines.length; j++) {
+            var tl = lines[j].trim();
+            if (/^(?:menuiseries?|ouvrants?|baies?\s*vitr[eé]es?)\s*(?:description|isolat.*)?$/i.test(tl) && tl.length<120) { inMenuiSect2=true; continue; }
+            if (inMenuiSect2 && tl.length>3 && /^(?:murs?|planchers?|toitures?|chauffage|ventilation|ecs|observations?|plan\s+ou|sc[eé]narios?)\s*/i.test(tl)) { inMenuiSect2=false; break; }
+            if (!inMenuiSect2) continue;
+            var mt = tl.match(tableRe);
+            if (!mt) continue;
+            var W=mt[1].replace(',','.'), H=mt[2].replace(',','.');
+            if (parseFloat(W)<0.2||parseFloat(W)>5||parseFloat(H)<0.2||parseFloat(H)>5) continue;
+            var dl=tl.toLowerCase(), il2;
+            if (dl.match(/porte(?!\s*fen)/)) { porteCnt2++; il2='Porte'+(porteCnt2>1?' '+porteCnt2:'')+' ('+W+'\u00d7'+H+')'; }
+            else if (dl.match(/baie|couliss/)) { baieCnt2++; il2='Baie vitr\u00e9e'+(baieCnt2>1?' '+baieCnt2:'')+' ('+W+'\u00d7'+H+')'; }
+            else { fenCnt2++; il2='Fen\u00eatre '+fenCnt2+' ('+W+'\u00d7'+H+')'; }
+            addUniq(menuiseries, il2);
+          }
+        }
+
+        // ===== PASS 2b (fallback): BATIAUDIT detail — "(W×H)" labels adjacent to Observé/Mesuré
+        // Fiable quand PASS 0 échoue sur les PDFs dont PDF.js sépare l'en-tête de tableau
+        if (menuiseries.length === 0) {
+          var DIM_RE2b = /^\(\s*(\d+[,.]?\d*)\s*[xX×\u00d7]\s*(\d+[,.]?\d*)\s*\)\s*(.*)?$/;
+          var OM_RE2b = /observ[^\/\n]{0,20}\/\s*mesur/i;
+          var fenN2b=0, porteN2b=0, baieN2b=0;
+          for (var nb=0; nb<lines.length; nb++) {
+            var nlb = lines[nb].trim();
+            var nmb = nlb.match(DIM_RE2b);
+            if (!nmb) continue;
+            // Vérifier contexte BATIAUDIT : OM dans les 8 lignes avant OU après
+            var prevOM=false, nextOM=false;
+            for (var pk=Math.max(0,nb-8); pk<nb; pk++) { if (OM_RE2b.test(lines[pk].trim())) { prevOM=true; break; } }
+            for (var nk=nb+1; nk<Math.min(lines.length,nb+9); nk++) { if (OM_RE2b.test(lines[nk].trim())) { nextOM=true; break; } }
+            if (!prevOM && !nextOM) continue; // pas en contexte BATIAUDIT → ignorer
+            var Wb=nmb[1].replace(',','.'), Hb=nmb[2].replace(',','.');
+            if (parseFloat(Wb)<0.2||parseFloat(Wb)>5||parseFloat(Hb)<0.2||parseFloat(Hb)>5) continue;
+            var dlb = (nmb[3]||'').toLowerCase();
+            var lblb;
+            if (dlb.match(/porte(?!\s*fen)/)) { porteN2b++; lblb='Porte'+(porteN2b>1?' '+porteN2b:'')+' ('+Wb+'\u00d7'+Hb+')'; }
+            else if (dlb.match(/baie|couliss/)) { baieN2b++; lblb='Baie vitr\u00e9e'+(baieN2b>1?' '+baieN2b:'')+' ('+Wb+'\u00d7'+Hb+')'; }
+            else { fenN2b++; lblb='Fen\u00eatre '+fenN2b+' ('+Wb+'\u00d7'+Hb+')'; }
+            addUniq(menuiseries, lblb);
+          }
+          if (menuiseries.length > 0) console.log('[PASS2b] Menuiseries BATIAUDIT-context:', menuiseries.join(' / '));
+        }
+
+        // ===== PASS 2c (fallback): fenêtre contextuelle 50 lignes après header "menuiseries"
+        // Cible les PDFs où "Menuiseries" apparaît seul puis les dimensions suivent dans les lignes suivantes
+        if (menuiseries.length === 0) {
+          var fn2c=0, pn2c=0, bn2c=0;
+          for (var j2c=0; j2c<lines.length; j2c++) {
+            var tl2c = lines[j2c].trim();
+            if (!/\bmenuiseries?\b/i.test(tl2c) || tl2c.length > 120) continue;
+            for (var k2c=j2c+1; k2c<Math.min(lines.length, j2c+50); k2c++) {
+              var lk2c = lines[k2c].trim();
+              if (/^(?:murs?|planchers?|toitures?|chauffage|ventilation|ecs|observations?|sc[eé]narios?)\s/i.test(lk2c) && lk2c.length < 80) break;
+              var dm2c = lk2c.match(/\(\s*(\d+[,.]?\d*)\s*[xX×\u00d7]\s*(\d+[,.]?\d*)\s*\)/);
+              if (!dm2c) continue;
+              var W2c=dm2c[1].replace(',','.'), H2c=dm2c[2].replace(',','.');
+              if (parseFloat(W2c)<0.2||parseFloat(W2c)>5||parseFloat(H2c)<0.2||parseFloat(H2c)>5) continue;
+              var dl2c=lk2c.toLowerCase(), lbl2c;
+              if (dl2c.match(/porte(?!\s*fen)/)) { pn2c++; lbl2c='Porte'+(pn2c>1?' '+pn2c:'')+' ('+W2c+'\u00d7'+H2c+')'; }
+              else if (dl2c.match(/baie|couliss/)) { bn2c++; lbl2c='Baie vitr\u00e9e'+(bn2c>1?' '+bn2c:'')+' ('+W2c+'\u00d7'+H2c+')'; }
+              else { fn2c++; lbl2c='Fen\u00eatre '+fn2c+' ('+W2c+'\u00d7'+H2c+')'; }
+              addUniq(menuiseries, lbl2c);
+            }
+            if (menuiseries.length > 0) { console.log('[PASS2c] Menuiseries header-context:', menuiseries.join(' / ')); break; }
+          }
+        }
+
+        // ===== PASS 3 (fallback) : détection contextuelle PAR SECTION — formats divers
+        var SECT_JOBS = [
+          { key:'murs',       hdr:/^(?:murs?|parois?\s+opaques?|fa[çc]ades?)(?:\s+(?:description|isolat|compos).*)?$/i,  arr:murs,       pfx:'Paroi ' },
+          { key:'planchers',  hdr:/^(?:planchers?(?:\s+bas)?|dalles?|sols?)(?:\s+(?:description|isolat).*)?$/i,           arr:planchers,  pfx:'Paroi ' },
+          { key:'toitures',   hdr:/^(?:toitures?|combles?|planchers?\s+hauts?)(?:\s+(?:description|isolat).*)?$/i,        arr:toitures,   pfx:'Paroi ' },
+          { key:'menuiseries',hdr:/^(?:menuiseries?|ouvrants?)(?:\s+(?:description|isolat).*)?$/i,                        arr:menuiseries,pfx:null }
+        ];
+        SECT_JOBS.forEach(function(job) {
+          if (job.arr.length > 0) return;
+          var inSect=false, cnt=0;
+          for (var p=0; p<lines.length; p++) {
+            var pl = lines[p].trim();
+            if (job.hdr.test(pl)) { inSect=true; cnt=0; continue; }
+            if (inSect && pl.length>3 && MAIN_SECT_EXIT.test(pl)) { inSect=false; break; }
+            // Pour les parois (non-menuiseries), sortir si on entre dans une section menuiseries/ouvrants
+            if (inSect && job.key !== 'menuiseries' && pl.length>3 && /^(?:menuiseries?|ouvrants?|baies?\s*vitr)/i.test(pl)) { inSect=false; break; }
+            if (!inSect || pl.length<4) continue;
+            if (/^(?:composition|[eé]paisseur|isolant|r\s*=|u\s*=|type|nature|mat[eé]riau|description|surface|orientation|adoss|mitoyen)/i.test(pl)) continue;
+            if (job.key === 'menuiseries') {
+              var dimM = pl.match(/(\d+[,.]\d+)\s*[xX×]\s*(\d+[,.]\d+)/);
+              if (!dimM) continue;
+              var W3=dimM[1].replace(',','.'), H3=dimM[2].replace(',','.');
+              if (parseFloat(W3)<0.2||parseFloat(W3)>5||parseFloat(H3)<0.2||parseFloat(H3)>5) continue;
+              var dl3=pl.toLowerCase(), il3;
+              if (dl3.match(/porte(?!\s*fen)/)) { cnt++; il3='Porte'+(cnt>1?' '+cnt:'')+' ('+W3+'\u00d7'+H3+')'; }
+              else if (dl3.match(/baie|couliss/)) { cnt++; il3='Baie vitr\u00e9e'+(cnt>1?' '+cnt:'')+' ('+W3+'\u00d7'+H3+')'; }
+              else { cnt++; il3='Fen\u00eatre '+cnt+' ('+W3+'\u00d7'+H3+')'; }
+              addUniq(job.arr, il3);
+            } else {
+              var pm3 = pl.match(/^[Pp]aroi\s+0*(\d+[a-z]?)\s*(?:\([^)]{0,12}\))?\s*(.*)/);
+              if (pm3) {
+                var d3=pm3[2].trim().split(/\s{3,}|\t/)[0].trim().substring(0,40);
+                addUniq(job.arr, d3 ? 'Paroi '+pm3[1]+' \u2014 '+d3 : 'Paroi '+pm3[1]);
+              } else if (/[Oo]bserv[^\/]{0,20}\/\s*[Mm]esur/.test(pl)) {
+                cnt++;
+                var label3=job.pfx+cnt;
+                var vm=pl.match(/[Oo]bserv[^\/]{0,20}\/\s*[Mm]esur[eé][eé]?\s+(.+)/i);
+                if (vm) { var rl3=vm[1].trim().split(/\s{3,}|\t/)[0].trim(); if (rl3&&rl3.length>=2&&rl3.length<=80) label3=rl3; }
+                addUniq(job.arr, label3);
+              }
+            }
+          }
+        });
+
+        // ===== PASS 4 : scanner générique BATIAUDIT pour non-parois (chauffage, ECS, ventilation…)
+        // Détecte "[Type] [N] Observé/Mesuré [Label]" pour toute catégorie hors parois
+        var generic = {};
+        var PAROI_KEYS4 = /^(?:mur|paroi|plancher|toiture|couverture|menuiserie|ouvrant|baie|fen|porte|comble|dalle)/i;
+        var GEN_RE4 = /^([A-Za-z\u00c0-\u00ff][A-Za-z\u00c0-\u00ff ]{2,25}?)\s+(?:[nN]\u00b0?\s*\d+\s+|0*[1-9]\d*\s+)?[Oo]bserv[^\/\n]{0,25}\/\s*[Mm]esur[eé][eé]?\s+(.+)/;
+        for (var g4=0; g4<lines.length; g4++) {
+          var gl4 = lines[g4].trim();
+          var gm4 = gl4.match(GEN_RE4);
+          if (!gm4) continue;
+          var gtypeRaw4 = gm4[1].trim().toLowerCase();
+          if (PAROI_KEYS4.test(gtypeRaw4)) continue; // parois : déjà gérées
+          // Normaliser en clé catégorie
+          var gcat4;
+          if (/chauf|g[eé]n[eé]rat|chaud[i\u00e8]re|\bpac\b|pompe.cha/i.test(gtypeRaw4)) gcat4 = 'chauffage';
+          else if (/\becs\b|eau.*chaude|chauffe.eau|ballon/i.test(gtypeRaw4)) gcat4 = 'ecs';
+          else if (/\bvmc\b|ventil/i.test(gtypeRaw4)) gcat4 = 'ventilation';
+          else if (/[eé]clairage/i.test(gtypeRaw4)) gcat4 = 'eclairage';
+          else gcat4 = gtypeRaw4.split(/\s+/)[0];
+          var glabel4 = gm4[2].trim().split(/\s{3,}|\t/)[0].trim();
+          if (!glabel4 || glabel4.length < 2 || glabel4.length > 100) continue;
+          if (!generic[gcat4]) generic[gcat4] = [];
+          if (generic[gcat4].indexOf(glabel4) < 0) generic[gcat4].push(glabel4);
+        }
+
+        return { murs:murs, planchers:planchers, toitures:toitures, menuiseries:menuiseries, generic:generic };
+      }
+      // Vérifie qu'un extrait cité par l'IA existe réellement dans le texte source
+      // Retourne : 'verifie' | 'partiel' | 'non_verifie' | 'non_cite' | 'court'
+      function verifyCitation(extract, sourceText) {
+        if (!extract || typeof extract !== 'string' || extract.trim().length < 6) return 'non_cite';
+        var norm = function(s) {
+          return (s||'').toLowerCase()
+            .replace(/[àáâãä]/g,'a').replace(/[èéêëẽ]/g,'e').replace(/[ìíîï]/g,'i')
+            .replace(/[òóôõö]/g,'o').replace(/[ùúûü]/g,'u').replace(/ç/g,'c').replace(/ñ/g,'n')
+            .replace(/\s+/g,' ').trim();
+        };
+        var ne = norm(extract);
+        var ns = norm(sourceText);
+        if (ns.includes(ne)) return 'verifie';
+        // Match partiel : ≥70% des mots significatifs (>4 chars) trouvés dans la source
+        var words = ne.split(' ').filter(function(w){return w.length>4;});
+        if (words.length < 2) return 'court';
+        var found = words.filter(function(w){return ns.includes(w);}).length;
+        if (found / words.length >= 0.70) return 'partiel';
+        return 'non_verifie';
+      }
+
+      var detectedInstances = detectBatiauditInstances(auditFull);
+      (function(){
+        var log = Object.keys(detectedInstances).filter(function(k){return detectedInstances[k].length>0;})
+          .map(function(k){return k+'('+detectedInstances[k].length+'): '+detectedInstances[k].join(' / ');}).join(' | ');
+        if (log) console.log('[INSTANCES PAROIS]', log);
+      })();
+
+      // ---- Expansion des champs par instances détectées ----
+      // Pour chaque catégorie avec N > 1 instances : crée N copies du champ, chacune pré-labellisée.
+      // L'IA n'a plus qu'à retourner 1 valeur par champ — fiable même pour instances identiques.
+      var _instSectionMap = [
+        { re: /menuiserie|ouvrant|baie|fen[eê]tre/i,          arr: detectedInstances.menuiseries },
+        { re: /\bmurs?\b|paroi.*opaque|fa[çc]ade/i,            arr: detectedInstances.murs },
+        { re: /plancher|dalle|vide[\s-]san|terre[\s-]plein/i,  arr: detectedInstances.planchers },
+        { re: /toiture|comble|plancher[\s-]*haut|plafond[\s-]*haut/i, arr: detectedInstances.toitures }
+      ];
+      // Ajouter les catégories génériques avec >1 instance
+      if (detectedInstances.generic) {
+        Object.keys(detectedInstances.generic).forEach(function(gcat) {
+          var garr = detectedInstances.generic[gcat];
+          if (garr.length > 1) {
+            _instSectionMap.push({ re: new RegExp(gcat.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'), 'i'), arr: garr });
+          }
+        });
+      }
+      // Expansion par instances — ordonnée PAR INSTANCE (instance-first)
+      // Garantit que chaque batch contient au plus 1 copie de chaque id_champ
+      // → évite que l'IA consolide plusieurs instances du même champ en 1 seul résultat
+      var _instBuckets = {}; // lbl → [champs]
+      var _instOrderList = []; // ordre de découverte des instances
+      var _nonExpandedFields = [];
+      refFields.forEach(function(f) {
+        var ctx = (f.section || '') + ' ' + (f.categorie || '') + ' ' + (f.parentSection || '');
+        var matched = null;
+        for (var _si=0; _si<_instSectionMap.length; _si++) {
+          if (_instSectionMap[_si].arr.length >= 1 && _instSectionMap[_si].re.test(ctx)) {
+            matched = _instSectionMap[_si].arr;
+            break;
+          }
+        }
+        if (matched) {
+          matched.forEach(function(lbl) {
+            if (!_instBuckets[lbl]) { _instBuckets[lbl] = []; _instOrderList.push(lbl); }
+            _instBuckets[lbl].push(Object.assign({}, f, { _forced_instance: lbl }));
+          });
+        } else {
+          _nonExpandedFields.push(f);
+        }
+      });
+      // Construire expandedFields : d'abord tous les champs de l'instance 1, puis instance 2, etc.
+      var expandedFields = [];
+      _instOrderList.forEach(function(lbl) {
+        _instBuckets[lbl].forEach(function(ef) { expandedFields.push(ef); });
+      });
+      _nonExpandedFields.forEach(function(f) { expandedFields.push(f); });
+      if (expandedFields.length > refFields.length) {
+        console.log('[EXPANSION instance-first] ' + refFields.length + ' champs → ' + expandedFields.length + ' (' + _instOrderList.length + ' instances : ' + _instOrderList.join(' / ') + ')');
+      }
+
+      // Batching intelligent : 1 batch par instance (tous les champs d'une fenêtre/paroi ensemble)
+      // Pour les champs non-expansés (autres sections), batch de 5 classique
       const batchSize = 5;
-      const batches = chunkArray(refFields, batchSize);
+      var batches = [];
+      // Batches instance-par-instance pour les champs expansés
+      _instOrderList.forEach(function(lbl) {
+        var instFields = expandedFields.filter(function(f) { return f._forced_instance === lbl; });
+        // Découper en chunks de batchSize pour ne pas dépasser les limites de l'API
+        for (var _bi = 0; _bi < instFields.length; _bi += batchSize) {
+          batches.push(instFields.slice(_bi, _bi + batchSize));
+        }
+      });
+      // Batches classiques pour les champs non-expansés
+      var chunkNonExp = chunkArray(_nonExpandedFields, batchSize);
+      chunkNonExp.forEach(function(c) { batches.push(c); });
       let processed = 0;
 
       for (let b = 0; b < batches.length; b++) {
         const batch = batches[b];
-        const batchStart = b * batchSize;
-        const progressPct = Math.round((processed / refFields.length) * 90);
+        const batchStart = processed;
+        const progressPct = Math.round((processed / expandedFields.length) * 90);
         updateProgress(
           progressPct,
-          'Analyse du champ ' + (batchStart + 1) + '–' + Math.min(batchStart + batchSize, refFields.length) + ' / ' + refFields.length + ' : ' + batch[0].nom,
+          'Analyse du champ ' + (batchStart + 1) + '–' + Math.min(batchStart + batchSize, expandedFields.length) + ' / ' + expandedFields.length + ' : ' + batch[0].nom,
           'Lot ' + (b + 1) + ' / ' + batches.length + ' — Interrogation IA...'
         );
 
+        // Pré-extraire les valeurs BATIAUDIT pour chaque champ du batch
+        const preExtracted = {};
+        batch.forEach(function(f) {
+          var sectionLC = ((f.section||'') + ' ' + (f.categorie||'') + ' ' + (f.parentSection||'')).toLowerCase();
+          var nomLC     = (f.nom||'').toLowerCase();
+          // RÈGLE ABSOLUE : ne JAMAIS pré-extraire "Surface" pour les menuiseries
+          // → le BATIAUDIT contient la SHAB (ex: 56.66 m²) qui serait confondue avec la surface d'un ouvrant
+          var isMenuiserieSurface = (nomLC.includes('surface') || nomLC.includes('m\u00b2') || nomLC.includes('m2')) &&
+            (sectionLC.match(/menuiserie|ouvrant|baie|fen[eê]tre/) !== null);
+          if (isMenuiserieSurface) {
+            console.log('[BATIAUDIT] "' + f.nom + '" \u2014 PRE-EXTRACTION BLOQU\u00c9E (menuiserie surface \u2192 risque SHAB)');
+            return;
+          }
+          var val = extractBatiauditValue(auditFull, f.nom);
+          if (val) {
+            // Sécurité supplémentaire : si champ "surface" ET section menuiserie/ouvrant ET valeur > 20 m² → probable SHAB confondue, bloquer
+            // NE PAS bloquer "Surface de référence" (SHAB du logement) qui est dans la section générale
+            var valNum = parseFloat(String(val).replace(',','.'));
+            if ((nomLC.includes('surface') || nomLC.includes('m\u00b2')) && !isNaN(valNum) && valNum > 20 && sectionLC.match(/menuiserie|ouvrant|baie|fen[eê]tre/)) {
+              console.log('[BATIAUDIT] "' + f.nom + '" \u2192 "' + val + '" BLOQU\u00c9 (valeur > 20 m\u00b2 dans section menuiserie, probable SHAB)');
+              return;
+            }
+            preExtracted[f.id] = val;
+            console.log('[BATIAUDIT] "' + f.nom + '" \u2192 "' + val + '"');
+          }
+        });
+
+        // Snippet VT uniquement (l'audit est géré via pré-extraction)
+        const batchKeywords = batch.reduce(function(acc, f) {
+          acc.push(f.nom);
+          if (f.lexique) f.lexique.split(/[,;|]/).forEach(function(s){ acc.push(s.trim()); });
+          return acc;
+        }, []);
+        const vtSnippet = auditFull.substring(0, 90000); // audit complet envoyé
+        const vtSnip2   = vtFull.substring(0, 90000);
+
         let batchResults;
         try {
-          batchResults = await callAI(batch, auditExcerpt, vtExcerpt);
+          batchResults = await callAI(batch, vtSnippet, vtSnip2, preExtracted, detectedInstances);
         } catch (err) {
           console.error('Erreur IA batch ' + b + ':', err);
           showProgress(false);
@@ -1941,10 +2451,52 @@
           return;
         }
 
+        // ---- Helpers post-traitement ----
+        // Parse une plage depuis une string : "1948-1974", "1948 à 1974", "entre 1948 et 1974"
+        var parseRange = function(s) {
+          var str = String(s || '').trim();
+          var m = str.match(/(\d+(?:[.,]\d+)?)\s*[-\u00e0\/]\s*(\d+(?:[.,]\d+)?)/i)
+               || str.match(/entre\s+(\d+(?:[.,]\d+)?)\s+et\s+(\d+(?:[.,]\d+)?)/i);
+          if (m) {
+            var lo = parseFloat(m[1].replace(',', '.'));
+            var hi = parseFloat(m[2].replace(',', '.'));
+            if (!isNaN(lo) && !isNaN(hi)) return { lo: Math.min(lo, hi), hi: Math.max(lo, hi) };
+          }
+          return null;
+        };
+        // Extrait un nombre d'une string (ignore texte autour)
+        var toNum = function(s) {
+          var str = String(s || '').trim().replace(',', '.');
+          var m = str.match(/(\d+(?:\.\d+)?)/);
+          return m ? parseFloat(m[1]) : null;
+        };
+        // Normalise un nombre de niveaux : RDC=1, R+1=2, R+2=3, "1"=1, "1,0"=1, etc.
+        var toNiveaux = function(s) {
+          var str = String(s || '').trim().toLowerCase().replace(/\s+/g, '');
+          if (str === 'rdc' || str === 'r' || str === 'rez-de-chauss\u00e9e' || str === 'rezdeplauss\u00e9e' || str === 'rezdeplauss\u00e9' || str.startsWith('rdc+0')) return 1;
+          var rPlus = str.match(/^r\+(\d+)$/);
+          if (rPlus) return 1 + parseInt(rPlus[1]);
+          var n = parseFloat(str.replace(',', '.'));
+          return isNaN(n) ? null : Math.round(n);
+        };
+
         // Regle departement : extrait les 2 premiers chars du code postal VT pour determiner le dept
         // Si le dept VT (extrait) == dept Audit (normalise) => statut VERT
-        const normalizedBatch = batchResults.resultats.map(function(rv) {
+        const normalizedBatch = batchResults.resultats.map(function(rv, _ri) {
+          // Garantir instance_label depuis le champ pré-labellisé si l'IA ne l'a pas retourné
+          if (!rv.instance_label) {
+            // Approche 1 : par index (fiable si l'IA respecte l'ordre)
+            if (_ri < batch.length && batch[_ri]._forced_instance && batch[_ri].id === rv.id_champ) {
+              rv = Object.assign({}, rv, { instance_label: batch[_ri]._forced_instance });
+            } else {
+              // Approche 2 : premier champ pré-labellisé avec le même id_champ
+              var _bf = batch.find(function(f) { return f.id === rv.id_champ && f._forced_instance; });
+              if (_bf) rv = Object.assign({}, rv, { instance_label: _bf._forced_instance });
+            }
+          }
           const fieldNom = (getFieldNom(rv.id_champ) || '').toLowerCase();
+
+          // ---- Règle département ----
           if (fieldNom.includes('d\u00e9partement') || fieldNom.includes('departement')) {
             const toDept = function(v) {
               var s = String(v || '').trim();
@@ -1965,7 +2517,132 @@
             }
             return Object.assign({}, rv, { valeur_vt: deptVT, valeur_audit: deptAudit, statut: newStatut, commentaire: newComment });
           }
-          return rv;
+
+          // ---- Règle niveaux : RDC = 1, R+1 = 2, etc. ----
+          if (fieldNom.includes('niveau') || fieldNom.includes('\u00e9tage') || fieldNom.includes('etage')) {
+            var nAudit = toNiveaux(rv.valeur_audit);
+            var nVT    = toNiveaux(rv.valeur_vt);
+            if (nAudit !== null && nVT !== null) {
+              if (nAudit === nVT) {
+                return Object.assign({}, rv, {
+                  statut: 'VERT',
+                  commentaire: 'Niveaux \u00e9quivalents : "' + (rv.valeur_audit||'') + '" = "' + (rv.valeur_vt||'') + '" (' + nAudit + ' niveau(x)).'
+                });
+              } else {
+                return Object.assign({}, rv, {
+                  statut: 'ROUGE',
+                  commentaire: 'Niveaux diff\u00e9rents : audit=' + nAudit + ' niveau(x), VT=' + nVT + ' niveau(x).'
+                });
+              }
+            }
+          }
+
+          // ---- Règle tranche : si valeur_audit est une plage et valeur_vt est dedans → VERT ----
+          if (rv.valeur_audit && rv.valeur_vt) {
+            var range = parseRange(rv.valeur_audit);
+            var vtNum = toNum(rv.valeur_vt);
+            if (range && vtNum !== null && vtNum >= range.lo && vtNum <= range.hi) {
+              return Object.assign({}, rv, {
+                statut: 'VERT',
+                commentaire: 'Valeur VT ' + rv.valeur_vt + ' incluse dans la tranche audit [' + range.lo + '\u2013' + range.hi + '].'
+              });
+            }
+          }
+
+          // ---- Règle Oui/Non : équivalences boolean + exact match insensible à la casse ----
+          if (rv.valeur_audit && rv.valeur_vt) {
+            var normA = String(rv.valeur_audit).toLowerCase().trim().replace(/\s+/g,' ');
+            var normV = String(rv.valeur_vt).toLowerCase().trim().replace(/\s+/g,' ');
+            // Exact match case-insensitif : même valeur, statut ≠ VERT → forcer VERT
+            if (normA && normV && normA === normV && rv.statut !== 'VERT') {
+              return Object.assign({}, rv, {
+                statut: 'VERT',
+                commentaire: 'Valeurs identiques (correspondance exacte, diff\u00e9rence de casse uniquement).'
+              });
+            }
+            // "Non [X]" (audit) ↔ "non" (VT) ou inverse : même négation → VERT
+            if ((normA.startsWith('non ') && normV === 'non') ||
+                (normV.startsWith('non ') && normA === 'non')) {
+              return Object.assign({}, rv, {
+                statut: 'VERT',
+                commentaire: 'Correspondance n\u00e9gation : "' + rv.valeur_audit + '" \u2194 "' + rv.valeur_vt + '" (m\u00eame sens).'
+              });
+            }
+            // "Oui [X]" (audit) ↔ "oui" (VT) ou inverse : même affirmation → VERT
+            if ((normA.startsWith('oui ') && normV === 'oui') ||
+                (normV.startsWith('oui ') && normA === 'oui')) {
+              return Object.assign({}, rv, {
+                statut: 'VERT',
+                commentaire: 'Correspondance affirmation : "' + rv.valeur_audit + '" \u2194 "' + rv.valeur_vt + '" (m\u00eame sens).'
+              });
+            }
+          }
+
+          // ---- Règle anomalie physique : surface d'ouvrant > 10 m² = impossible ----
+          // UNIQUEMENT pour les menuiseries/ouvrants — pas pour les murs/planchers/toitures
+          var _instLbl    = (rv.instance_label || '').toLowerCase();
+          var _sectLbl    = (getFieldSection(rv.id_champ) || '').toLowerCase();
+          var _isMenuCtx  = _instLbl.match(/fen[eê]tre|ouvrant|baie|menuiserie|porte/) ||
+                            _sectLbl.match(/menuiserie|ouvrant|baie|fen[eê]tre/);
+          // Le filtre ne s'applique QUE si le contexte est réellement une menuiserie/ouvrant
+          if (_isMenuCtx) {
+            var fNom    = (getFieldNom(rv.id_champ) || '').toLowerCase();
+            var isOuvrantSurf = (fNom.includes('surface') || fNom.includes('m\u00b2') || fNom.includes('m2'));
+            if (isOuvrantSurf) {
+              var badA = toNum(rv.valeur_audit), badV = toNum(rv.valeur_vt);
+              var hasAnomalie = (badA !== null && badA > 10) || (badV !== null && badV > 10);
+              if (hasAnomalie) {
+                var rejVal = (badA !== null && badA > 10) ? badA : badV;
+                return Object.assign({}, rv, {
+                  statut:       'MANQUANT',
+                  valeur_audit: null,
+                  valeur_vt:    null,
+                  commentaire:  'Valeur rejet\u00e9e (' + rejVal + '\u00a0m\u00b2) : surface du logement (SHAB) confondue avec la surface de l\u2019ouvrant. \u00c0 renseigner manuellement.'
+                });
+              }
+            }
+          }
+
+          // ---- Option A : vérification des citations IA dans les textes sources ----
+          var vA = verifyCitation(rv.extrait_audit, auditFull);
+          var vV = verifyCitation(rv.extrait_vt, vtFull);
+          // Si valeur_audit présente mais citation introuvable → flag dans commentaire
+          var hasAuditVal = rv.valeur_audit && rv.valeur_audit.trim() && rv.valeur_audit !== '-';
+          var hasVtVal    = rv.valeur_vt    && rv.valeur_vt.trim()    && rv.valeur_vt    !== '-';
+          var warnParts = [];
+          if (hasAuditVal && vA === 'non_verifie') warnParts.push('Audit: valeur non retrouv\u00e9e dans le texte');
+          if (hasVtVal    && vV === 'non_verifie') warnParts.push('VT: valeur non retrouv\u00e9e dans le texte');
+          var verif_comment = warnParts.length > 0 ? '\u26a0\ufe0f ' + warnParts.join(' / ') : '';
+          return Object.assign({}, rv, {
+            _verif_audit: vA,
+            _verif_vt:    vV,
+            _verif_warn:  verif_comment
+          });
+        });
+        // Récupération des résultats manquants : si l'IA n'a pas retourné de résultat
+        // pour un champ du batch (notamment pour les instances multiples), ajouter MANQUANT
+        batch.forEach(function(f) {
+          var hasResult = normalizedBatch.some(function(rv) {
+            if (rv.id_champ !== f.id) return false;
+            if (!f._forced_instance) return true; // champ sans instance : OK si id_champ match
+            return rv.instance_label === f._forced_instance;
+          });
+          if (!hasResult) {
+            console.log('[MANQUANT-RECOVERY] Résultat absent pour "' + f.nom + '" instance="' + (f._forced_instance||'—') + '" → ajout MANQUANT');
+            normalizedBatch.push({
+              id_champ: f.id,
+              instance_label: f._forced_instance || null,
+              valeur_audit: null,
+              valeur_vt: null,
+              statut: 'MANQUANT',
+              commentaire: 'Résultat non retourné par l\'IA pour cette instance — à compléter manuellement.',
+              extrait_audit: '',
+              extrait_vt: '',
+              _verif_audit: 'non_cite',
+              _verif_vt: 'non_cite',
+              _verif_warn: ''
+            });
+          }
         });
         state.analysisResults.push(...normalizedBatch);
         if (batchResults.nouveaux_termes) {
@@ -2003,7 +2680,70 @@
       document.getElementById('btn-analyze').disabled = false;
     }
 
-    async function callAI(fields, auditText, vtText) {
+    function extractVtLexiqueHint(vtText, lexique) {
+      if (!vtText || !lexique || !lexique.includes('+')) return null;
+      var alt0 = lexique.split(/\s*;\s*/)[0].trim();
+      if (!alt0.includes('+')) return null;
+      var ER = function(s){ return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); };
+      var parts = alt0.split(/\s*\+\s*/).map(function(p){ return p.trim(); }).filter(Boolean);
+      var values = [];
+      for (var i = 0; i < parts.length; i++) {
+        var key = parts[i];
+        // Cas 1 : valeur sur la même ligne (ex: "Adresse  5b rue de la Paix  Mitoyenneté")
+        //   → s'arrête à 2+ espaces (séparateur de colonnes dans les VT Word)
+        // Cas 2 : valeur sur la ligne suivante (ex: "Adresse\n5b rue de la Paix")
+        var re = new RegExp('(?:^|[\\n\\r]| {2,})' + ER(key) + '(?:[ \\t]+(.+?)(?= {2,}|[\\n\\r]|$)|[ \\t]*[\\n\\r][ \\t]*([^\\n\\r]{1,120}))', 'im');
+        var m = vtText.match(re);
+        if (!m) continue;
+        var val = ((m[1] !== undefined ? m[1] : m[2]) || '').trim();
+        if (val && val.length > 1) values.push(val);
+      }
+      if (values.length < 2) return null;
+      var deduped = values.filter(function(v, i) {
+        return !values.some(function(other, j) {
+          return j !== i && other.replace(/\s/g,'').toLowerCase().includes(v.replace(/\s/g,'').toLowerCase());
+        });
+      });
+      var result = (deduped.length >= 2 ? deduped : values).join(' ');
+      console.log('[VT-LEXIQUE-FN] lexique="' + lexique + '" \u2192 result="' + result + '"');
+      return result;
+    }
+
+    async function callAI(fields, auditText, vtText, preExtracted, instanceHints) {
+      preExtracted = preExtracted || {};
+      instanceHints = instanceHints || {};
+      // Construire le bloc d'instances détectées à injecter dans le prompt
+      var instancesBlock = '';
+      var typeLabels = { murs:'Murs/Parois opaques', planchers:'Planchers', toitures:'Toitures/Plafonds hauts', menuiseries:'Menuiseries/Ouvrants' };
+      var hasInstances = Object.keys(instanceHints).some(function(k){return instanceHints[k] && instanceHints[k].length>0;});
+      var hasPreLabeled = fields.some(function(f) { return !!f._forced_instance; });
+      if (hasInstances) {
+        instancesBlock = '\n\nINSTANCES DÉTECTÉES DANS L\'AUDIT (pré-analysées, fiables) :\n';
+        Object.keys(typeLabels).forEach(function(k) {
+          if (instanceHints[k] && instanceHints[k].length > 0) {
+            instancesBlock += '- ' + typeLabels[k] + ' (' + instanceHints[k].length + ') : "' + instanceHints[k].join('" | "') + '"\n';
+          }
+        });
+        if (instanceHints.generic) {
+          Object.keys(instanceHints.generic).forEach(function(gc) {
+            if (instanceHints.generic[gc].length > 0) {
+              instancesBlock += '- ' + gc + ' (' + instanceHints.generic[gc].length + ') : "' + instanceHints.generic[gc].join('" | "') + '"\n';
+            }
+          });
+        }
+        if (hasPreLabeled) {
+          // Mode pré-labellisé : chaque champ a déjà son instance_label → l'IA retourne 1 seul résultat
+          instancesBlock += '→ MODE PRÉ-LABELLISÉ : chaque champ dans la liste ci-dessous a déjà son "instance_label" renseigné.\n';
+          instancesBlock += '→ Retourne EXACTEMENT 1 résultat par champ, pour l\'instance spécifiée UNIQUEMENT.\n';
+          instancesBlock += '→ NE retourne PAS d\'autres instances. NE regroupe PAS. NE démultiplie PAS.\n';
+          instancesBlock += '→ Si la valeur pour cette instance n\'est pas trouvée → retourne MANQUANT (mais conserve instance_label).\n';
+        } else {
+          // Mode multi-résultat (fallback, catégories non-expansées)
+          instancesBlock += '→ OBLIGATION ABSOLUE : pour tout champ appartenant à une catégorie listée ci-dessus,\n';
+          instancesBlock += '  retourne UN résultat séparé pour CHACUNE des instances listées.\n';
+          instancesBlock += '→ Utilise EXACTEMENT les labels listés comme instance_label.\n';
+        }
+      }
       const systemPrompt = `Tu es Sonia, assistante experte en audit énergétique de bâtiments pour OT Énergie.
 Tu analyses des documents d'audit énergétique et des visites techniques (VT) pour vérifier leur conformité.
 
@@ -2011,26 +2751,190 @@ RÈGLE ABSOLUE : Le document Audit est le MAÎTRE. Tu compares la VT à l'Audit,
 
 Pour chaque champ fourni (issu du référentiel) :
 1. Localise la (ou les) valeur(s) dans l'Audit
-2. Cherche la (ou les) valeur(s) correspondante(s) dans la VT en utilisant le lexique de synonymes
+2. Cherche la (ou les) valeur(s) correspondante(s) dans la VT en suivant OBLIGATOIREMENT les instructions du champ "lexique_vt" (voir RÈGLE LEXIQUE VT ci-dessous)
 3. Compare et retourne un statut :
-   - "VERT" : correspondance exacte ou quasi-exacte
+   - "VERT" : correspondance exacte, quasi-exacte, OU valeur VT incluse dans une tranche Audit, OU équivalence sémantique reconnue
    - "ORANGE" : même sens mais formulation/unité/arrondi différent
    - "ROUGE" : valeurs contradictoires ou incompatibles
    - "MANQUANT" : champ non trouvé dans la VT
 4. Fournis un commentaire bref et factuel (max 120 caractères)
 5. Si tu identifies un terme VT non présent dans le lexique, signale-le dans "nouveaux_termes"
 
-RÈGLE MULTI-INSTANCES (CRITIQUE) :
-Certains champs peuvent avoir plusieurs instances dans l'Audit : plusieurs parois (murs, planchers, toitures),
-plusieurs menuiseries (fenêtres, portes), plusieurs équipements (chaudières, VMC, etc.).
-- Si un champ a N instances distinctes dans l'Audit → retourne N résultats séparés pour ce champ.
-- Chaque résultat doit avoir un "instance_label" décrivant précisément l'élément (ex: "Mur Nord", "Fenêtre façade Sud", "Plancher bas sur cave", "Chaudière principale").
-- Vérifie CHAQUE instance dans la VT SÉPARÉMENT et indépendamment.
-- Si une instance spécifique de l'Audit est absente de la VT → statut "MANQUANT" pour cette instance.
-- Si le champ n'a qu'une seule instance → retourne 1 résultat avec instance_label = null.
-- Ne regroupe JAMAIS plusieurs instances en un seul résultat.
+RÈGLE TRANCHES ET PÉRIODES (VERT automatique) :
+- Si la valeur Audit est une plage/tranche (ex: "1948-1974", "1948 à 1974", "45-80 m²") ET que la valeur VT est un nombre inclus dans cette plage → statut "VERT".
+- Ex: Audit="1948-1974", VT="1960" → VERT car 1960 ∈ [1948,1974].
+- Ex: Audit="45-80 m²", VT="65 m²" → VERT.
+
+RÈGLE ÉQUIVALENCES SÉMANTIQUES NIVEAUX (VERT automatique) :
+- "RDC" = "rez-de-chaussée" = "1" = "1,0" = 1 niveau → si Audit="1" et VT="RDC" → VERT.
+- "R+1" = 2 niveaux, "R+2" = 3 niveaux, etc.
+- Si les deux valeurs représentent le même nombre de niveaux → VERT.
+
+RÈGLE ÉQUIVALENCES OUI/NON (VERT automatique) :
+- "Non isolé", "non doublé", "sans isolation", "pas d'isolation" dans l'Audit ↔ "Non" dans la VT (pour un champ isolation/doublage) → VERT. Les deux expriment l'absence d'isolation.
+- "Isolé", "avec isolation", "présent", "oui" dans l'Audit ↔ "Oui" dans la VT → VERT.
+- RÈGLE GÉNÉRALE : si l'Audit dit "Non [qualificatif]" et la VT dit "Non" pour le même champ → VERT (la VT confirme la négation).
+- Si l'Audit dit "Oui [qualificatif]" et la VT dit "Oui" → VERT (la VT confirme l'affirmation).
+- INTERDIT : retourner ROUGE si les deux valeurs expriment la même polarité (toutes deux positives ou toutes deux négatives) — utiliser VERT ou ORANGE selon la précision.
+- INTERDIT : retourner des statuts différents pour deux champs avec des valeurs Audit et VT identiques (même casse différente).
+
+RÈGLE ANTI-HALLUCINATION (ABSOLUE) :
+- Ne retourne une valeur_vt QUE si elle est EXPLICITEMENT et DIRECTEMENT associée au champ demandé dans le texte de la VT.
+- INTERDIT : extraire un mot trouvé dans un contexte différent. Ex: "Mitoyenneté" ne peut PAS devenir la valeur d'un champ "Orientation des baies".
+- INTERDIT : inférer ou déduire une valeur non écrite. Ex: si la VT ne mentionne pas "condensation", ne retourne pas "Chaudière à condensation".
+- En cas de doute sur l'association label↔valeur : retourne "MANQUANT" plutôt qu'une valeur incertaine.
+- Une valeur_vt doit pouvoir être retrouvée mot pour mot (ou proche) dans le texte de la VT, dans le contexte du champ demandé.
+
+RÈGLES SPÉCIFIQUES TABLEAU FAÇADES (CRITIQUE) :
+La VT contient un tableau FAÇADES avec des colonnes DISTINCTES et INDÉPENDANTES : Orientation | Mitoyenneté | Composition | Dimensions | Surface...
+Chaque colonne a une signification propre — NE JAMAIS confondre les valeurs d'une colonne avec celles d'une autre :
+- Colonne "Mitoyenneté" (valeurs: Oui/Non) = indique si la façade est accolée à un autre bâtiment. "Non" = EXTÉRIEUR. Ce n'est PAS la valeur d'un champ "Type d'adjacence" ou "Exposition".
+  → Si le champ demandé est "Type d'adjacence" : "Mitoyenneté: Non" = traduit comme "Extérieur". Jamais retourner "Non" brut comme type d'adjacence.
+  → Si le champ demandé est "Mitoyenneté" : retourne "Oui" ou "Non" directement.
+- Colonne "Composition" / "Matériaux" (valeurs: Béton, Parpaings, etc.) = matériaux constructifs du mur. C'est la COMPOSITION, PAS un type d'adjacence ni une orientation.
+  → INTERDIT d'utiliser une valeur de composition pour remplir un champ "Type d'adjacence", "Orientation" ou tout autre champ non-matériau.
+- Colonne "Orientation" = orientation cardinale de la façade (Nord, Sud, Est, Ouest). Concerne le MUR, pas forcément les baies.
+  → Pour "Orientation des baies/fenêtres", cherche une mention EXPLICITE des baies ou fenêtres dans leur propre contexte.
+
+RÈGLE MITOYENNETÉ ≠ ORIENTATION :
+- "Mitoyenneté Est, Ouest" dans une fiche descriptive = l'immeuble a des MURS MITOYENS côté Est et Ouest → information de mitoyenneté générale.
+- Ce n'est PAS une orientation de baies/fenêtres. Ne jamais l'utiliser pour un champ "Orientation des baies".
+- Pour "Orientation des baies" → cherche une valeur explicitement liée aux fenêtres ou baies vitrées (ex: "Baies côté Sud", "Fenêtres orientées Nord").
+
+FORMAT BATIAUDIT (CRITIQUE — ce document utilise ce logiciel) :
+Les valeurs dans l'audit sont au format : [Label]  Observé/Mesuré  [Valeur]
+- "Hauteur moyenne sous plafond Observé/Mesuré 2,75 m" → valeur = "2,75 m"
+- "Surface de référence Observé/Mesuré 36,00 m²" → valeur = "36,00 m²"
+- "Nombre de niveaux Observé/Mesuré 1,0" → valeur = "1,0"
+Le mot "Observé/Mesuré" est un SÉPARATEUR entre le label et la valeur — ce n'est PAS la valeur.
+Les décimales utilisent la virgule française : "2,75" = 2.75, "36,00" = 36.
+
+RÈGLE LEXIQUE VT — COMPOSITION ET SYNONYMES (CRITIQUE — PRIORITÉ MAXIMALE) :
+Le champ "lexique_vt" fourni pour chaque champ indique EXACTEMENT comment trouver et composer la valeur dans la VT.
+
+SYNTAXE DU LEXIQUE :
+  • Termes séparés par ";" = ALTERNATIVES : essaie chaque alternative dans l'ordre, utilise la première trouvée dans la VT.
+  • Termes contenant "+" = FORMULE DE COMPOSITION : chaque sous-terme est un champ SÉPARÉ dans la VT — tu dois les trouver TOUS et les CONCATÉNER.
+
+RÈGLE DE COMPOSITION (quand lexique_vt contient "+") :
+  → Cherche chaque composant dans la VT, même s'ils sont sur des lignes ou champs différents
+  → Concatène-les pour former la valeur_vt complète (ex: adresse + ", " + CP + " " + ville)
+  → NE RETOURNE JAMAIS un seul composant si les autres existent dans la VT — la valeur doit être COMPLÈTE
+  → Si tu trouves A mais pas B : inclus A et note dans commentaire que B est absent
+
+EXEMPLE CONCRET :
+  Champ "Adresse complète", lexique_vt = "Adresse + Ville + Code postal;Adresse du logement"
+  → Alternative 1 : cherche "Adresse" → "5b rue de la Paix", cherche "Ville" → "Sérmange", cherche "Code Postal" → "57290"
+  → valeur_vt = "5b rue de la Paix, 57290 Sérmange" (valeur COMPLÈTE, jamais partielle)
+  → Si l'audit = "5b rue de la Paix, 57290 Sérmange - Erzange" et VT a ces 3 composants → VERT
+
+RÈGLE CRITIQUE : Ne jamais retourner une valeur partielle quand d'autres composants sont disponibles dans la VT.
+
+RÈGLE valeur_vt_pre_extraite (PRIORITÉ MAXIMALE) :
+Certains champs ont un champ "valeur_vt_pre_extraite" — c'est la valeur déjà extraite et composée depuis la VT par le système JavaScript (fiable à 100%).
+→ Utilise-la DIRECTEMENT comme valeur_vt. Ne cherche PAS une autre valeur dans le texte VT pour ce champ.
+→ Cite dans extrait_vt un fragment du texte VT qui confirme un des composants (ex: "Adresse   5b rue de la Paix").
+→ Si valeur_vt_pre_extraite est fournie ET correspond à valeur_audit (même info, formats potentiellement différents) → statut VERT.
+
+RÈGLE RECHERCHE ÉTENDUE (CRITIQUE) :
+Cherche chaque champ avec TOUS ses synonymes et abréviations techniques courants.
+Exemples : "hauteur sous plafond" = HSP / hauteur libre / hauteur de volume / h.s.p / hauteur intérieure
+"surface habitable" = SHAB / SH / surface de plancher / SDP
+"résistance thermique" = R / R-value / résistance isolant
+Ne rate jamais une valeur parce que le libellé exact ne correspond pas — cherche le sens, pas le mot.
+
+RÈGLE MULTI-INSTANCES — TOUTES PAROIS, TOUTES CATÉGORIES (ABSOLUE — PRIORITÉ MAXIMALE) :
+L'audit contient des parois numérotées dans chaque catégorie : MURS (Paroi 01, Paroi 02...), PLANCHERS, TOITURES, MENUISERIES.
+⚠️ Le nombre de résultats retournés DOIT correspondre exactement au nombre de parois détectées dans le document.
+→ Si l'audit a 4 murs → retourne 4 blocs de résultats pour les champs MURS.
+→ Si l'audit a 2 planchers → retourne 2 blocs de résultats pour les champs PLANCHERS.
+→ Si l'audit a 1 toiture → retourne 1 bloc.
+→ Si l'audit a 4 menuiseries → retourne 4 blocs.
+RÈGLES :
+- CHAQUE paroi distincte = un résultat séparé pour chaque champ de sa catégorie.
+- N'arrête JAMAIS après la première paroi. Parcoure TOUT le document.
+- Ne regroupe JAMAIS plusieurs parois dans un seul résultat.
+- instance_label = nom/référence précise de la paroi tel qu'écrit dans l'audit (ex: "Paroi 01 — Mur extérieur", "Mur Nord", "Plancher bas sur vide sanitaire", "Fenêtre 1 (1,50×1,60)").
+- Si les instances sont listées dans le bloc INSTANCES ci-dessous → utilise EXACTEMENT ces labels et retourne UN résultat par instance listée.
+
+RÈGLE MENUISERIES MULTI-INSTANCES (CRITIQUE) :
+Les menuiseries peuvent apparaître sous DEUX formats dans l'audit — les deux sont valides :
+FORMAT A — BATIAUDIT : "Référence menuiserie [N] Observé/Mesuré [nom]" → chaque bloc = un ouvrant.
+FORMAT B — TABLEAU : "(Largeur x Hauteur)  Description  Isolation" → chaque ligne = un ouvrant distinct.
+  Exemple FORMAT B : "(1,50 x1,60)  Fen.bat./ocil. PVC double vitrage argon 18mm  très bonne"
+                     "(2,10 x0,90)  Porte opaque pleine simple en bois  insuffisante"
+  → Dans ce cas, les dimensions (L×H) et la description sont les données clés à extraire PAR LIGNE.
+- Chaque ouvrant (fenêtre, porte-fenêtre, baie vitrée, porte) = un résultat séparé.
+- Dans la VT, le tableau MENUISERIES a aussi généralement plusieurs lignes → traite chacune séparément.
+- Si l'audit a 3 fenêtres et 1 porte → le champ "Type de vitrage" doit apparaître 4 fois (une par ouvrant).
+- JAMAIS regrouper plusieurs ouvrants en un seul résultat.
+- Pour les fenêtres identiques (même dimensions, même description) : crée quand même un résultat séparé par fenêtre.
+
+EXCEPTION ABSOLUE — SURFACE DE RÉFÉRENCE / SHAB DU LOGEMENT :
+Les champs "Surface de référence", "Surface habitable", "SHAB", "Surface de plancher" sont des champs GÉNÉRAUX du logement — PAS des surfaces d'ouvrant.
+→ Pour ces champs, retourne TOUJOURS leur valeur telle quelle (ex: 57 m², 56,66 m²) dans valeur_audit ET valeur_vt.
+→ La règle anti-SHAB ci-dessous s'applique UNIQUEMENT aux champs de la section MENUISERIES / OUVRANTS. Jamais aux champs généraux du logement.
+
+RÈGLE SURFACE HABITABLE ≠ SURFACE OUVRANT — INTERDICTION ABSOLUE :
+La SHAB (surface habitable), la SDP, la SHON, ou toute surface > 15 m² NE DOIT JAMAIS être utilisée pour un champ "Surface" dans la section MENUISERIES ou OUVRANTS.
+⛔ INTERDIT (section menuiseries/ouvrants seulement) : retourner 56 m², 57 m², 58 m² ou toute valeur > 15 m² comme surface d'une fenêtre, d'une porte ou d'un ouvrant.
+⛔ INTERDIT : utiliser la "valeur_audit_pre_extraite" si elle correspond clairement à la SHAB (valeur > 15 m² pour un ouvrant).
+→ Si aucune surface d'ouvrant réelle trouvée : retourne MANQUANT, valeur_audit null, valeur_vt null.
+→ CALCULE toi-même : pour le format tableau "(L x H)", Surface ouvrant = L × H. Ex: (1,50 × 1,60) → 2,40 m².
+→ Surface réaliste d'UN ouvrant : entre 0,30 m² et 6 m². Valeur > 10 m² = MANQUANT (valeurs null) — ne jamais retourner la SHAB comme surface d'ouvrant.
+
+RÈGLE VALEUR VS LIBELLÉ DE COLONNE (CRITIQUE) :
+Ne jamais retourner comme valeur un libellé de colonne, un intitulé de champ, ou un titre de section.
+- Exemples de ce qui N'EST PAS une valeur : "Largeur + Hauteur", "Section / Type", "Référence", "Valeur", "Description", "Libellé".
+- Si la seule information trouvée ressemble à un intitulé de colonne ou de champ → retourne MANQUANT.
+
+RÈGLE VALEURS ABERRANTES / HORS NORME (CRITIQUE) :
+Si une valeur extraite (Audit ou VT) est physiquement impossible ou hors des plages normales pour son type de champ, signale-le impérativement.
+Plages normales de référence (bâtiment résidentiel standard) :
+- Surface d'UN ouvrant (fenêtre, porte, baie) : 0,3 à 6 m² → si > 10 m² = IMPOSSIBLE (c'est la surface du logement, pas d'une fenêtre)
+- Surface d'UN mur : 2 à 80 m² → si > 120 m² = suspect
+- Hauteur sous plafond : 2,0 à 3,5 m → si < 1,5 m ou > 6 m = suspect
+- Année de construction : 1850 à 2025 → si hors plage = ANOMALIE
+- Épaisseur lame d'air menuiserie : 4 à 24 mm → si > 50 mm = suspect
+- Résistance thermique R (paroi) : 0 à 12 m².K/W → si > 15 = suspect
+Conduite à tenir en cas d'anomalie sur un champ OUVRANT/MENUISERIE :
+1. Retourne statut "MANQUANT" — ne jamais afficher une valeur fausse
+2. Mets valeur_audit null ET valeur_vt null (les deux effacées)
+3. Commentaire : "Valeur rejetée ([valeur] m²) : surface du logement confondue avec surface d'ouvrant. À renseigner manuellement."
+Conduite à tenir pour les autres anomalies physiques :
+1. Retourne statut "ROUGE"
+2. Commence le commentaire par "[ANOMALIE physique]"
+3. Explique brièvement pourquoi (ex: "[ANOMALIE physique] valeur hors plage normale pour ce champ")
+
+RÈGLE CITATION OBLIGATOIRE — TRAÇABILITÉ (ABSOLUE) :
+Pour CHAQUE valeur non-MANQUANT que tu retournes, tu DOIS fournir l'extrait exact du document source.
+- extrait_audit : copie mot pour mot la phrase ou l'entrée de l'Audit où tu as trouvé valeur_audit (20-150 chars). Laisse vide si valeur_audit = MANQUANT ou si la valeur vient de valeur_audit_pre_extraite.
+- extrait_vt : copie mot pour mot la phrase ou l'entrée de la VT où tu as trouvé valeur_vt (20-150 chars). Laisse vide si valeur_vt = MANQUANT.
+- INTERDIT de paraphraser ou reformuler — copie-colle le texte exact tel qu'il apparaît dans le document.
+- Si tu ne peux pas citer un extrait exact pour une valeur → cette valeur doit être MANQUANT. Pas de valeur sans source.
 
 Réponds UNIQUEMENT en JSON valide, sans markdown, sans commentaire.`;
+
+      // Pré-extraction VT via lexique de composition pour ce batch
+      const vtPreExtracted = {};
+      fields.forEach(function(f) {
+        var vtHint = extractVtLexiqueHint(vtText, f.lexique);
+        if (vtHint) {
+          vtPreExtracted[f.id] = vtHint;
+          console.log('[VT-LEXIQUE] "' + f.nom + '" → "' + vtHint + '"');
+        }
+      });
+
+      // Injecter les valeurs pré-extraites BATIAUDIT + VT lexique + instance pré-labellisée dans les champs
+      const fieldsWithHints = fields.map(function(f) {
+        var hint = preExtracted[f.id];
+        var fh = Object.assign({}, { id_champ: f.id, nom: f.nom, categorie: f.categorie, description: f.description, lexique_vt: f.lexique });
+        if (hint) fh.valeur_audit_pre_extraite = hint;
+        var vtHint = vtPreExtracted[f.id];
+        if (vtHint) fh.valeur_vt_pre_extraite = vtHint;
+        if (f._forced_instance) fh.instance_label = f._forced_instance; // pré-labellisé → IA retourne 1 seul résultat pour cette instance
+        return fh;
+      });
 
       const userContent = `TEXTE DE L'AUDIT ÉNERGÉTIQUE (MAÎTRE) :
 ${auditText}
@@ -2041,15 +2945,11 @@ TEXTE DE LA VISITE TECHNIQUE (À COMPARER) :
 ${vtText}
 
 ---
-
+${instancesBlock}
 CHAMPS À ANALYSER :
-${JSON.stringify(fields.map(f => ({
-  id_champ: f.id,
-  nom: f.nom,
-  categorie: f.categorie,
-  description: f.description,
-  lexique_vt: f.lexique
-})), null, 2)}
+${JSON.stringify(fieldsWithHints, null, 2)}
+IMPORTANT : certains champs ont une "valeur_audit_pre_extraite" — c'est la valeur trouvée directement dans l'audit par analyse du format BATIAUDIT. Utilise-la comme valeur_audit CONFIRMÉE.
+Certains champs ont aussi une "valeur_vt_pre_extraite" — c'est la valeur composée depuis la VT par extraction automatique du lexique. Utilise-la DIRECTEMENT comme valeur_vt CONFIRMÉE (ne cherche pas une autre valeur dans la VT pour ce champ).
 
 FORMAT DE RÉPONSE (JSON strict) :
 {
@@ -2058,7 +2958,9 @@ FORMAT DE RÉPONSE (JSON strict) :
       "id_champ": "...",
       "instance_label": "...",
       "valeur_audit": "...",
+      "extrait_audit": "phrase exacte copiée du document Audit (ou vide si MANQUANT)",
       "valeur_vt": "...",
+      "extrait_vt": "phrase exacte copiée de la VT (ou vide si MANQUANT)",
       "statut": "VERT|ORANGE|ROUGE|MANQUANT",
       "commentaire": "..."
     }
@@ -2067,7 +2969,8 @@ FORMAT DE RÉPONSE (JSON strict) :
     { "champ_id": "...", "terme_suggere": "..." }
   ]
 }
-RAPPEL : instance_label = null si le champ n'a qu'une instance. Si plusieurs instances, chaque instance a son propre objet dans "resultats" avec le même id_champ et un instance_label distinct.`;
+RAPPEL : si un champ en entrée a déjà "instance_label" renseigné → retourne EXACTEMENT 1 résultat pour cette instance. Copie l'instance_label tel quel dans ta réponse. Ne retourne pas d'autres instances pour ce champ.
+Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans la réponse (sauf si plusieurs instances à retourner selon le bloc INSTANCES ci-dessus).`;
 
       const endpoint = state.config.provider === 'openai'
         ? 'https://api.openai.com/v1/chat/completions'
@@ -2089,7 +2992,7 @@ RAPPEL : instance_label = null si le champ n'a qu'une instance. Si plusieurs ins
 
       // AbortSignal compatible avec tous navigateurs
       const abortCtrl = new AbortController();
-      const timeoutId = setTimeout(function() { abortCtrl.abort(); }, 30000);
+      const timeoutId = setTimeout(function() { abortCtrl.abort(); }, 90000);
 
       let resp;
       try {
@@ -2164,7 +3067,7 @@ RAPPEL : instance_label = null si le champ n'a qu'une instance. Si plusieurs ins
       document.getElementById('kpi-nonconf').textContent = nonconf;
       document.getElementById('kpi-manquants').textContent = manquants;
 
-      const pct = total > 0 ? Math.round((conformes / total) * 100) : 0;
+      const pct = total > 0 ? Math.round(((conformes + approx) / total) * 100) : 0;
       document.getElementById('conformity-pct').textContent = pct + '%';
 
       const barEl = document.getElementById('conformity-bar');
@@ -2292,6 +3195,15 @@ RAPPEL : instance_label = null si le champ n'a qu'une instance. Si plusieurs ins
       }
 
       missingSection.style.display = 'block';
+      // Badge compteur
+      const badge = document.getElementById('missing-count-badge');
+      if (badge) badge.textContent = missing.length + ' champ' + (missing.length > 1 ? 's' : '');
+      // Fermé par défaut à chaque rendu
+      const cont = document.getElementById('missing-cards-container');
+      if (cont) cont.style.display = 'none';
+      const chev = document.getElementById('missing-chevron');
+      if (chev) chev.style.transform = 'rotate(0deg)';
+      lucide.createIcons();
 
       missing.forEach(r => {
         const field = state.referentiel.find(f => f.id === r.id_champ) || {};
@@ -2309,6 +3221,15 @@ RAPPEL : instance_label = null si le champ n'a qu'une instance. Si plusieurs ins
         `;
         container.appendChild(div);
       });
+    }
+
+    function toggleMissingSection() {
+      var container = document.getElementById('missing-cards-container');
+      var chevron   = document.getElementById('missing-chevron');
+      if (!container) return;
+      var isOpen = container.style.display !== 'none';
+      container.style.display = isOpen ? 'none' : 'block';
+      if (chevron) chevron.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
     }
 
     function setFilter(f) {
@@ -2394,12 +3315,13 @@ RAPPEL : instance_label = null si le champ n'a qu'une instance. Si plusieurs ins
         MANQUANT:'\u25a1  MANQUANTS',  VERT:'\u2714  CONFORMES',
       };
 
-      const conformes = state.analysisResults.filter(function(r){return r.statut==='VERT';}).length;
-      const total     = state.analysisResults.length;
-      const pct       = total>0?Math.round((conformes/total)*100):0;
-      const SCORE_BG  = pct>=95?'FFD9F2D9':pct>=80?'FFFFF0D6':'FFFFEBEE';
-      const SCORE_FG  = pct>=95?'FF1A4D1A':pct>=80?'FF7F3D00':'FFB71C1C';
-      const SCORE_BD  = pct>=95?'FF2E7D32':pct>=80?'FFE65100':'FFB71C1C';
+      const conformes    = state.analysisResults.filter(function(r){return r.statut==='VERT';}).length;
+      const approxCount  = state.analysisResults.filter(function(r){return r.statut==='ORANGE';}).length;
+      const total        = state.analysisResults.length;
+      const pct          = total>0?Math.round(((conformes+approxCount)/total)*100):0;
+      const SCORE_BG     = pct>=95?'FFD9F2D9':pct>=80?'FFFFF0D6':'FFFFEBEE';
+      const SCORE_FG     = pct>=95?'FF1A4D1A':pct>=80?'FF7F3D00':'FFB71C1C';
+      const SCORE_BD     = pct>=95?'FF2E7D32':pct>=80?'FFE65100':'FFB71C1C';
 
       function xlFill(a){return{type:'pattern',pattern:'solid',fgColor:{argb:a}};}
       function xlFont(a,b,s,i){return{name:'Calibri',size:s||10,bold:!!b,italic:!!i,color:{argb:a}};}
@@ -2413,6 +3335,40 @@ RAPPEL : instance_label = null si le champ n'a qu'une instance. Si plusieurs ins
       function mrow(ws,vals,n,bg,fg,o,h){
         var r=ws.addRow(vals); r.height=h||14;
         ws.mergeCells(r.number,1,r.number,n); sr(r,bg,fg,o,n); return r;
+      }
+      // Colonne F — Source & Vérification (Option A+C)
+      function buildVerifCell(rv) {
+        var iA = rv._verif_audit || 'non_cite';
+        var iV = rv._verif_vt    || 'non_cite';
+        var icon = { verifie:'✅', partiel:'~', non_verifie:'⚠️', non_cite:'—', court:'?' };
+        var lines = [];
+        var extA = rv.extrait_audit ? rv.extrait_audit.substring(0,70) + (rv.extrait_audit.length>70?'…':'') : '';
+        var extV = rv.extrait_vt   ? rv.extrait_vt.substring(0,70)   + (rv.extrait_vt.length>70?'…':'')   : '';
+        if (extA) lines.push((icon[iA]||'—') + ' Audit : "' + extA + '"');
+        if (extV) lines.push((icon[iV]||'—') + ' VT : "'    + extV + '"');
+        if (!extA && !extV) lines.push('— Non cité par l\'IA');
+        var hasWarn  = iA==='non_verifie' || iV==='non_verifie';
+        var allCited = (extA || extV);
+        var bg, fg;
+        if (hasWarn)     { bg='FFFFF3CD'; fg='FF7F4000'; }          // jaune — non vérifié
+        else if (!extA && !extV) { bg='FFF5F5F5'; fg='FF888888'; }   // gris  — non cité
+        else             { bg='FFE8F5E9'; fg='FF2E4A2E'; }            // vert  — vérifié
+        return { txt: lines.join('\n'), bg: bg, fg: fg };
+      }
+      // Calcule la hauteur de ligne en fonction du contenu des colonnes E et F
+      function calcRowH(rv, vfCell) {
+        // Col E : Commentaire IA — Calibri 10, largeur ~52 chars
+        var comment = rv.commentaire || '';
+        var linesE = Math.max(1, Math.ceil(comment.length / 52));
+        // Col F : Source & vérif — Calibri 8, largeur ~64 chars, avec \n internes
+        var vfLines = 1;
+        if (vfCell && vfCell.txt) {
+          var parts = vfCell.txt.split('\n');
+          vfLines = parts.reduce(function(acc, l) {
+            return acc + Math.max(1, Math.ceil(l.length / 64));
+          }, 0);
+        }
+        return Math.max(Math.max(linesE, vfLines) * 14 + 4, 18);
       }
 
       const wb = new ExcelJS.Workbook();
@@ -2430,7 +3386,7 @@ RAPPEL : instance_label = null si le champ n'a qu'une instance. Si plusieurs ins
       var approx=state.analysisResults.filter(function(rv){return rv.statut==='ORANGE';}).length;
       var nonconf=state.analysisResults.filter(function(rv){return rv.statut==='ROUGE';}).length;
       var manqTotal=state.analysisResults.filter(function(rv){return rv.statut==='MANQUANT';}).length;
-      mrow(ws3,["OT \u00c9NERGIE \u2014 Synth\u00e8se de l'Analyse",'',''],3,C.BLU_DARK,C.WHT,{bold:true,sz:14},30);
+      mrow(ws1,["OT \u00c9NERGIE \u2014 Synth\u00e8se de l'Analyse",'',''],3,C.BLU_DARK,C.WHT,{bold:true,sz:14},30);
       ws1.addRow(['','','']).height=6;
       var hdr3=ws1.addRow(['Indicateur','Valeur','% du total']); hdr3.height=24;
       sr(hdr3,C.BLU_DARK,C.WHT,{bold:true,align:'center'},3);
@@ -2459,12 +3415,12 @@ RAPPEL : instance_label = null si le champ n'a qu'une instance. Si plusieurs ins
 
       // ── ONGLET 2 ──────────────────────────────────────────────────────────
       var ws2=wb.addWorksheet('Rapport conformite');
-      ws2.columns=[{width:36},{width:22},{width:22},{width:15},{width:48}];
+      ws2.columns=[{width:36},{width:22},{width:22},{width:15},{width:55},{width:58}];
       ws2.views=[{state:'frozen',xSplit:0,ySplit:7}];
-      const N1=5;
+      const N1=6;
 
-      mrow(ws1,['OT \u00c9NERGIE','','','',''],N1,C.BLU_DARK,C.WHT,{bold:true,sz:14},26);
-      mrow(ws1,['Rapport de Conformit\u00e9  \u2014  Revue Audit \u00c9nerg\u00e9tique','','','',''],N1,C.BLU_MED,C.WHT,{sz:11,italic:true},20);
+      mrow(ws2,['OT \u00c9NERGIE','','','',''],N1,C.BLU_DARK,C.WHT,{bold:true,sz:14},26);
+      mrow(ws2,['Rapport de Conformit\u00e9  \u2014  Revue Audit \u00c9nerg\u00e9tique','','','',''],N1,C.BLU_MED,C.WHT,{sz:11,italic:true},20);
       [['Rapport g\u00e9n\u00e9r\u00e9 le :',date,'','',''],
        ['Audit (Ma\u00eetre) :',state.auditFileName||'-','','',''],
        ['Visite Technique :',state.vtFileName||'-','','','']].forEach(function(v){
@@ -2473,143 +3429,133 @@ RAPPEL : instance_label = null si le champ n'a qu'une instance. Si plusieurs ins
         for(var c=2;c<=N1;c++)sc(r.getCell(c),C.GRY_META,'FF2C3E70',{});
       });
 
-      var sRow=ws2.addRow(['Score global : '+pct+'%  \u2014  '+conformes+' champs conformes sur '+total,'','','','']);
+      var sRow=ws2.addRow(['Score global : '+pct+'%  \u2014  '+(conformes+approxCount)+' champs conformes ou approximatifs sur '+total,'','','','']);
       sRow.height=20; ws2.mergeCells(sRow.number,1,sRow.number,N1); sr(sRow,SCORE_BG,SCORE_FG,{bold:true,sz:11},N1);
       for(var sc2=1;sc2<=N1;sc2++){sRow.getCell(sc2).border={
         top:{style:'medium',color:{argb:SCORE_BD}},bottom:{style:'medium',color:{argb:SCORE_BD}},
         left:{style:'thin',color:{argb:C.GRY_LINE}},right:{style:'thin',color:{argb:C.GRY_LINE}}};}
 
-      var hdrRow=ws2.addRow(['Libell\u00e9','Valeur Audit','Valeur VT','Statut','Commentaire IA']);
+      var hdrRow=ws2.addRow(['Libell\u00e9','Valeur Audit','Valeur VT','Statut','Commentaire IA','Source & V\u00e9rification']);
       hdrRow.height=18; sr(hdrRow,C.BLU_DARK,C.WHT,{bold:true,align:'center'},N1);
+      ws2.autoFilter={from:{row:hdrRow.number,column:1},to:{row:hdrRow.number,column:N1}};
 
-      STATUS_ORDER.forEach(function(statut){
-        var grp=state.analysisResults.filter(function(rv){return rv.statut===statut;});
-        if(!grp.length)return;
-        var g=GRP[statut]; var cnt=grp.length;
-        mrow(ws1,[STATUS_LABELS[statut]+'   \u2014   '+cnt+' champ'+(cnt>1?'s':''),'','','',''],N1,g.hdr,C.WHT,{bold:true,sz:11},22);
-        sectionOrder.forEach(function(sec){
-          var secR=grp.filter(function(rv){return getFieldSection(rv.id_champ)===sec;});
-          if(!secR.length)return;
-          mrow(ws1,['   \u203a  '+sec,'','','',''],N1,g.sect,g.stxt,{bold:true,sz:10,italic:true},16);
-          secR.forEach(function(rv){
-            var lib=rv.instance_label?getFieldNom(rv.id_champ)+' \u2014 '+rv.instance_label:getFieldNom(rv.id_champ);
-            var dr=ws2.addRow([lib,rv.valeur_audit||'-',rv.valeur_vt||'-',rv.statut,rv.commentaire||'']); dr.height=14;
-            sc(dr.getCell(1),g.row,g.rtxt,{bold:true}); sc(dr.getCell(2),g.row,g.rtxt,{});
-            sc(dr.getCell(3),g.row,g.rtxt,{}); sc(dr.getCell(4),g.badge,C.WHT,{bold:true,align:'center'});
-            sc(dr.getCell(5),g.row,g.rtxt,{wrap:true});
-          });
+      // Ordre d'apparition : boucle par section du référentiel, tous statuts mélangés, couleur par statut
+      var SECT_BG2='FFE8EEFA', SECT_TXT2='FF1B3F8B';
+      sectionOrder.forEach(function(sec){
+        var secR=state.analysisResults.filter(function(rv){return getFieldSection(rv.id_champ)===sec;});
+        if(!secR.length)return;
+        mrow(ws2,['   \u203a  '+sec,'','','','',''],N1,SECT_BG2,SECT_TXT2,{bold:true,sz:10,italic:true},16);
+        secR.forEach(function(rv){
+          var g=GRP[rv.statut]||GRP.MANQUANT;
+          var lib=rv.instance_label?getFieldNom(rv.id_champ)+' \u2014 '+rv.instance_label:getFieldNom(rv.id_champ);
+          var vfCell=buildVerifCell(rv);
+          var dr=ws2.addRow([lib,rv.valeur_audit||'-',rv.valeur_vt||'-',rv.statut,rv.commentaire||'',vfCell.txt]); dr.height=calcRowH(rv,vfCell);
+          sc(dr.getCell(1),g.row,g.rtxt,{bold:true}); sc(dr.getCell(2),g.row,g.rtxt,{});
+          sc(dr.getCell(3),g.row,g.rtxt,{}); sc(dr.getCell(4),g.badge,C.WHT,{bold:true,align:'center'});
+          sc(dr.getCell(5),g.row,g.rtxt,{wrap:true});
+          sc(dr.getCell(6),vfCell.bg,vfCell.fg,{sz:8,wrap:true,italic:true});
         });
-        var ns=grp.filter(function(rv){return!getFieldSection(rv.id_champ);});
-        if(ns.length){
-          mrow(ws1,['   \u203a  Autres','','','',''],N1,g.sect,g.stxt,{bold:true,sz:10,italic:true},16);
-          ns.forEach(function(rv){
-            var lib=rv.instance_label?getFieldNom(rv.id_champ)+' \u2014 '+rv.instance_label:getFieldNom(rv.id_champ);
-            var dr=ws2.addRow([lib,rv.valeur_audit||'-',rv.valeur_vt||'-',rv.statut,rv.commentaire||'']); dr.height=14;
-            sc(dr.getCell(1),g.row,g.rtxt,{bold:true}); sc(dr.getCell(2),g.row,g.rtxt,{});
-            sc(dr.getCell(3),g.row,g.rtxt,{}); sc(dr.getCell(4),g.badge,C.WHT,{bold:true,align:'center'});
-            sc(dr.getCell(5),g.row,g.rtxt,{wrap:true});
-          });
-        }
-        var sep=ws2.addRow(['','','','','']); sep.height=6;
       });
+      var noSec2=state.analysisResults.filter(function(rv){return !getFieldSection(rv.id_champ);});
+      if(noSec2.length){
+        mrow(ws2,['   \u203a  Autres','','','','',''],N1,SECT_BG2,SECT_TXT2,{bold:true,sz:10,italic:true},16);
+        noSec2.forEach(function(rv){
+          var g=GRP[rv.statut]||GRP.MANQUANT;
+          var lib=rv.instance_label?getFieldNom(rv.id_champ)+' \u2014 '+rv.instance_label:getFieldNom(rv.id_champ);
+          var vfCell=buildVerifCell(rv);
+          var dr=ws2.addRow([lib,rv.valeur_audit||'-',rv.valeur_vt||'-',rv.statut,rv.commentaire||'',vfCell.txt]); dr.height=calcRowH(rv,vfCell);
+          sc(dr.getCell(1),g.row,g.rtxt,{bold:true}); sc(dr.getCell(2),g.row,g.rtxt,{});
+          sc(dr.getCell(3),g.row,g.rtxt,{}); sc(dr.getCell(4),g.badge,C.WHT,{bold:true,align:'center'});
+          sc(dr.getCell(5),g.row,g.rtxt,{wrap:true});
+          sc(dr.getCell(6),vfCell.bg,vfCell.fg,{sz:8,wrap:true,italic:true});
+        });
+      }
 
-      // ── ONGLET 3 ──────────────────────────────────────────────────────────
-      var ws3=wb.addWorksheet('Champs manquants');
-      ws3.columns=[{width:28},{width:46},{width:58}];
-      ws3.views=[{state:'frozen',xSplit:0,ySplit:5}];
-      var missing=state.analysisResults.filter(function(rv){return rv.statut==='MANQUANT';});
-      var MAN=GRP.MANQUANT;
-      mrow(ws2,['OT \u00c9NERGIE','',''],3,C.BLU_DARK,C.WHT,{bold:true,sz:14},26);
-      mrow(ws2,['Champs absents de la Visite Technique  \u2014  '+missing.length+' champ'+(missing.length>1?'s':''),'',''],3,MAN.hdr,C.WHT,{sz:11,italic:true},20);
-      [['Audit (Ma\u00eetre) :',state.auditFileName||'-',''],
-       ['Visite Technique :',state.vtFileName||'-','']].forEach(function(v){
+      // ── ONGLET 3 : Référentiel vs Audit ──────────────────────────────────
+      var ws3=wb.addWorksheet('R\u00e9f\u00e9rentiel vs Audit');
+      ws3.columns=[{width:32},{width:40},{width:30},{width:14}];
+      ws3.views=[{state:'frozen',xSplit:0,ySplit:7}];
+      var N3=4;
+      var C3P_HDR='FF2E7D32', C3P_ROW='FFEBF7EB', C3P_TXT='FF1A4D1A', C3P_SECT='FFC8E6C9';
+      var C3A_HDR='FF455A64', C3A_ROW='FFECEFF1', C3A_TXT='FF37474F', C3A_SECT='FFCFD8DC';
+      function isAbsent(v){var s=(v||'').trim();var sl=s.toLowerCase();return !s||s==='-'||s==='\u2014'||s==='\u2013'||s.charAt(0)==='\u2014'||s.charAt(0)==='\u2013'||sl.startsWith('non trouv')||sl.startsWith('non pr\u00e9cis')||sl.startsWith('non precis')||sl.startsWith('non mention')||sl==='manquant'||sl==='manquante'||sl==='manquants'||sl==='manquantes'||sl==='n/a'||sl==='na'||sl==='nd'||sl==='non renseign\u00e9'||sl==='non renseigne';}
+      var auditPresent3=state.analysisResults.filter(function(rv){return !isAbsent(rv.valeur_audit);});
+      var auditAbsent3=state.analysisResults.filter(function(rv){return isAbsent(rv.valeur_audit);});
+      var totRef3=state.analysisResults.length;
+      mrow(ws3,['OT \u00c9NERGIE','','',''],N3,C.BLU_DARK,C.WHT,{bold:true,sz:14},26);
+      mrow(ws3,['Contr\u00f4le R\u00e9f\u00e9rentiel  \u2014  Champs obligatoires vs Audit \u00c9nerg\u00e9tique','','',''],N3,C.BLU_MED,C.WHT,{sz:11,italic:true},20);
+      [['Rapport g\u00e9n\u00e9r\u00e9 le :',date,'',''],
+       ['Audit (Ma\u00eetre) :',state.auditFileName||'-','','']].forEach(function(v){
         var r=ws3.addRow(v); r.height=14;
         sc(r.getCell(1),C.GRY_META,C.BLU_DARK,{bold:true});
-        sc(r.getCell(2),C.GRY_META,'FF2C3E70',{}); sc(r.getCell(3),C.GRY_META,'FF2C3E70',{});
+        for(var c3=2;c3<=N3;c3++)sc(r.getCell(c3),C.GRY_META,'FF2C3E70',{});
       });
-      var hdr2=ws3.addRow(['Section','Libell\u00e9 du champ manquant','Commentaire IA (suggestion de localisation)']); hdr2.height=18;
-      sr(hdr2,C.BLU_DARK,C.WHT,{bold:true,align:'center'},3);
-      var lastSec2='';
-      missing.forEach(function(rv,idx){
+      var summRow3=ws3.addRow([totRef3+' champ'+(totRef3>1?'s':'')+' obligatoires dans le r\u00e9f\u00e9rentiel  \u2014  '+auditPresent3.length+' pr\u00e9sents  /  '+auditAbsent3.length+' absents de l\'audit','','','']);
+      summRow3.height=20; ws3.mergeCells(summRow3.number,1,summRow3.number,N3);
+      sr(summRow3,'FFEEF2FA',C.BLU_DARK,{bold:true,sz:10},N3);
+      var hdr3b=ws3.addRow(['Section','Libell\u00e9 du champ','Valeur trouv\u00e9e dans l\'Audit','Statut']); hdr3b.height=18;
+      sr(hdr3b,C.BLU_DARK,C.WHT,{bold:true,align:'center'},N3);
+      ws3.autoFilter={from:{row:hdr3b.number,column:1},to:{row:hdr3b.number,column:N3}};
+
+      // Ordre d'apparition : tous champs par section, colorés présent/absent
+      var SECT_BG3='FFE8EEFA', SECT_TXT3='FF1B3F8B';
+      var lastSec3='';
+      state.analysisResults.forEach(function(rv){
         var sec=getFieldSection(rv.id_champ)||'-';
         var lib=rv.instance_label?getFieldNom(rv.id_champ)+' \u2014 '+rv.instance_label:getFieldNom(rv.id_champ);
-        // Insérer un sous-titre de section quand elle change
-        if(sec!==lastSec2){
-          lastSec2=sec;
-          var sr2=ws3.addRow(['   \u203a  '+sec,'','']); sr2.height=16;
-          ws3.mergeCells(sr2.number,1,sr2.number,3);
-          sc(sr2.getCell(1),MAN.sect,MAN.stxt,{bold:true,sz:10,italic:true});
+        var pres=!isAbsent(rv.valeur_audit);
+        var rowBg=pres?C3P_ROW:C3A_ROW; var rowTxt=pres?C3P_TXT:C3A_TXT;
+        var badgeBg=pres?C3P_HDR:C3A_HDR; var statLbl=pres?'PR\u00c9SENT':'ABSENT';
+        if(sec!==lastSec3){
+          lastSec3=sec;
+          mrow(ws3,['   \u203a  '+sec,'','',''],N3,SECT_BG3,SECT_TXT3,{bold:true,sz:10,italic:true},16);
         }
-        var alt=idx%2===0?MAN.row:'FFF2F4F8';
-        var r=ws3.addRow(['',lib,rv.commentaire||'']); r.height=32;
-        sc(r.getCell(1),alt,MAN.rtxt,{});
-        sc(r.getCell(2),alt,MAN.rtxt,{bold:true,wrap:true});
-        sc(r.getCell(3),alt,MAN.rtxt,{wrap:true});
+        var r=ws3.addRow([sec,lib,rv.valeur_audit||'-',statLbl]); r.height=14;
+        sc(r.getCell(1),rowBg,rowTxt,{}); sc(r.getCell(2),rowBg,rowTxt,{bold:true});
+        sc(r.getCell(3),rowBg,rowTxt,{}); sc(r.getCell(4),badgeBg,C.WHT,{bold:true,align:'center'});
       });
 
-      // ── ONGLET 4 : Référentiel vs Audit ──────────────────────────────────
-      var ws4=wb.addWorksheet('R\u00e9f\u00e9rentiel vs Audit');
+      // ── ONGLET 4 : Référentiel vs VT ──────────────────────────────────────
+      var ws4=wb.addWorksheet('R\u00e9f\u00e9rentiel vs VT');
       ws4.columns=[{width:32},{width:40},{width:30},{width:14}];
       ws4.views=[{state:'frozen',xSplit:0,ySplit:7}];
       var N4=4;
       var C4P_HDR='FF2E7D32', C4P_ROW='FFEBF7EB', C4P_TXT='FF1A4D1A', C4P_SECT='FFC8E6C9';
-      var C4A_HDR='FFB71C1C', C4A_ROW='FFFFEBEE', C4A_TXT='FFB71C1C', C4A_SECT='FFFFCDD2';
-      var auditPresent4=state.analysisResults.filter(function(rv){
-        return rv.valeur_audit&&rv.valeur_audit.trim()&&rv.valeur_audit.trim()!=='-';
-      });
-      var auditAbsent4=state.analysisResults.filter(function(rv){
-        return !rv.valeur_audit||!rv.valeur_audit.trim()||rv.valeur_audit.trim()==='-';
-      });
+      var C4A_HDR='FF455A64', C4A_ROW='FFECEFF1', C4A_TXT='FF37474F', C4A_SECT='FFCFD8DC';
+      var vtPresent4=state.analysisResults.filter(function(rv){return rv.statut!=='MANQUANT';});
+      var vtAbsent4=state.analysisResults.filter(function(rv){return rv.statut==='MANQUANT';});
       var totRef4=state.analysisResults.length;
       mrow(ws4,['OT \u00c9NERGIE','','',''],N4,C.BLU_DARK,C.WHT,{bold:true,sz:14},26);
-      mrow(ws4,['Contr\u00f4le R\u00e9f\u00e9rentiel  \u2014  Champs obligatoires vs Audit \u00c9nerg\u00e9tique','','',''],N4,C.BLU_MED,C.WHT,{sz:11,italic:true},20);
+      mrow(ws4,['Contr\u00f4le R\u00e9f\u00e9rentiel  \u2014  Champs obligatoires vs Visite Technique','','',''],N4,C.BLU_MED,C.WHT,{sz:11,italic:true},20);
       [['Rapport g\u00e9n\u00e9r\u00e9 le :',date,'',''],
-       ['Audit (Ma\u00eetre) :',state.auditFileName||'-','','']].forEach(function(v){
+       ['Visite Technique :',state.vtFileName||'-','','']].forEach(function(v){
         var r=ws4.addRow(v); r.height=14;
         sc(r.getCell(1),C.GRY_META,C.BLU_DARK,{bold:true});
         for(var c=2;c<=N4;c++)sc(r.getCell(c),C.GRY_META,'FF2C3E70',{});
       });
-      var summRow4=ws4.addRow([totRef4+' champ'+(totRef4>1?'s':'')+ ' obligatoires dans le r\u00e9f\u00e9rentiel  \u2014  '+auditPresent4.length+' pr\u00e9sents  /  '+auditAbsent4.length+' absents de l\'audit','','','']);
+      var summRow4=ws4.addRow([totRef4+' champ'+(totRef4>1?'s':'')+' obligatoires dans le r\u00e9f\u00e9rentiel  \u2014  '+vtPresent4.length+' pr\u00e9sents  /  '+vtAbsent4.length+' absents de la VT','','','']);
       summRow4.height=20; ws4.mergeCells(summRow4.number,1,summRow4.number,N4);
       sr(summRow4,'FFEEF2FA',C.BLU_DARK,{bold:true,sz:10},N4);
-      var hdr4=ws4.addRow(['Section','Libell\u00e9 du champ','Valeur trouv\u00e9e dans l\'Audit','Statut']); hdr4.height=18;
+      var hdr4=ws4.addRow(['Section','Libell\u00e9 du champ','Valeur trouv\u00e9e dans la VT','Statut']); hdr4.height=18;
       sr(hdr4,C.BLU_DARK,C.WHT,{bold:true,align:'center'},N4);
-      // ---- Groupe PRÉSENTS ----
-      mrow(ws4,['\u2714  PR\u00c9SENTS DANS L\'AUDIT  \u2014  '+auditPresent4.length+' champ'+(auditPresent4.length>1?'s':''),'','',''],N4,C4P_HDR,C.WHT,{bold:true,sz:11},22);
-      var lastSec4p='';
-      auditPresent4.forEach(function(rv){
+      ws4.autoFilter={from:{row:hdr4.number,column:1},to:{row:hdr4.number,column:N4}};
+
+      // Ordre d'apparition : tous champs par section, colorés présent/absent VT
+      var SECT_BG4='FFE8EEFA', SECT_TXT4='FF1B3F8B';
+      var lastSec4='';
+      state.analysisResults.forEach(function(rv){
         var sec=getFieldSection(rv.id_champ)||'-';
         var lib=rv.instance_label?getFieldNom(rv.id_champ)+' \u2014 '+rv.instance_label:getFieldNom(rv.id_champ);
-        if(sec!==lastSec4p){
-          lastSec4p=sec;
-          var s4p=ws4.addRow(['   \u203a  '+sec,'','','']); s4p.height=16;
-          ws4.mergeCells(s4p.number,1,s4p.number,N4);
-          sc(s4p.getCell(1),C4P_SECT,C4P_TXT,{bold:true,sz:10,italic:true});
+        var pres4=rv.statut!=='MANQUANT';
+        var rowBg4=pres4?C4P_ROW:C4A_ROW; var rowTxt4=pres4?C4P_TXT:C4A_TXT;
+        var badgeBg4=pres4?C4P_HDR:C4A_HDR; var statLbl4=pres4?'PR\u00c9SENT':'ABSENT';
+        if(sec!==lastSec4){
+          lastSec4=sec;
+          mrow(ws4,['   \u203a  '+sec,'','',''],N4,SECT_BG4,SECT_TXT4,{bold:true,sz:10,italic:true},16);
         }
-        var r=ws4.addRow([sec,lib,rv.valeur_audit,'PR\u00c9SENT']); r.height=14;
-        sc(r.getCell(1),C4P_ROW,C4P_TXT,{});
-        sc(r.getCell(2),C4P_ROW,C4P_TXT,{bold:true});
-        sc(r.getCell(3),C4P_ROW,C4P_TXT,{});
-        sc(r.getCell(4),C4P_HDR,C.WHT,{bold:true,align:'center'});
-      });
-      ws4.addRow(['','','','']).height=6;
-      // ---- Groupe ABSENTS ----
-      mrow(ws4,['\u26a0  ABSENTS DE L\'AUDIT  \u2014  '+auditAbsent4.length+' champ'+(auditAbsent4.length>1?'s':''),'','',''],N4,C4A_HDR,C.WHT,{bold:true,sz:11},22);
-      var lastSec4a='';
-      auditAbsent4.forEach(function(rv){
-        var sec=getFieldSection(rv.id_champ)||'-';
-        var lib=rv.instance_label?getFieldNom(rv.id_champ)+' \u2014 '+rv.instance_label:getFieldNom(rv.id_champ);
-        if(sec!==lastSec4a){
-          lastSec4a=sec;
-          var s4a=ws4.addRow(['   \u203a  '+sec,'','','']); s4a.height=16;
-          ws4.mergeCells(s4a.number,1,s4a.number,N4);
-          sc(s4a.getCell(1),C4A_SECT,C4A_TXT,{bold:true,sz:10,italic:true});
-        }
-        var r=ws4.addRow([sec,lib,'-','ABSENT']); r.height=14;
-        sc(r.getCell(1),C4A_ROW,C4A_TXT,{});
-        sc(r.getCell(2),C4A_ROW,C4A_TXT,{bold:true});
-        sc(r.getCell(3),C4A_ROW,C4A_TXT,{});
-        sc(r.getCell(4),C4A_HDR,C.WHT,{bold:true,align:'center'});
+        var r=ws4.addRow([sec,lib,rv.valeur_vt||'-',statLbl4]); r.height=14;
+        sc(r.getCell(1),rowBg4,rowTxt4,{}); sc(r.getCell(2),rowBg4,rowTxt4,{bold:true});
+        sc(r.getCell(3),rowBg4,rowTxt4,{}); sc(r.getCell(4),badgeBg4,C.WHT,{bold:true,align:'center'});
       });
 
       var dateFile='OTEnergie_Rapport_AuditVT_'+new Date().toISOString().slice(0,10)+'.xlsx';
@@ -2652,6 +3598,7 @@ RAPPEL : instance_label = null si le champ n'a qu'une instance. Si plusieurs ins
         id:         now.getTime(),
         date:       now.toLocaleDateString('fr-FR'),
         time:       now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+        dossier:    state.dossierName || '—',
         auditFile:  state.auditFileName || '—',
         vtFile:     state.vtFileName    || '—',
         score:      pct,
@@ -2722,17 +3669,37 @@ RAPPEL : instance_label = null si le champ n'a qu'une instance. Si plusieurs ins
     }
 
     function renderHistory() {
-      const empty = document.getElementById('history-empty');
-      const wrap  = document.getElementById('history-table-wrap');
-      const tbody = document.getElementById('history-tbody');
+      const empty      = document.getElementById('history-empty');
+      const wrap       = document.getElementById('history-table-wrap');
+      const tbody      = document.getElementById('history-tbody');
+      const countEl    = document.getElementById('history-filter-count');
+      const searchEl   = document.getElementById('history-search');
+      const query      = searchEl ? searchEl.value.trim().toLowerCase() : '';
+
       if (!historyData || historyData.length === 0) {
         empty.classList.remove('hidden');
         wrap.classList.add('hidden');
+        if (countEl) countEl.textContent = '';
         return;
       }
+
+      // Filtre par nom de dossier
+      const filtered = query
+        ? historyData.filter(function(e) { return (e.dossier||'').toLowerCase().includes(query); })
+        : historyData;
+
+      if (filtered.length === 0) {
+        empty.classList.remove('hidden');
+        wrap.classList.add('hidden');
+        if (countEl) countEl.textContent = 'Aucun résultat pour "' + query + '"';
+        return;
+      }
+
       empty.classList.add('hidden');
       wrap.classList.remove('hidden');
-      tbody.innerHTML = historyData.map(function(e) {
+      if (countEl) countEl.textContent = query ? filtered.length + ' résultat(s) sur ' + historyData.length : historyData.length + ' analyse(s)';
+
+      tbody.innerHTML = filtered.map(function(e) {
         const scoreClass = e.score >= 90 ? 'score-high' : e.score >= 70 ? 'score-mid' : 'score-low';
         const dlBtn = e.results
           ? '<button class="dl-btn" onclick="downloadHistoryEntry(' + e.id + ')" title="T\u00e9l\u00e9charger le fichier Excel"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>'
@@ -2741,13 +3708,19 @@ RAPPEL : instance_label = null si le champ n'a qu'une instance. Si plusieurs ins
         const fileCell = e.exportFile
           ? '<span class="history-filename">&#128196; ' + escHtml(e.exportFile) + '</span>'
           : '<span class="history-no-export">Non export\u00e9</span>';
-        const auditShort = e.auditFile.length > 35 ? e.auditFile.slice(0, 33) + '\u2026' : e.auditFile;
-        const vtShort    = e.vtFile.length > 35    ? e.vtFile.slice(0, 33) + '\u2026'    : e.vtFile;
+        const auditShort = (e.auditFile||'').length > 30 ? (e.auditFile||'').slice(0,28) + '\u2026' : (e.auditFile||'—');
+        const vtShort    = (e.vtFile||'').length > 30    ? (e.vtFile||'').slice(0,28) + '\u2026'    : (e.vtFile||'—');
+        const dossierShort = (e.dossier||'—').length > 28 ? (e.dossier||'').slice(0,26) + '\u2026' : (e.dossier||'—');
+        // Surligner la recherche dans le nom du dossier
+        const dossierHl = query && e.dossier
+          ? escHtml(e.dossier).replace(new RegExp('(' + escHtml(query).replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + ')', 'gi'), '<mark style="background:#FFF176;border-radius:2px;padding:0 1px">$1</mark>')
+          : escHtml(dossierShort);
         return '<tr>' +
+          '<td style="font-weight:700;color:var(--primary);white-space:nowrap;" title="' + escHtml(e.dossier||'') + '">' + dossierHl + '</td>' +
           '<td style="white-space:nowrap;font-weight:600">' + escHtml(e.date) + '</td>' +
           '<td style="white-space:nowrap;color:var(--text-muted)">' + escHtml(e.time) + '</td>' +
-          '<td title="' + escHtml(e.auditFile) + '">' + escHtml(auditShort) + '</td>' +
-          '<td title="' + escHtml(e.vtFile) + '">' + escHtml(vtShort) + '</td>' +
+          '<td title="' + escHtml(e.auditFile||'') + '">' + escHtml(auditShort) + '</td>' +
+          '<td title="' + escHtml(e.vtFile||'') + '">' + escHtml(vtShort) + '</td>' +
           '<td><span class="score-badge ' + scoreClass + '">' + e.score + '%</span></td>' +
           '<td style="text-align:center;color:#276221;font-weight:700">' + e.conformes + '</td>' +
           '<td style="text-align:center;color:#7A4A00;font-weight:700">' + e.oranges + '</td>' +
@@ -3122,11 +4095,9 @@ RAPPEL : instance_label = null si le champ n'a qu'une instance. Si plusieurs ins
       } else {
         label.textContent = 'Modèle (OpenRouter)';
         document.getElementById('model-select').innerHTML = `
-          <option value="openai/gpt-4o-mini">openai/gpt-4o-mini</option>
-          <option value="openai/gpt-4o">openai/gpt-4o</option>
-          <option value="anthropic/claude-3-haiku">anthropic/claude-3-haiku</option>
-          <option value="anthropic/claude-3.5-sonnet">anthropic/claude-3.5-sonnet</option>
-          <option value="custom">Saisie libre...</option>
+          <option value="openai/gpt-4o-mini">OpenAI GPT-4o Mini</option>
+          <option value="openai/gpt-4o">OpenAI GPT-4o</option>
+          <option value="anthropic/claude-haiku-4-5">Anthropic Haiku 4.5</option>
         `;
       }
 
@@ -3377,6 +4348,26 @@ RAPPEL : instance_label = null si le champ n'a qu'une instance. Si plusieurs ins
         chunks.push(arr.slice(i, i + size));
       }
       return chunks;
+    }
+
+    function showTextModal(side) {
+      const text = side === 'audit' ? state.auditText : state.vtText;
+      if (!text) return;
+      const existing = document.getElementById('text-modal');
+      if (existing) existing.remove();
+      const modal = document.createElement('div');
+      modal.id = 'text-modal';
+      modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center';
+      modal.innerHTML = '<div style="background:#fff;width:80%;max-width:900px;height:80vh;border-radius:10px;display:flex;flex-direction:column;overflow:hidden">'
+        + '<div style="padding:12px 16px;background:#1B3F8B;color:#fff;display:flex;justify-content:space-between;align-items:center">'
+        + '<span style="font-weight:700">Texte extrait — ' + (side==='audit'?'Audit':'VT') + ' (' + text.length.toLocaleString() + ' chars)</span>'
+        + '<span style="font-size:12px;opacity:0.8">Ctrl+F pour chercher "plafond" ou "2,75"</span>'
+        + '<button onclick="document.getElementById(\'text-modal\').remove()" style="background:none;border:none;color:#fff;font-size:20px;cursor:pointer">✕</button>'
+        + '</div>'
+        + '<textarea style="flex:1;padding:12px;font-family:monospace;font-size:12px;border:none;resize:none;outline:none;overflow-y:auto" readonly>' + text.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</textarea>'
+        + '</div>';
+      document.body.appendChild(modal);
+      modal.addEventListener('click', function(e){ if(e.target===modal) modal.remove(); });
     }
   </script>
 </body>
