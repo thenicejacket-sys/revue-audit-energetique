@@ -2345,6 +2345,7 @@
       }
 
       var detectedInstances = detectBatiauditInstances(auditFull);
+      state.detectedInstances = detectedInstances;
       (function(){
         var log = Object.keys(detectedInstances).filter(function(k){return detectedInstances[k].length>0;})
           .map(function(k){return k+'('+detectedInstances[k].length+'): '+detectedInstances[k].join(' / ');}).join(' | ');
@@ -3698,19 +3699,28 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
       var ENE_HDR='FF0D47A1', ENE_CAT='FF1565C0', ENE_FLD='FF1976D2', ENE_SUB='FF42A5F5';
       var ENE_AUD_BG='FFE3F2FD', ENE_VT_BG='FFE8F5E9';
 
-      // Catégories enveloppe et mots-clés section
+      // Catégories enveloppe — catKey = clé dans state.detectedInstances
       var ENE_CATS = [
-        { label:'MURS',       inst:'Paroi',   keys:['mur','paroi','fa\u00e7ade','facade','wall'] },
-        { label:'PLANCHERS',  inst:'Paroi',   keys:['plancher','bas','dalle','floor','vide sanitaire'] },
-        { label:'TOITURES',   inst:'Paroi',   keys:['toiture','comble','toit','rampant','roof'] },
-        { label:'MENUISERIES',inst:'Ouvrant', keys:['menuiserie','fen\u00eatre','fenetre','ouvrant','baie vitree','vitrage','porte-fen','window'] },
+        { label:'MURS',       catKey:'murs',        inst:'Paroi',   secKeys:['mur','paroi opaque','fa\u00e7ade','facade'] },
+        { label:'PLANCHERS',  catKey:'planchers',   inst:'Paroi',   secKeys:['plancher bas','dalle bas','dalle sol','vide sanitaire','terre-plein','terre plein'] },
+        { label:'TOITURES',   catKey:'toitures',    inst:'Paroi',   secKeys:['toiture','comble','plancher haut','plafond haut','rampant'] },
+        { label:'MENUISERIES',catKey:'menuiseries', inst:'Ouvrant', secKeys:['menuiserie','ouvrant','baie vitr','fen\u00eatre','fenetre','vitrage','porte-fen'] },
       ];
 
-      function eneGetResults(keys) {
+      function eneGetResults(catKey, secKeys) {
+        var di = (state.detectedInstances) || {};
+        var knownInst = di[catKey] || [];
+        if (knownInst.length > 0) {
+          // Priorité : instance_label appartient à la catégorie détectée → pas de mélange possible
+          return state.analysisResults.filter(function(rv) {
+            return knownInst.indexOf(rv.instance_label || '') >= 0;
+          });
+        }
+        // Fallback : matching section/nom par mots-clés (si aucune instance détectée)
         return state.analysisResults.filter(function(rv) {
           var sec = (getFieldSection(rv.id_champ)||'').toLowerCase();
           var nom = (getFieldNom(rv.id_champ)||'').toLowerCase();
-          return keys.some(function(k){ return sec.indexOf(k)>=0 || nom.indexOf(k)>=0; });
+          return secKeys.some(function(k){ return sec.indexOf(k)>=0 || nom.indexOf(k)>=0; });
         });
       }
 
@@ -3725,7 +3735,7 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
       sc(ne5d.getCell(1), C.GRY_META, C.BLU_DARK, {sz:9,italic:true});
 
       ENE_CATS.forEach(function(cat) {
-        var catRes = eneGetResults(cat.keys);
+        var catRes = eneGetResults(cat.catKey, cat.secKeys);
 
         // Séparateur
         ws5.addRow([]).height = 8;
