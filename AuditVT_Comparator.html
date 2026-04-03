@@ -1987,6 +1987,17 @@
       const canAnalyze = dossierOk && auditOk && vtOk && refOk && apiOk;
       document.getElementById('btn-analyze').disabled = !canAnalyze || state.analysisRunning;
 
+      // Auto-démarrage : déclenche l'analyse au moment où TOUS les prérequis passent de incomplet → complet
+      if (canAnalyze && !state.analysisRunning) {
+        if (!state._wasAllReady) {
+          state._wasAllReady = true;
+          setTimeout(function() {
+            if (!state.analysisRunning) startAnalysis();
+          }, 400);
+        }
+      } else {
+        state._wasAllReady = false;
+      }
     }
 
     function setPrereq(id, ok, label) {
@@ -3863,40 +3874,40 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
         { label:'MENUISERIES',catKey:'menuiseries', inst:'Ouvrant', secKeys:['menuiserie','ouvrant','baie vitr','fen\u00eatre','fenetre','vitrage','porte-fen'] },
       ];
 
+      // Normalise un instance_label pour comparaison : "Paroi 01 — BlocBeton" → "paroi 1"
+      function normInstForEne(s) {
+        return (s||'').toLowerCase()
+          .replace(/\bparoi\s+0*(\d+)/g, 'paroi $1')
+          .replace(/\s+/g, ' ').trim()
+          .split(/\s*(?:—|–)\s*/)[0].trim();
+      }
+
       function eneGetResults(catKey, secKeys) {
-        // PRIORITÉ ABSOLUE : matching par instance_label contre detectedInstances[catKey]
-        // PASS 0 assigne chaque paroi à exactement une catégorie → source de vérité
-        // La section ou le nom du champ peuvent se chevaucher entre catégories → on ne les utilise PAS
+        // Clés de section élargies — PLANCHERS accepte "Planchers" (pas seulement "Planchers bas")
+        var broadSecKeys;
+        if (catKey === 'planchers')   broadSecKeys = ['plancher','dalle','vide sanitaire','terre-plein','terre plein'];
+        else if (catKey === 'toitures') broadSecKeys = ['toiture','comble','plancher haut','plafond haut','rampant'];
+        else broadSecKeys = secKeys;
+
+        // PRIORITÉ : section du référentiel uniquement (jamais par nom de champ — évite contamination croisée)
+        // ex: un champ "Résistance plancher haut" dans section "Planchers" ne doit pas aller dans TOITURES
+        var bySection = state.analysisResults.filter(function(rv) {
+          var sec = (getFieldSection(rv.id_champ)||'').toLowerCase();
+          return broadSecKeys.some(function(k){ return sec.indexOf(k)>=0; });
+        });
+        if (bySection.length > 0) return bySection;
+
+        // FALLBACK : matching par instance_label normalisé contre detectedInstances
         var di = (state.detectedInstances) || {};
         var knownInst = di[catKey] || [];
-
-        // Normalisation : supprime description (après —), dimensions (Lx×Hy), zéros en tête, accents
-        function normNum(s) {
-          return (s||'').toLowerCase()
-            .replace(/\s*[—\-–].*$/, '')         // "Paroi 01 — Mur..." → "paroi 01"
-            .replace(/\s*\([^)]*\)\s*$/, '')      // "Fenêtre 1 (1.50×1.60)" → "fenêtre 1"
-            .replace(/\b0+(\d)/g, '$1')           // "paroi 01" → "paroi 1"
-            .replace(/[àâä]/g,'a').replace(/[éèêë]/g,'e')
-            .replace(/[îï]/g,'i').replace(/[ôö]/g,'o').replace(/[ùûü]/g,'u')
-            .trim();
-        }
-
-        if (knownInst.length > 0) {
-          var catNorms = knownInst.map(normNum);
-          return state.analysisResults.filter(function(rv) {
-            if (!rv.instance_label) return false;
-            var rvNorm = normNum(rv.instance_label);
-            return catNorms.some(function(cn) {
-              return cn === rvNorm || rvNorm.startsWith(cn) || cn.startsWith(rvNorm);
-            });
-          });
-        }
-
-        // FALLBACK (PASS 0 n'a rien détecté) : filtrage par section du référentiel uniquement
-        // Pas de filtrage par nom de champ → évite la cross-contamination (ex: "plancher haut" ∈ TOITURES)
+        if (knownInst.length === 0) return [];
+        var knownNorm = knownInst.map(normInstForEne);
         return state.analysisResults.filter(function(rv) {
-          var sec = (getFieldSection(rv.id_champ)||'').toLowerCase();
-          return secKeys.some(function(k){ return sec.indexOf(k)>=0; });
+          if (!rv.instance_label) return false;
+          var inst = normInstForEne(rv.instance_label);
+          return knownNorm.some(function(kn){
+            return kn===inst || kn.startsWith(inst+' ') || inst.startsWith(kn+' ');
+          });
         });
       }
 
@@ -3926,25 +3937,26 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
           var ndRow = ws5.addRow(['  Aucune donn\u00e9e pour cette cat\u00e9gorie dans le r\u00e9f\u00e9rentiel']);
           ndRow.height = 16;
           ws5.mergeCells(ndRow.number,1,ndRow.number,30);
-          sc(ndRow.getCell(1), 'FFF5F5F5', 'FF888888', {italic:true,align:'left'});
+          sc(ndRow.getCell(1), 'FFF5F5F5', 'FF888888', {italic:true,align:'center'});
           return;
         }
 
-        // Instances uniques (ordre d'apparition)
-        var instSeen={}; var instances=[];
+        // Instances uniques avec normalisation (évite "Paroi 01" + "Paroi 1" en double)
+        var instSeen={}, instances=[];
         catRes.forEach(function(rv){
-          var k = rv.instance_label||'\u2014';
+          var k = normInstForEne(rv.instance_label||'\u2014');
           if(!instSeen[k]){instSeen[k]=true; instances.push(k);}
         });
         // Champs uniques (ordre d'apparition)
-        var fldSeen={}; var fields=[];
+        var fldSeen={}, fields=[];
         catRes.forEach(function(rv){
           if(!fldSeen[rv.id_champ]){fldSeen[rv.id_champ]=true; fields.push({id:rv.id_champ,nom:getFieldNom(rv.id_champ)});}
         });
-        // Index résultats
+        // Index résultats par instance normalisée
         var ridx={};
         catRes.forEach(function(rv){
-          ridx[(rv.instance_label||'\u2014')+'||'+rv.id_champ]=rv;
+          var k = normInstForEne(rv.instance_label||'\u2014');
+          ridx[k+'||'+rv.id_champ]=rv;
         });
 
         var NC = 1 + fields.length*2;
@@ -3990,7 +4002,7 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
             dVals.push(rv?(rv.valeur_audit||'\u2014'):'\u2014');
             dVals.push(rv?(rv.valeur_vt   ||'\u2014'):'\u2014');
           });
-          var dr=ws5.addRow(dVals); dr.height=18;
+          var dr=ws5.addRow(dVals); dr.height=35;
           sc(dr.getCell(1),ENE_CAT,C.WHT,{bold:true,wrap:true});
           fields.forEach(function(f,i){
             var rv=ridx[inst+'||'+f.id]||null;
