@@ -2038,6 +2038,8 @@ Pour chaque champ fourni (issu du référentiel) :
 1. Localise la (ou les) valeur(s) dans l'Audit
 2. Cherche la (ou les) valeur(s) correspondante(s) dans la VT :
    a. Si le champ "lexique_vt" est renseigné (non vide) : utilise les termes du lexique comme clés de recherche PRIORITAIRES dans la VT — cherche-les mot pour mot dans le document VT AVANT de chercher le nom du champ lui-même. Le lexique contient les libellés exacts tels qu'ils apparaissent dans la VT.
+      - Si lexique_vt contient UN seul terme : cherche ce terme dans la VT et retourne la valeur associée.
+      - Si lexique_vt contient PLUSIEURS termes séparés par ";" (ex: "Adresse;Code postal;Ville") : cherche CHAQUE terme séparément dans la VT, extrais la valeur correspondante à chacun, puis CONCATÈNE-les pour former la valeur complète de valeur_vt. Exemple : lexique_vt="Adresse;Code postal;Ville" → cherche "Adresse" dans VT → "12 rue des Lilas", cherche "Code postal" → "57290", cherche "Ville" → "Sérémange-Erzange" → valeur_vt = "12 rue des Lilas 57290 Sérémange-Erzange". Ne jamais retourner MANQUANT si au moins un des termes du lexique est trouvé dans la VT.
    b. Si le lexique_vt est vide : cherche le nom du champ directement dans la VT.
 3. Compare et retourne un statut :
    - "VERT" : correspondance exacte ou quasi-exacte
