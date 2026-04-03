@@ -3155,8 +3155,8 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
       const safeKey = key.replace(/'/g, "\\'");
       return '<select class="revu-select' + cls + '" onchange="setRevuDoc(\'' + safeKey + '\', this)">' +
         '<option value=""' + (val === '' ? ' selected' : '') + '>\u2014</option>' +
-        '<option value="VT"' + (val === 'VT' ? ' selected' : '') + '>VT</option>' +
         '<option value="Audit"' + (val === 'Audit' ? ' selected' : '') + '>Audit</option>' +
+        '<option value="VT"' + (val === 'VT' ? ' selected' : '') + '>VT</option>' +
         '</select>';
     }
 
