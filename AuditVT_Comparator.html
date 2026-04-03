@@ -2467,6 +2467,14 @@
             }
             preExtracted[f.id] = val;
             console.log('[BATIAUDIT] "' + f.nom + '" \u2192 "' + val + '"');
+          } else if (/surface.*r[eé]f[eé]rence|surface.*habit|shab|sdp|surface.*plancher|surface.*totale|surface.*utile/.test(nomLC)) {
+            // Fallback SHAB côté AUDIT : BATIAUDIT n'a pas trouvé le label → cherche par synonymes
+            var audShabSyns = [f.nom.toLowerCase(), 'surface de r\u00e9f\u00e9rence', 'shab', 'surface habitable', 'surface de plancher', 'sdp', 'surface totale', 'surface de reference'];
+            var shabAuditVal = extractVtSingleNumValue(auditFull, audShabSyns);
+            if (shabAuditVal) {
+              preExtracted[f.id] = shabAuditVal;
+              console.log('[AUDIT-SHAB] "' + f.nom + '" \u2192 "' + shabAuditVal + '"');
+            }
           }
         });
 
