@@ -3874,52 +3874,62 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
         { label:'MENUISERIES',catKey:'menuiseries', inst:'Ouvrant', secKeys:['menuiserie','ouvrant','baie vitr','fen\u00eatre','fenetre','vitrage','porte-fen'] },
       ];
 
-      // Normalise un instance_label pour comparaison : "Paroi 01 — BlocBeton" → "paroi 1"
+      // Normalise un instance_label pour comparaison : "Paroi 01 — BlocBeton" / "Paroi 01 (ext.)" → "paroi 1"
       function normInstForEne(s) {
         return (s||'').toLowerCase()
           .replace(/\bparoi\s+0*(\d+)/g, 'paroi $1')
+          .replace(/\([^)]*\)/g, '')   // supprime les parenthèses "(ext.)" "(Bois)" etc.
           .replace(/\s+/g, ' ').trim()
           .split(/\s*(?:—|–)\s*/)[0].trim();
       }
 
+      // Mapping exclusif : catKey → [liste de labels normalisés] depuis detectedInstances
+      // Chaque instance appartient à UNE SEULE catégorie (la première assignation gagne)
+      var _instCatNorm = {};
+      ['murs','planchers','toitures','menuiseries'].forEach(function(ck) {
+        _instCatNorm[ck] = ((state.detectedInstances||{})[ck]||[]).map(normInstForEne);
+      });
+
       function eneGetResults(catKey, secKeys) {
-        // Clés de section élargies — PLANCHERS accepte "Planchers" (pas seulement "Planchers bas")
+        // PRIORITÉ 1 : mapping exclusif depuis detectedInstances (source de vérité absolue)
+        // Empêche qu'une même paroi apparaisse dans plusieurs tableaux
+        var catInsts = _instCatNorm[catKey] || [];
+        if (catInsts.length > 0) {
+          var mapped = state.analysisResults.filter(function(rv) {
+            if (!rv.instance_label) return false;
+            var k = normInstForEne(rv.instance_label);
+            return catInsts.indexOf(k) >= 0;
+          });
+          if (mapped.length > 0) return mapped;
+        }
+
+        // PRIORITÉ 2 : section du référentiel (fallback si detectedInstances vide pour cette cat)
         var broadSecKeys;
         if (catKey === 'planchers')   broadSecKeys = ['plancher','dalle','vide sanitaire','terre-plein','terre plein'];
         else if (catKey === 'toitures') broadSecKeys = ['toiture','comble','plancher haut','plafond haut','rampant'];
         else broadSecKeys = secKeys;
 
-        // PRIORITÉ : section du référentiel uniquement (jamais par nom de champ — évite contamination croisée)
-        // ex: un champ "Résistance plancher haut" dans section "Planchers" ne doit pas aller dans TOITURES
         var bySection = state.analysisResults.filter(function(rv) {
           var sec = (getFieldSection(rv.id_champ)||'').toLowerCase();
           return broadSecKeys.some(function(k){ return sec.indexOf(k)>=0; });
         });
         if (bySection.length > 0) return bySection;
 
-        // FALLBACK : matching par instance_label normalisé contre detectedInstances
-        var di = (state.detectedInstances) || {};
-        var knownInst = di[catKey] || [];
-        if (knownInst.length === 0) return [];
-        var knownNorm = knownInst.map(normInstForEne);
-        return state.analysisResults.filter(function(rv) {
-          if (!rv.instance_label) return false;
-          var inst = normInstForEne(rv.instance_label);
-          return knownNorm.some(function(kn){
-            return kn===inst || kn.startsWith(inst+' ') || inst.startsWith(kn+' ');
-          });
-        });
+        return [];
       }
 
-      // Titre
+      // Titre — pas de merge (garantit colonne A dans Excel)
       var ne5t = ws5.addRow(['OT \u00c9NERGIE \u2014 Audit \u00c9nerg\u00e9tique \u2014 D\u00e9tail par Paroi / Ouvrant']);
       ne5t.height = 28;
-      ws5.mergeCells(ne5t.number,1,ne5t.number,30);
-      sc(ne5t.getCell(1), ENE_HDR, C.WHT, {bold:true,sz:14,align:'left'});
+      ne5t.getCell(1).fill = xlFill(ENE_HDR);
+      ne5t.getCell(1).font = xlFont(C.WHT, true, 14, false);
+      ne5t.getCell(1).alignment = {vertical:'middle', horizontal:'left', wrapText:false};
+      ne5t.getCell(1).border = xlBorder();
       var ne5d = ws5.addRow(['G\u00e9n\u00e9r\u00e9 le : '+date+'  \u2014  Audit : '+(state.auditFileName||'-')+'  \u2014  VT : '+(state.vtFileName||'-')]);
       ne5d.height = 14;
-      ws5.mergeCells(ne5d.number,1,ne5d.number,30);
-      sc(ne5d.getCell(1), C.GRY_META, C.BLU_DARK, {sz:9,italic:true});
+      ne5d.getCell(1).fill = xlFill(C.GRY_META);
+      ne5d.getCell(1).font = xlFont(C.BLU_DARK, false, 9, true);
+      ne5d.getCell(1).alignment = {vertical:'middle', horizontal:'left', wrapText:false};
 
       ENE_CATS.forEach(function(cat) {
         var catRes = eneGetResults(cat.catKey, cat.secKeys);
@@ -3927,11 +3937,13 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
         // Séparateur
         ws5.addRow([]).height = 8;
 
-        // Titre catégorie
+        // Titre catégorie — pas de merge (colonne A garantie)
         var catRow = ws5.addRow(['\u25b6  '+cat.label]);
         catRow.height = 22;
-        ws5.mergeCells(catRow.number,1,catRow.number,30);
-        sc(catRow.getCell(1), ENE_CAT, C.WHT, {bold:true,sz:12,align:'left'});
+        catRow.getCell(1).fill = xlFill(ENE_CAT);
+        catRow.getCell(1).font = xlFont(C.WHT, true, 12, false);
+        catRow.getCell(1).alignment = {vertical:'middle', horizontal:'left', wrapText:false};
+        catRow.getCell(1).border = xlBorder();
 
         if (!catRes.length) {
           var ndRow = ws5.addRow(['  Aucune donn\u00e9e pour cette cat\u00e9gorie dans le r\u00e9f\u00e9rentiel']);
@@ -3945,6 +3957,8 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
         var instSeen={}, instances=[];
         catRes.forEach(function(rv){
           var k = normInstForEne(rv.instance_label||'\u2014');
+          // Pour menuiseries : exclure les labels "paroi N" qui sont des parois structurelles
+          if (cat.catKey === 'menuiseries' && /^paroi\s+\d/.test(k)) return;
           if(!instSeen[k]){instSeen[k]=true; instances.push(k);}
         });
         // Champs uniques (ordre d'apparition)
@@ -4002,7 +4016,7 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
             dVals.push(rv?(rv.valeur_audit||'\u2014'):'\u2014');
             dVals.push(rv?(rv.valeur_vt   ||'\u2014'):'\u2014');
           });
-          var dr=ws5.addRow(dVals); dr.height=35;
+          var dr=ws5.addRow(dVals); dr.height=50;
           sc(dr.getCell(1),ENE_CAT,C.WHT,{bold:true,wrap:true});
           fields.forEach(function(f,i){
             var rv=ridx[inst+'||'+f.id]||null;
