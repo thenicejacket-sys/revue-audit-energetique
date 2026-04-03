@@ -3771,7 +3771,10 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
         });
       }
 
-      // ── ONGLET 3 : Référentiel vs Audit ──────────────────────────────────
+      // Réservation de la position 3 pour "Audit énergétique" (populé plus bas)
+      var wsENE = wb.addWorksheet('Audit \u00e9nerg\u00e9tique');
+
+      // ── ONGLET 4 : Référentiel vs Audit ──────────────────────────────────
       var ws3=wb.addWorksheet('R\u00e9f\u00e9rentiel vs Audit');
       ws3.columns=[{width:32},{width:40},{width:30},{width:14}];
       ws3.views=[{state:'frozen',xSplit:0,ySplit:7}];
@@ -3815,7 +3818,7 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
         sc(r.getCell(3),rowBg,rowTxt,{}); sc(r.getCell(4),badgeBg,C.WHT,{bold:true,align:'center'});
       });
 
-      // ── ONGLET 4 : Référentiel vs VT ──────────────────────────────────────
+      // ── ONGLET 5 : Référentiel vs VT ──────────────────────────────────────
       var ws4=wb.addWorksheet('R\u00e9f\u00e9rentiel vs VT');
       ws4.columns=[{width:32},{width:40},{width:30},{width:14}];
       ws4.views=[{state:'frozen',xSplit:0,ySplit:7}];
@@ -3858,8 +3861,8 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
         sc(r.getCell(3),rowBg4,rowTxt4,{}); sc(r.getCell(4),badgeBg4,C.WHT,{bold:true,align:'center'});
       });
 
-      // ── ONGLET 5 : Audit énergétique (tableau pivoté par catégorie) ──────
-      var ws5 = wb.addWorksheet('Audit \u00e9nerg\u00e9tique');
+      // ── ONGLET 3 : Audit énergétique (tableau pivoté par catégorie) ──────
+      var ws5 = wsENE; // sheet déjà créé en position 3 (voir réservation ci-dessus)
       var ENE_HDR='FF0D47A1', ENE_CAT='FF1565C0', ENE_FLD='FF1976D2', ENE_SUB='FF42A5F5';
       var ENE_AUD_BG='FFE3F2FD', ENE_VT_BG='FFE8F5E9';
 
