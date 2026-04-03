@@ -3570,6 +3570,15 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
 
         if (!extA && !ctxA && !extV && !ctxV) lines.push('\u2014 Non cit\u00e9 par l\'IA \u2014 valeur introuvable dans les sources');
 
+        // Noms de fichiers sources en bas de cellule
+        var auditFile = (state && state.auditFileName) || '';
+        var vtFile    = (state && state.vtFileName)    || '';
+        if (auditFile || vtFile) {
+          lines.push('');
+          if (auditFile) lines.push('\ud83d\udcc4 Audit : ' + auditFile);
+          if (vtFile)    lines.push('\ud83d\udcc4 VT : '    + vtFile);
+        }
+
         var hasWarn  = iA==='non_verifie' || iV==='non_verifie';
         var bg, fg;
         if (hasWarn)              { bg='FFFFF3CD'; fg='FF7F4000'; }
