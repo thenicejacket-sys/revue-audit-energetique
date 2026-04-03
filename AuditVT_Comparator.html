@@ -2647,6 +2647,25 @@
             }
           }
 
+          // ---- Règle porte opaque : forcer MANQUANT sur tous les champs vitrage ----
+          // Si l'instance est une porte simple (pas porte-fenêtre, pas vitrée), aucun champ
+          // lié au vitrage ne peut avoir de valeur — c'est du code, pas du prompt.
+          var _instRaw = (rv.instance_label || '').toLowerCase();
+          var _isPorteOpaque = _instRaw.match(/\bporte\b/) &&
+                               !_instRaw.match(/porte.fen[eê]|vitr[eé]|baie/);
+          if (_isPorteOpaque) {
+            var _fNomV = (getFieldNom(rv.id_champ) || '').toLowerCase();
+            var _isVitrageField = _fNomV.match(/vitrag|lame.d.air|lame\s*air|[eé]missiv|remplissage|inclinaison|survitrag|coat|argon|krypton|feuilletage|feuilleté|feuillet/);
+            if (_isVitrageField && (rv.valeur_audit || rv.valeur_vt)) {
+              rv = Object.assign({}, rv, {
+                statut: 'MANQUANT',
+                valeur_audit: null,
+                valeur_vt: null,
+                commentaire: 'Porte opaque : champ vitrage non applicable. Valeur IA ignorée.'
+              });
+            }
+          }
+
           // ---- Option A : vérification des citations IA dans les textes sources ----
           var vA = verifyCitation(rv.extrait_audit, auditFull);
           var vV = verifyCitation(rv.extrait_vt, vtFull);
