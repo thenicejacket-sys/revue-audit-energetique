@@ -2158,9 +2158,14 @@
             if (!pm0) continue;
             var desc0 = pm0[2].trim().split(/\s{3,}|\t/)[0].trim().substring(0,50);
             var lblp0 = desc0 ? 'Paroi '+pm0[1]+' \u2014 '+desc0 : 'Paroi '+pm0[1];
-            if (curCat0==='murs') addUniq(murs, lblp0);
-            else if (curCat0==='planchers') addUniq(planchers, lblp0);
-            else if (curCat0==='toitures') addUniq(toitures, lblp0);
+            // Override sémantique : si la description de la paroi indique clairement une autre catégorie
+            var descL0 = desc0.toLowerCase();
+            var semCat0 = curCat0;
+            if (/plancher|mitoyen(?!\s*mur)|dalle\s*(?:b[eé]ton|bois)|vide.san|terre.plein/.test(descL0) && curCat0 !== 'planchers') semCat0 = 'planchers';
+            else if (/toiture|comble|plafond.haut|plancher.haut|rampant/.test(descL0) && curCat0 !== 'toitures') semCat0 = 'toitures';
+            if (semCat0==='murs') addUniq(murs, lblp0);
+            else if (semCat0==='planchers') addUniq(planchers, lblp0);
+            else if (semCat0==='toitures') addUniq(toitures, lblp0);
           }
         }
 
@@ -3003,10 +3008,20 @@ FORMAT B — TABLEAU : "(Largeur x Hauteur)  Description  Isolation" → chaque 
 RÈGLE ANTI-TRANSFERT INTER-OUVRANT (ABSOLUE — MENUISERIES) :
 Ne jamais transférer la valeur d'un ouvrant vers un autre ouvrant.
 - Si l'instance_hint est "Porte (2,10×0,90)", les valeurs_audit et valeur_vt doivent provenir EXCLUSIVEMENT du bloc "Porte" ou de la ligne "(2,10 x 0,90)" de l'audit.
-- INTERDIT : retourner "Double vitrage" ou "Argon" pour une porte opaque — une porte opaque n'a pas de vitrage. Si le champ "Type de vitrage" ne s'applique pas à cet ouvrant, retourner MANQUANT (valeur_audit null, valeur_vt null).
 - INTERDIT : copier la valeur d'une fenêtre pour une porte, ou inversement, même si le champ est le même.
 - Chaque ouvrant est un élément DISTINCT et INDÉPENDANT. Les valeurs extraites pour "Fenêtre 1" ne peuvent jamais migrer vers "Fenêtre 2", "Porte" ou tout autre ouvrant.
 - Si un champ ne mentionne pas explicitement cet ouvrant précis dans le document, retourner MANQUANT.
+
+RÈGLE PORTE OPAQUE (ABSOLUE) :
+Une "Porte" simple (sans "vitrée", "fenêtre", "baie" ou "porte-fenêtre" dans sa description) est une porte opaque — elle n'a PAS de vitrage.
+⛔ Pour une porte opaque, les champs suivants doivent OBLIGATOIREMENT retourner MANQUANT (valeur_audit null, valeur_vt null) :
+  - Type de vitrage
+  - Épaisseur lame d'air
+  - Couche peu émissive
+  - Gaz remplissage
+  - Tout champ lié au vitrage ou à la transparence
+Ne jamais retourner "Double vitrage", "Simple vitrage", "Triple vitrage", ou tout autre type de vitrage pour une porte standard.
+Cette règle est ABSOLUE même si des fenêtres avec vitrage apparaissent dans le même tableau juste au-dessus de la porte.
 
 EXCEPTION ABSOLUE — SURFACE DE RÉFÉRENCE / SHAB DU LOGEMENT :
 Les champs "Surface de référence", "Surface habitable", "SHAB", "Surface de plancher" sont des champs GÉNÉRAUX du logement — PAS des surfaces d'ouvrant.
