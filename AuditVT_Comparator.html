@@ -1405,6 +1405,10 @@
       <i data-lucide="file-text" style="width:15px;height:15px"></i>
       Rapport
     </button>
+    <button class="nav-tab" data-tab="conformite" onclick="switchTab('conformite')">
+      <i data-lucide="alert-triangle" style="width:15px;height:15px"></i>
+      Rapport de conformité
+    </button>
     <button class="nav-tab" data-tab="audit-energetique" onclick="switchTab('audit-energetique')">
       <i data-lucide="layers" style="width:15px;height:15px"></i>
       Audit énergétique
@@ -1654,6 +1658,62 @@
             <i data-lucide="chevron-down" id="missing-chevron" style="width:18px;height:18px;color:var(--primary);transition:transform 0.25s;flex-shrink:0;"></i>
           </div>
           <div id="missing-cards-container" style="display:none"></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ============================= ONGLET RAPPORT DE CONFORMITÉ ============================= -->
+    <div id="tab-conformite" class="tab-panel">
+
+      <div id="conformite-empty" class="empty-state">
+        <div class="empty-state-icon">⚠️</div>
+        <div class="empty-state-title">Aucune analyse disponible</div>
+        <div class="empty-state-sub">Lancez une analyse depuis l'onglet Comparaison pour voir les non-conformités et approximations.</div>
+      </div>
+
+      <div id="conformite-content" class="hidden">
+        <!-- Top bar -->
+        <div class="report-topbar">
+          <div>
+            <div class="section-title" style="margin-bottom:4px">Rapport de conformité</div>
+            <div style="font-size:12px;color:var(--text-muted)" id="conformite-subtitle"></div>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+            <div class="filter-row">
+              <button class="filter-btn active-all" id="conf-filter-all" onclick="setConformiteFilter('all')">Tous</button>
+              <button class="filter-btn" id="conf-filter-orange" onclick="setConformiteFilter('ORANGE')">⚠️ Approximatifs</button>
+              <button class="filter-btn" id="conf-filter-rouge" onclick="setConformiteFilter('ROUGE')">❌ Non conformes</button>
+            </div>
+            <div class="filter-row" style="margin-top:6px;">
+              <span style="font-size:11px;color:var(--text-muted);margin-right:4px;">Revue Analyse :</span>
+              <button class="filter-btn active-all" id="revu-conf-filter-all" onclick="setConformiteRevuFilter('all')">Tous</button>
+              <button class="filter-btn" id="revu-conf-filter-vt" onclick="setConformiteRevuFilter('VT')">📋 VT</button>
+              <button class="filter-btn" id="revu-conf-filter-audit" onclick="setConformiteRevuFilter('Audit')">📄 Audit</button>
+            </div>
+            <button class="btn btn-success" onclick="exportExcel()">
+              <i data-lucide="download" style="width:14px;height:14px"></i>
+              Télécharger Excel
+            </button>
+          </div>
+        </div>
+
+        <!-- Main Table -->
+        <div class="report-table-wrap">
+          <table class="report-table" id="conformite-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Champ Audit</th>
+                <th>Valeur Audit</th>
+                <th>Valeur VT</th>
+                <th>Statut</th>
+                <th>Commentaire IA</th>
+                <th>Revue Analyse</th>
+              </tr>
+            </thead>
+            <tbody id="conformite-tbody"></tbody>
+          </table>
         </div>
       </div>
 
@@ -2828,6 +2888,7 @@
       showProgress(false);
       renderResults();
       renderRapport();
+      renderConformite();
       renderAuditEnergetique();
       renderSuggestions();
       saveAnalysisToHistory();
@@ -3272,7 +3333,122 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
     // =====================================================================
     let currentFilter = 'all';
     let currentRevuFilter = 'all';
+    let currentConformiteFilter = 'all';
+    let currentConformiteRevuFilter = 'all';
     let inlineEdits = {};
+
+    function setConformiteFilter(f) {
+      currentConformiteFilter = f;
+      document.querySelectorAll('[id^="conf-filter-"]').forEach(function(b) { b.className = 'filter-btn'; });
+      if (f === 'all') document.getElementById('conf-filter-all').className = 'filter-btn active-all';
+      else if (f === 'ORANGE') document.getElementById('conf-filter-orange').className = 'filter-btn active-orange';
+      else if (f === 'ROUGE') document.getElementById('conf-filter-rouge').className = 'filter-btn active-rouge';
+      renderConformiteTable(f);
+    }
+
+    function setConformiteRevuFilter(f) {
+      document.querySelectorAll('#conformite-tbody .revu-select').forEach(function(sel) {
+        const match = sel.getAttribute('onchange').match(/setRevuDoc\('([^']+)'/);
+        if (!match) return;
+        const parts = match[1].split('|');
+        const id_champ = parts[0];
+        const instance_label = parts.length > 1 ? parts.slice(1).join('|') : null;
+        const val = sel.value;
+        state.analysisResults.forEach(function(r) {
+          if (r.id_champ === id_champ && (r.instance_label || null) === (instance_label || null)) {
+            r.revu_doc = val;
+          }
+        });
+      });
+      currentConformiteRevuFilter = f;
+      document.querySelectorAll('[id^="revu-conf-filter-"]').forEach(function(b) { b.className = 'filter-btn'; });
+      if (f === 'all') document.getElementById('revu-conf-filter-all').className = 'filter-btn active-all';
+      else if (f === 'VT') document.getElementById('revu-conf-filter-vt').className = 'filter-btn active-revu-vt';
+      else if (f === 'Audit') document.getElementById('revu-conf-filter-audit').className = 'filter-btn active-revu-audit';
+      renderConformiteTable(currentConformiteFilter);
+    }
+
+    function renderConformite() {
+      if (state.analysisResults.length === 0) {
+        document.getElementById('conformite-empty').classList.remove('hidden');
+        document.getElementById('conformite-content').classList.add('hidden');
+        return;
+      }
+      document.getElementById('conformite-empty').classList.add('hidden');
+      document.getElementById('conformite-content').classList.remove('hidden');
+      const date = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
+      document.getElementById('conformite-subtitle').textContent =
+        (state.auditFileName || 'Audit') + ' vs ' + (state.vtFileName || 'VT') + ' — ' + date;
+      renderConformiteTable(currentConformiteFilter);
+      lucide.createIcons();
+    }
+
+    function renderConformiteTable(filter) {
+      const tbody = document.getElementById('conformite-tbody');
+      tbody.innerHTML = '';
+
+      let base = state.analysisResults.filter(function(r) { return r.statut === 'ROUGE' || r.statut === 'ORANGE'; });
+      let filtered = filter === 'all' ? base : base.filter(function(r) { return r.statut === filter; });
+      if (currentConformiteRevuFilter && currentConformiteRevuFilter !== 'all') {
+        filtered = filtered.filter(function(r) { return r.revu_doc === currentConformiteRevuFilter; });
+      }
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:28px;color:var(--text-muted);font-style:italic;">Aucun résultat pour ce filtre.</td></tr>';
+        return;
+      }
+
+      const sectionOrder = [];
+      const sectionSeen = new Set();
+      state.referentiel.forEach(function(r) {
+        const s = r.parentSection || r.section || '';
+        if (s && !sectionSeen.has(s)) { sectionSeen.add(s); sectionOrder.push(s); }
+      });
+
+      const bySection = {};
+      const noSection = [];
+      filtered.forEach(function(r) {
+        const sec = getFieldSection(r.id_champ) || '';
+        if (!sec) { noSection.push(r); return; }
+        if (!bySection[sec]) bySection[sec] = [];
+        bySection[sec].push(r);
+      });
+
+      let rowNum = 0;
+
+      function appendConformiteRows(rows) {
+        rows.forEach(function(r) {
+          rowNum++;
+          const row = document.createElement('tr');
+          const instanceTag = r.instance_label
+            ? '<br><span style="display:inline-block;margin-top:3px;padding:1px 7px;background:rgba(27,63,139,0.08);border-radius:10px;font-size:10px;color:var(--primary);font-weight:600">' + escHtml(r.instance_label) + '</span>'
+            : '';
+          row.innerHTML =
+            '<td>' + rowNum + '</td>' +
+            '<td><strong>' + escHtml(r.id_champ || '') + '</strong><br><span style="font-size:11px;color:var(--text-muted)">' + escHtml(getFieldNom(r.id_champ)) + '</span>' + instanceTag + '</td>' +
+            '<td style="max-width:180px;font-size:12px">' + escHtml(r.valeur_audit || '\u2014') + '</td>' +
+            '<td style="max-width:180px;font-size:12px">' + escHtml(r.valeur_vt || '\u2014') + '</td>' +
+            '<td>' + statusChip(r.statut) + '</td>' +
+            '<td style="max-width:200px;font-size:12px;color:var(--text-muted)">' + escHtml(r.commentaire || '\u2014') + '</td>' +
+            '<td>' + revuSelectHtml(r.id_champ, r.instance_label, r.revu_doc) + '</td>';
+          tbody.appendChild(row);
+        });
+      }
+
+      sectionOrder.forEach(function(sec) {
+        const rows = bySection[sec];
+        if (!rows || !rows.length) return;
+        const secRow = document.createElement('tr');
+        secRow.className = 'rapport-section-row';
+        secRow.innerHTML = '<td colspan="7">&#9656; ' + escHtml(sec) + '<span class="rapport-section-count">(' + rows.length + ' champ' + (rows.length > 1 ? 's' : '') + ')</span></td>';
+        tbody.appendChild(secRow);
+        appendConformiteRows(rows);
+      });
+
+      if (noSection.length > 0) {
+        appendConformiteRows(noSection);
+      }
+    }
 
     function revuSelectHtml(id_champ, instance_label, current) {
       const key = id_champ + (instance_label ? '|' + instance_label : '');
