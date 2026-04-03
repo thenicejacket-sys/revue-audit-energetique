@@ -2760,11 +2760,25 @@
         var vt    = vtFull    || '';
         state.analysisResults.forEach(function(rv) {
           var label = getFieldNom(rv.id_champ) || rv.id_champ || '';
+          // Termes VT alternatifs depuis le lexique du référentiel (colonnes F/G/H)
+          var refEntry = state.referentiel.find(function(r) { return r.id === rv.id_champ; });
+          var vtAltLabels = [label];
+          if (refEntry && refEntry.lexique) {
+            refEntry.lexique.split(/[,;|\n]/).forEach(function(t) {
+              var tk = t.replace(/\+/g,' ').trim();
+              if (tk.length >= 3) vtAltLabels.push(tk);
+            });
+          }
+
           if (!rv.extrait_audit && rv.valeur_audit && rv.valeur_audit !== 'MANQUANT') {
             rv._ctx_audit = findCtxJS(label, rv.valeur_audit, audit, 80);
           }
           if (!rv.extrait_vt && rv.valeur_vt && rv.valeur_vt !== 'MANQUANT') {
-            rv._ctx_vt = findCtxJS(label, rv.valeur_vt, vt, 80);
+            // Essaie chaque terme VT (label + synonymes lexique) jusqu'au premier match
+            for (var vi = 0; vi < vtAltLabels.length; vi++) {
+              rv._ctx_vt = findCtxJS(vtAltLabels[vi], rv.valeur_vt, vt, 80);
+              if (rv._ctx_vt) break;
+            }
           }
         });
       })();
