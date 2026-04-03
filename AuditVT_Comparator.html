@@ -1987,17 +1987,6 @@
       const canAnalyze = dossierOk && auditOk && vtOk && refOk && apiOk;
       document.getElementById('btn-analyze').disabled = !canAnalyze || state.analysisRunning;
 
-      // Auto-démarrage : déclenche l'analyse au moment où TOUS les prérequis passent de incomplet → complet
-      if (canAnalyze && !state.analysisRunning) {
-        if (!state._wasAllReady) {
-          state._wasAllReady = true;
-          setTimeout(function() {
-            if (!state.analysisRunning) startAnalysis();
-          }, 400);
-        }
-      } else {
-        state._wasAllReady = false;
-      }
     }
 
     function setPrereq(id, ok, label) {
