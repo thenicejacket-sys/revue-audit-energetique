@@ -3875,27 +3875,39 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
       ];
 
       function eneGetResults(catKey, secKeys) {
-        // PRIORITÉ : filtrage par section du référentiel (fiable — ne dépend pas des labels IA)
-        // Chaque champ a une section dans le référentiel (Murs, Planchers, etc.)
-        // → les résultats tombent naturellement dans la bonne catégorie sans ambiguïté
-        var bySection = state.analysisResults.filter(function(rv) {
-          var sec = (getFieldSection(rv.id_champ)||'').toLowerCase();
-          var nom = (getFieldNom(rv.id_champ)||'').toLowerCase();
-          return secKeys.some(function(k){ return sec.indexOf(k)>=0 || nom.indexOf(k)>=0; });
-        });
-        if (bySection.length > 0) return bySection;
-
-        // FALLBACK : matching fuzzy par instance_label si la section ne discrimine pas
+        // PRIORITÉ ABSOLUE : matching par instance_label contre detectedInstances[catKey]
+        // PASS 0 assigne chaque paroi à exactement une catégorie → source de vérité
+        // La section ou le nom du champ peuvent se chevaucher entre catégories → on ne les utilise PAS
         var di = (state.detectedInstances) || {};
         var knownInst = di[catKey] || [];
-        if (knownInst.length === 0) return [];
-        return state.analysisResults.filter(function(rv) {
-          var inst = (rv.instance_label || '').toLowerCase().replace(/\s+0*/g,' ').trim();
-          return knownInst.some(function(k){
-            var kn = k.toLowerCase().replace(/\s+0*/g,' ').trim();
-            // Match exact ou préfixe (ex "paroi 1" ↔ "paroi 1 — beton")
-            return kn === inst || kn.startsWith(inst) || inst.startsWith(kn.split(' — ')[0]);
+
+        // Normalisation : supprime description (après —), dimensions (Lx×Hy), zéros en tête, accents
+        function normNum(s) {
+          return (s||'').toLowerCase()
+            .replace(/\s*[—\-–].*$/, '')         // "Paroi 01 — Mur..." → "paroi 01"
+            .replace(/\s*\([^)]*\)\s*$/, '')      // "Fenêtre 1 (1.50×1.60)" → "fenêtre 1"
+            .replace(/\b0+(\d)/g, '$1')           // "paroi 01" → "paroi 1"
+            .replace(/[àâä]/g,'a').replace(/[éèêë]/g,'e')
+            .replace(/[îï]/g,'i').replace(/[ôö]/g,'o').replace(/[ùûü]/g,'u')
+            .trim();
+        }
+
+        if (knownInst.length > 0) {
+          var catNorms = knownInst.map(normNum);
+          return state.analysisResults.filter(function(rv) {
+            if (!rv.instance_label) return false;
+            var rvNorm = normNum(rv.instance_label);
+            return catNorms.some(function(cn) {
+              return cn === rvNorm || rvNorm.startsWith(cn) || cn.startsWith(rvNorm);
+            });
           });
+        }
+
+        // FALLBACK (PASS 0 n'a rien détecté) : filtrage par section du référentiel uniquement
+        // Pas de filtrage par nom de champ → évite la cross-contamination (ex: "plancher haut" ∈ TOITURES)
+        return state.analysisResults.filter(function(rv) {
+          var sec = (getFieldSection(rv.id_champ)||'').toLowerCase();
+          return secKeys.some(function(k){ return sec.indexOf(k)>=0; });
         });
       }
 
@@ -3903,7 +3915,7 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
       var ne5t = ws5.addRow(['OT \u00c9NERGIE \u2014 Audit \u00c9nerg\u00e9tique \u2014 D\u00e9tail par Paroi / Ouvrant']);
       ne5t.height = 28;
       ws5.mergeCells(ne5t.number,1,ne5t.number,30);
-      sc(ne5t.getCell(1), ENE_HDR, C.WHT, {bold:true,sz:14,align:'center'});
+      sc(ne5t.getCell(1), ENE_HDR, C.WHT, {bold:true,sz:14,align:'left'});
       var ne5d = ws5.addRow(['G\u00e9n\u00e9r\u00e9 le : '+date+'  \u2014  Audit : '+(state.auditFileName||'-')+'  \u2014  VT : '+(state.vtFileName||'-')]);
       ne5d.height = 14;
       ws5.mergeCells(ne5d.number,1,ne5d.number,30);
@@ -3919,13 +3931,13 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
         var catRow = ws5.addRow(['\u25b6  '+cat.label]);
         catRow.height = 22;
         ws5.mergeCells(catRow.number,1,catRow.number,30);
-        sc(catRow.getCell(1), ENE_CAT, C.WHT, {bold:true,sz:12,align:'center'});
+        sc(catRow.getCell(1), ENE_CAT, C.WHT, {bold:true,sz:12,align:'left'});
 
         if (!catRes.length) {
           var ndRow = ws5.addRow(['  Aucune donn\u00e9e pour cette cat\u00e9gorie dans le r\u00e9f\u00e9rentiel']);
           ndRow.height = 16;
           ws5.mergeCells(ndRow.number,1,ndRow.number,30);
-          sc(ndRow.getCell(1), 'FFF5F5F5', 'FF888888', {italic:true,align:'center'});
+          sc(ndRow.getCell(1), 'FFF5F5F5', 'FF888888', {italic:true,align:'left'});
           return;
         }
 
