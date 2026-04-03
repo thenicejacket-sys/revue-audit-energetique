@@ -4,3 +4,6 @@ restore_points/
 # OS
 .DS_Store
 Thumbs.db
+
+.vercel
+.gstack/
