@@ -2915,7 +2915,9 @@ FORMAT B — TABLEAU : "(Largeur x Hauteur)  Description  Isolation" → chaque 
 
 EXCEPTION ABSOLUE — SURFACE DE RÉFÉRENCE / SHAB DU LOGEMENT :
 Les champs "Surface de référence", "Surface habitable", "SHAB", "Surface de plancher" sont des champs GÉNÉRAUX du logement — PAS des surfaces d'ouvrant.
-→ Pour ces champs, retourne TOUJOURS leur valeur telle quelle (ex: 57 m², 56,66 m²) dans valeur_audit ET valeur_vt.
+→ Pour ces champs, retourne TOUJOURS leur valeur telle quelle dans valeur_audit ET valeur_vt.
+→ Dans la VT, cherche ces synonymes pour trouver la surface du logement : "SHAB", "Surface habitable", "SDP", "Surface de plancher", "Surface de référence", "Surface totale", "surface utile". Retourne la valeur numérique trouvée (ex: 56,66 m²) même si légèrement différente de l'audit.
+→ Ne jamais laisser valeur_vt = MANQUANT pour ce type de champ si une surface totale du logement est présente dans la VT — même sous un terme synonyme.
 → La règle anti-SHAB ci-dessous s'applique UNIQUEMENT aux champs de la section MENUISERIES / OUVRANTS. Jamais aux champs généraux du logement.
 
 RÈGLE SURFACE HABITABLE ≠ SURFACE OUVRANT — INTERDICTION ABSOLUE :
@@ -3478,23 +3480,54 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
         var r=ws.addRow(vals); r.height=h||14;
         ws.mergeCells(r.number,1,r.number,n); sr(r,bg,fg,o,n); return r;
       }
-      // Colonne F — Source & Vérification (Option A+C)
+      // Colonne F — Source & Vérification (Option A+C + contexte source)
+      function _findCtx(needle, haystack, halfLen) {
+        if (!needle || !haystack) return '';
+        var n = function(s){ return s.replace(/\s+/g,' ').replace(/[\u00e0\u00e2\u00e4]/g,'a').replace(/[\u00e9\u00e8\u00ea\u00eb]/g,'e').replace(/[\u00ee\u00ef]/g,'i').replace(/[\u00f4\u00f6]/g,'o').replace(/[\u00f9\u00fb\u00fc]/g,'u').toLowerCase(); };
+        var nh = n(haystack);
+        var nn = n(needle).substring(0, 40); // 40 premiers chars normalisés
+        var idx = nh.indexOf(nn);
+        if (idx < 0) {
+          // Fallback : cherche juste la partie numérique
+          var numM = needle.match(/[\d,.\u00bd\u00bc\u00be]+/);
+          if (numM) idx = nh.indexOf(numM[0].replace(',', '.'));
+          if (idx < 0 && numM) idx = nh.indexOf(numM[0]);
+        }
+        if (idx < 0) return '';
+        var s = Math.max(0, idx - halfLen);
+        var e = Math.min(haystack.length, idx + halfLen);
+        return (s>0?'…':'') + haystack.substring(s, e).replace(/\n/g,' ').replace(/\s{2,}/g,' ').trim() + (e<haystack.length?'…':'');
+      }
+
       function buildVerifCell(rv) {
         var iA = rv._verif_audit || 'non_cite';
         var iV = rv._verif_vt    || 'non_cite';
-        var icon = { verifie:'✅', partiel:'~', non_verifie:'⚠️', non_cite:'—', court:'?' };
+        var icon = { verifie:'\u2705', partiel:'~', non_verifie:'\u26a0\ufe0f', non_cite:'\u2014', court:'?' };
         var lines = [];
-        var extA = rv.extrait_audit ? rv.extrait_audit.substring(0,70) + (rv.extrait_audit.length>70?'…':'') : '';
-        var extV = rv.extrait_vt   ? rv.extrait_vt.substring(0,70)   + (rv.extrait_vt.length>70?'…':'')   : '';
-        if (extA) lines.push((icon[iA]||'—') + ' Audit : "' + extA + '"');
-        if (extV) lines.push((icon[iV]||'—') + ' VT : "'    + extV + '"');
-        if (!extA && !extV) lines.push('— Non cité par l\'IA');
+
+        // Extrait IA (source citée)
+        var extA = rv.extrait_audit ? rv.extrait_audit.substring(0,80) + (rv.extrait_audit.length>80?'\u2026':'') : '';
+        var extV = rv.extrait_vt   ? rv.extrait_vt.substring(0,80)   + (rv.extrait_vt.length>80?'\u2026':'')   : '';
+
+        // Contexte source autour de la valeur (si disponible dans state)
+        var auditSrc = (state && state.auditText) || '';
+        var vtSrc    = (state && state.vtText)    || '';
+        var ctxA = extA ? _findCtx(extA, auditSrc, 90) : (rv.valeur_audit && rv.valeur_audit !== 'MANQUANT' ? _findCtx(rv.valeur_audit, auditSrc, 90) : '');
+        var ctxV = extV ? _findCtx(extV, vtSrc,    90) : (rv.valeur_vt    && rv.valeur_vt    !== 'MANQUANT' ? _findCtx(rv.valeur_vt,    vtSrc,    90) : '');
+
+        if (extA) { lines.push((icon[iA]||'\u2014') + ' Audit cit\u00e9 : "' + extA + '"'); }
+        else if (ctxA) { lines.push('\ud83d\udd0d Audit trouv\u00e9 : "' + ctxA.substring(0,100) + '"'); }
+
+        if (extV) { lines.push((icon[iV]||'\u2014') + ' VT cit\u00e9 : "' + extV + '"'); }
+        else if (ctxV) { lines.push('\ud83d\udd0d VT trouv\u00e9 : "' + ctxV.substring(0,100) + '"'); }
+
+        if (!extA && !ctxA && !extV && !ctxV) lines.push('\u2014 Non cit\u00e9 par l\'IA \u2014 valeur introuvable dans les sources');
+
         var hasWarn  = iA==='non_verifie' || iV==='non_verifie';
-        var allCited = (extA || extV);
         var bg, fg;
-        if (hasWarn)     { bg='FFFFF3CD'; fg='FF7F4000'; }          // jaune — non vérifié
-        else if (!extA && !extV) { bg='FFF5F5F5'; fg='FF888888'; }   // gris  — non cité
-        else             { bg='FFE8F5E9'; fg='FF2E4A2E'; }            // vert  — vérifié
+        if (hasWarn)              { bg='FFFFF3CD'; fg='FF7F4000'; }
+        else if (!extA && !extV)  { bg='FFFAFAFA'; fg='FF666666'; }
+        else                      { bg='FFE8F5E9'; fg='FF2E4A2E'; }
         return { txt: lines.join('\n'), bg: bg, fg: fg };
       }
       // Calcule la hauteur de ligne en fonction du contenu des colonnes E et F
