@@ -3872,19 +3872,27 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
       ];
 
       function eneGetResults(catKey, secKeys) {
-        var di = (state.detectedInstances) || {};
-        var knownInst = di[catKey] || [];
-        if (knownInst.length > 0) {
-          // Priorité : instance_label appartient à la catégorie détectée → pas de mélange possible
-          return state.analysisResults.filter(function(rv) {
-            return knownInst.indexOf(rv.instance_label || '') >= 0;
-          });
-        }
-        // Fallback : matching section/nom par mots-clés (si aucune instance détectée)
-        return state.analysisResults.filter(function(rv) {
+        // PRIORITÉ : filtrage par section du référentiel (fiable — ne dépend pas des labels IA)
+        // Chaque champ a une section dans le référentiel (Murs, Planchers, etc.)
+        // → les résultats tombent naturellement dans la bonne catégorie sans ambiguïté
+        var bySection = state.analysisResults.filter(function(rv) {
           var sec = (getFieldSection(rv.id_champ)||'').toLowerCase();
           var nom = (getFieldNom(rv.id_champ)||'').toLowerCase();
           return secKeys.some(function(k){ return sec.indexOf(k)>=0 || nom.indexOf(k)>=0; });
+        });
+        if (bySection.length > 0) return bySection;
+
+        // FALLBACK : matching fuzzy par instance_label si la section ne discrimine pas
+        var di = (state.detectedInstances) || {};
+        var knownInst = di[catKey] || [];
+        if (knownInst.length === 0) return [];
+        return state.analysisResults.filter(function(rv) {
+          var inst = (rv.instance_label || '').toLowerCase().replace(/\s+0*/g,' ').trim();
+          return knownInst.some(function(k){
+            var kn = k.toLowerCase().replace(/\s+0*/g,' ').trim();
+            // Match exact ou préfixe (ex "paroi 1" ↔ "paroi 1 — beton")
+            return kn === inst || kn.startsWith(inst) || inst.startsWith(kn.split(' — ')[0]);
+          });
         });
       }
 
@@ -3958,11 +3966,14 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
           sc(shRow.getCell(2+i*2+1), ENE_VT_BG, 'FF1B5E20',{bold:true,align:'center'});
         });
 
-        // Largeurs colonnes
-        ws5.getColumn(1).width=24;
+        // Largeurs colonnes — col 1 large, colonnes données auto-largeur + wrap
+        ws5.getColumn(1).width=28;
         fields.forEach(function(f,i){
-          ws5.getColumn(2+i*2).width=18;
-          ws5.getColumn(2+i*2+1).width=18;
+          // Calcule la largeur optimale selon le nom du champ (min 18, max 38)
+          var fnLen = (f.nom||'').length;
+          var colW = Math.max(18, Math.min(38, Math.ceil(fnLen/2)+4));
+          ws5.getColumn(2+i*2).width=colW;
+          ws5.getColumn(2+i*2+1).width=colW;
         });
 
         // Lignes de données (une par instance)
@@ -3975,8 +3986,8 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
             dVals.push(rv?(rv.valeur_audit||'\u2014'):'\u2014');
             dVals.push(rv?(rv.valeur_vt   ||'\u2014'):'\u2014');
           });
-          var dr=ws5.addRow(dVals); dr.height=15;
-          sc(dr.getCell(1),ENE_CAT,C.WHT,{bold:true});
+          var dr=ws5.addRow(dVals); dr.height=18;
+          sc(dr.getCell(1),ENE_CAT,C.WHT,{bold:true,wrap:true});
           fields.forEach(function(f,i){
             var rv=ridx[inst+'||'+f.id]||null;
             var bg=rowBg;
@@ -3986,8 +3997,8 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
               else if(rv.statut==='ORANGE')  bg=C.ORA_ROW;
               else if(rv.statut==='MANQUANT')bg=C.MAN_ROW;
             }
-            sc(dr.getCell(2+i*2),  bg,'FF37474F',{});
-            sc(dr.getCell(2+i*2+1),bg,'FF37474F',{});
+            sc(dr.getCell(2+i*2),  bg,'FF37474F',{wrap:true,sz:9});
+            sc(dr.getCell(2+i*2+1),bg,'FF37474F',{wrap:true,sz:9});
           });
         });
       });
