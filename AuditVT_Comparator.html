@@ -2715,8 +2715,59 @@
         return !!(rv.valeur_audit && rv.valeur_audit.trim() && rv.valeur_audit.trim() !== '-');
       });
 
-      updateProgress(95, 'Compilation des résultats...', 'Calcul des indicateurs...');
+      updateProgress(95, 'Compilation des résultats...', 'Extraction des contextes sources...');
       await sleep(200);
+
+      // ── Enrichissement JS : contexte source pour les extraits manquants ──────
+      // Pour chaque résultat sans extrait_audit/extrait_vt, cherche le passage
+      // dans le texte source en croisant label du champ + valeur numérique.
+      (function enrichContexts() {
+        function norm(s) {
+          return (s||'').replace(/[^\w\d\s,.\-\/]/g,' ').replace(/\s+/g,' ').toLowerCase();
+        }
+        // Cherche label puis valeur à proximité, ou juste la valeur si non trouvé
+        function findCtxJS(label, value, sourceText, halfLen) {
+          if (!value || value === 'MANQUANT' || !sourceText) return '';
+          var lower = norm(sourceText);
+          var lbl   = norm(label).substring(0, 40);
+          var val   = norm(value).replace(/m2|m²/g, 'm').replace(/[²2]$/,'').trim();
+          // --- Stratégie 1 : label puis valeur dans les 200 chars suivants ---
+          var idx = -1;
+          if (lbl.length >= 4) {
+            var li = lower.indexOf(lbl);
+            while (li >= 0) {
+              var win = lower.substring(li, li + 200);
+              if (val.length >= 2 && win.indexOf(val) >= 0) { idx = li; break; }
+              li = lower.indexOf(lbl, li + 1);
+            }
+          }
+          // --- Stratégie 2 : valeur seule (nombre) ---
+          if (idx < 0) {
+            var numMatch = value.match(/\d[\d,.\s]*/);
+            if (numMatch) {
+              var numStr = numMatch[0].replace(',','.').trim();
+              idx = lower.indexOf(numStr.substring(0, Math.min(numStr.length, 8)));
+            }
+          }
+          if (idx < 0) return '';
+          var s = Math.max(0, idx - halfLen);
+          var e = Math.min(sourceText.length, idx + halfLen + label.length + 10);
+          var snippet = sourceText.substring(s, e).replace(/[\r\n\t]+/g,' ').replace(/\s{2,}/g,' ').trim();
+          return (s > 0 ? '\u2026' : '') + snippet + (e < sourceText.length ? '\u2026' : '');
+        }
+
+        var audit = auditFull || '';
+        var vt    = vtFull    || '';
+        state.analysisResults.forEach(function(rv) {
+          var label = getFieldNom(rv.id_champ) || rv.id_champ || '';
+          if (!rv.extrait_audit && rv.valeur_audit && rv.valeur_audit !== 'MANQUANT') {
+            rv._ctx_audit = findCtxJS(label, rv.valeur_audit, audit, 80);
+          }
+          if (!rv.extrait_vt && rv.valeur_vt && rv.valeur_vt !== 'MANQUANT') {
+            rv._ctx_vt = findCtxJS(label, rv.valeur_vt, vt, 80);
+          }
+        });
+      })();
 
       updateProgress(100, 'Analyse terminée !', 'Rapport prêt.');
       await sleep(400);
@@ -3556,17 +3607,15 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
         var extA = rv.extrait_audit ? rv.extrait_audit.substring(0,80) + (rv.extrait_audit.length>80?'\u2026':'') : '';
         var extV = rv.extrait_vt   ? rv.extrait_vt.substring(0,80)   + (rv.extrait_vt.length>80?'\u2026':'')   : '';
 
-        // Contexte source autour de la valeur (si disponible dans state)
-        var auditSrc = (state && state.auditText) || '';
-        var vtSrc    = (state && state.vtText)    || '';
-        var ctxA = extA ? _findCtx(extA, auditSrc, 90) : (rv.valeur_audit && rv.valeur_audit !== 'MANQUANT' ? _findCtx(rv.valeur_audit, auditSrc, 90) : '');
-        var ctxV = extV ? _findCtx(extV, vtSrc,    90) : (rv.valeur_vt    && rv.valeur_vt    !== 'MANQUANT' ? _findCtx(rv.valeur_vt,    vtSrc,    90) : '');
+        // Contexte source : priorité à extrait IA, puis contexte JS pré-calculé (_ctx_*)
+        var ctxA = extA || (rv._ctx_audit  ? rv._ctx_audit.substring(0, 120)  : '');
+        var ctxV = extV || (rv._ctx_vt     ? rv._ctx_vt.substring(0, 120)    : '');
 
-        if (extA) { lines.push((icon[iA]||'\u2014') + ' Audit cit\u00e9 : "' + extA + '"'); }
-        else if (ctxA) { lines.push('\ud83d\udd0d Audit trouv\u00e9 : "' + ctxA.substring(0,100) + '"'); }
+        if (extA) { lines.push((icon[iA]||'\u2014') + ' Audit : "' + extA + '"'); }
+        else if (ctxA) { lines.push('\ud83d\udd0d Audit : "' + ctxA + '"'); }
 
-        if (extV) { lines.push((icon[iV]||'\u2014') + ' VT cit\u00e9 : "' + extV + '"'); }
-        else if (ctxV) { lines.push('\ud83d\udd0d VT trouv\u00e9 : "' + ctxV.substring(0,100) + '"'); }
+        if (extV) { lines.push((icon[iV]||'\u2014') + ' VT : "' + extV + '"'); }
+        else if (ctxV) { lines.push('\ud83d\udd0d VT : "' + ctxV + '"'); }
 
         if (!extA && !ctxA && !extV && !ctxV) lines.push('\u2014 Non cit\u00e9 par l\'IA \u2014 valeur introuvable dans les sources');
 
