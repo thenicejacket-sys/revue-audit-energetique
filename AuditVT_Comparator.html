@@ -3000,6 +3000,14 @@ FORMAT B — TABLEAU : "(Largeur x Hauteur)  Description  Isolation" → chaque 
 - JAMAIS regrouper plusieurs ouvrants en un seul résultat.
 - Pour les fenêtres identiques (même dimensions, même description) : crée quand même un résultat séparé par fenêtre.
 
+RÈGLE ANTI-TRANSFERT INTER-OUVRANT (ABSOLUE — MENUISERIES) :
+Ne jamais transférer la valeur d'un ouvrant vers un autre ouvrant.
+- Si l'instance_hint est "Porte (2,10×0,90)", les valeurs_audit et valeur_vt doivent provenir EXCLUSIVEMENT du bloc "Porte" ou de la ligne "(2,10 x 0,90)" de l'audit.
+- INTERDIT : retourner "Double vitrage" ou "Argon" pour une porte opaque — une porte opaque n'a pas de vitrage. Si le champ "Type de vitrage" ne s'applique pas à cet ouvrant, retourner MANQUANT (valeur_audit null, valeur_vt null).
+- INTERDIT : copier la valeur d'une fenêtre pour une porte, ou inversement, même si le champ est le même.
+- Chaque ouvrant est un élément DISTINCT et INDÉPENDANT. Les valeurs extraites pour "Fenêtre 1" ne peuvent jamais migrer vers "Fenêtre 2", "Porte" ou tout autre ouvrant.
+- Si un champ ne mentionne pas explicitement cet ouvrant précis dans le document, retourner MANQUANT.
+
 EXCEPTION ABSOLUE — SURFACE DE RÉFÉRENCE / SHAB DU LOGEMENT :
 Les champs "Surface de référence", "Surface habitable", "SHAB", "Surface de plancher" sont des champs GÉNÉRAUX du logement — PAS des surfaces d'ouvrant.
 → Pour ces champs, retourne TOUJOURS leur valeur telle quelle dans valeur_audit ET valeur_vt.
@@ -3879,6 +3887,14 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
         _instCatNorm[ck] = ((state.detectedInstances||{})[ck]||[]).map(normInstForEne);
       });
 
+      // Map clé normalisée → label original (pour affichage fidèle : "Paroi 01" pas "paroi 1")
+      var _origLabelMap = {};
+      ['murs','planchers','toitures','menuiseries'].forEach(function(ck) {
+        ((state.detectedInstances||{})[ck]||[]).forEach(function(orig) {
+          _origLabelMap[normInstForEne(orig)] = orig;
+        });
+      });
+
       function eneGetResults(catKey, secKeys) {
         // PRIORITÉ 1 : mapping exclusif depuis detectedInstances (source de vérité absolue)
         // Empêche qu'une même paroi apparaisse dans plusieurs tableaux
@@ -3898,7 +3914,16 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
         else if (catKey === 'toitures') broadSecKeys = ['toiture','comble','plancher haut','plafond haut','rampant'];
         else broadSecKeys = secKeys;
 
+        // Instances qui appartiennent à d'autres catégories — exclure pour éviter les doublons inter-tableaux
+        var _otherCatInsts = [];
+        ['murs','planchers','toitures','menuiseries'].forEach(function(ck) {
+          if (ck !== catKey) _otherCatInsts = _otherCatInsts.concat(_instCatNorm[ck]||[]);
+        });
         var bySection = state.analysisResults.filter(function(rv) {
+          if (rv.instance_label) {
+            var k = normInstForEne(rv.instance_label);
+            if (_otherCatInsts.indexOf(k) >= 0) return false; // appartient à une autre catégorie
+          }
           var sec = (getFieldSection(rv.id_champ)||'').toLowerCase();
           return broadSecKeys.some(function(k){ return sec.indexOf(k)>=0; });
         });
@@ -3943,12 +3968,22 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
         }
 
         // Instances uniques avec normalisation (évite "Paroi 01" + "Paroi 1" en double)
+        // On garde le label original (depuis detectedInstances) pour l'affichage
         var instSeen={}, instances=[];
+        // Priorité : prendre l'ordre depuis detectedInstances (source de vérité)
+        var detInsts = ((state.detectedInstances||{})[cat.catKey]||[]);
+        if (detInsts.length > 0) {
+          detInsts.forEach(function(orig) {
+            var k = normInstForEne(orig);
+            if (cat.catKey === 'menuiseries' && /^paroi\s+\d/.test(k)) return;
+            if(!instSeen[k]){instSeen[k]=true; instances.push({norm:k, display:orig});}
+          });
+        }
+        // Compléter avec les instances retournées par l'IA non présentes dans detectedInstances
         catRes.forEach(function(rv){
           var k = normInstForEne(rv.instance_label||'\u2014');
-          // Pour menuiseries : exclure les labels "paroi N" qui sont des parois structurelles
           if (cat.catKey === 'menuiseries' && /^paroi\s+\d/.test(k)) return;
-          if(!instSeen[k]){instSeen[k]=true; instances.push(k);}
+          if(!instSeen[k]){instSeen[k]=true; instances.push({norm:k, display:(_origLabelMap[k]||rv.instance_label||k)});}
         });
         // Champs uniques (ordre d'apparition)
         var fldSeen={}, fields=[];
@@ -3998,17 +4033,18 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
         // Lignes de données (une par instance)
         var alt=false;
         instances.forEach(function(inst){
+          var instNorm = inst.norm, instDisp = inst.display;
           var rowBg=alt?'FFF8FBFF':'FFFFFFFF'; alt=!alt;
-          var dVals=[inst];
+          var dVals=[instDisp];
           fields.forEach(function(f){
-            var rv=ridx[inst+'||'+f.id]||null;
+            var rv=ridx[instNorm+'||'+f.id]||null;
             dVals.push(rv?(rv.valeur_audit||'\u2014'):'\u2014');
             dVals.push(rv?(rv.valeur_vt   ||'\u2014'):'\u2014');
           });
           var dr=ws5.addRow(dVals); dr.height=50;
           sc(dr.getCell(1),ENE_CAT,C.WHT,{bold:true,wrap:true});
           fields.forEach(function(f,i){
-            var rv=ridx[inst+'||'+f.id]||null;
+            var rv=ridx[instNorm+'||'+f.id]||null;
             var bg=rowBg;
             if(rv){
               if(rv.statut==='VERT')    bg=C.VERT_ROW;
