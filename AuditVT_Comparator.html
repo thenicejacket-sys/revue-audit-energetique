@@ -1347,6 +1347,14 @@
         </div>
       </div>
 
+      <!-- Nom du dossier -->
+      <div style="margin-bottom:16px;">
+        <label style="display:block;font-family:'Montserrat',sans-serif;font-weight:700;font-size:13px;color:var(--text-dark);margin-bottom:6px;">
+          Nom du dossier <span style="color:#c00;font-size:11px;font-weight:400">(obligatoire)</span>
+        </label>
+        <input type="text" id="input-dossier" class="form-input" placeholder="Ex : Makram Hosni — 12 rue des Lilas" oninput="updatePrereqs()" style="max-width:480px;" />
+      </div>
+
       <!-- Analyse section -->
       <div class="analyze-section">
         <div>
@@ -1367,13 +1375,17 @@
             <span class="status-dot missing" id="dot-api"></span>
             Configuration IA : <span id="status-api" style="font-weight:700">Non configuré</span>
           </div>
+          <div class="analyze-status-text" style="margin-top:5px" id="prereq-dossier">
+            <span class="status-dot missing" id="dot-dossier"></span>
+            Nom du dossier : <span id="status-dossier" style="font-weight:700">Non renseigné</span>
+          </div>
         </div>
         <div style="text-align:right;">
           <button class="btn btn-primary" id="btn-analyze" disabled onclick="startAnalysis()" style="font-size:14px;padding:14px 28px;">
             <i data-lucide="search" style="width:16px;height:16px"></i>
             Lancer l'analyse
           </button>
-          <div style="font-size:11px;color:var(--text-muted);margin-top:8px;">Les 2 PDFs et le référentiel sont requis</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:8px;">Les 2 PDFs, le référentiel et le nom du dossier sont requis</div>
         </div>
       </div>
 
@@ -1668,12 +1680,16 @@
     <!-- ============================= ONGLET HISTORIQUE ============================= -->
     <div id="tab-historique" class="tab-panel">
 
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
         <p class="section-title" style="margin:0">Historique des analyses</p>
         <button class="btn btn-danger btn-sm" onclick="clearHistory()">
           <i data-lucide="trash-2" style="width:12px;height:12px"></i>
           Tout effacer
         </button>
+      </div>
+
+      <div style="margin-bottom:14px;">
+        <input type="text" id="history-search" class="form-input" placeholder="🔍 Rechercher par nom de dossier..." oninput="renderHistory()" style="max-width:420px;" />
       </div>
 
       <div id="history-empty" class="empty-state">
@@ -1687,6 +1703,7 @@
             <tr>
               <th>Date</th>
               <th>Heure</th>
+              <th>Nom du dossier</th>
               <th>Audit (Maître)</th>
               <th>Visite Technique</th>
               <th>Score</th>
@@ -1887,17 +1904,20 @@
     // PREREQS + ANALYZE BUTTON
     // =====================================================================
     function updatePrereqs() {
-      const auditOk = !!state.auditText;
-      const vtOk    = !!state.vtText;
-      const refOk   = state.referentiel.length > 0;
-      const apiOk   = !!state.config.apiKey;
+      const auditOk   = !!state.auditText;
+      const vtOk      = !!state.vtText;
+      const refOk     = state.referentiel.length > 0;
+      const apiOk     = !!state.config.apiKey;
+      const dossierEl = document.getElementById('input-dossier');
+      const dossierOk = dossierEl && dossierEl.value.trim().length > 0;
 
       setPrereq('audit', auditOk, auditOk ? state.auditFileName : 'En attente');
       setPrereq('vt', vtOk, vtOk ? state.vtFileName : 'En attente');
       setPrereq('ref', refOk, refOk ? state.referentiel.length + ' champ(s)' : 'Non chargé — voir Paramètres');
       setPrereq('api', apiOk, apiOk ? 'Configuré' : 'Non configuré — voir Paramètres');
+      setPrereq('dossier', dossierOk, dossierOk ? dossierEl.value.trim() : 'Non renseigné');
 
-      const canAnalyze = auditOk && vtOk && refOk;
+      const canAnalyze = auditOk && vtOk && refOk && dossierOk;
       document.getElementById('btn-analyze').disabled = !canAnalyze || state.analysisRunning;
     }
 
@@ -1912,6 +1932,16 @@
     async function startAnalysis() {
       if (state.analysisRunning) return;
       clearAlerts();
+
+      // Vérification nom du dossier obligatoire
+      const dossierEl = document.getElementById('input-dossier');
+      const nomDossier = dossierEl ? dossierEl.value.trim() : '';
+      if (!nomDossier) {
+        showAlert('alerts-area', 'error', 'Nom du dossier obligatoire — saisissez un nom de dossier avant de lancer l\'analyse.');
+        dossierEl && dossierEl.focus();
+        return;
+      }
+      state.nomDossier = nomDossier;
 
       const refFields = state.referentiel.filter(r => (r.check || '').toUpperCase() === 'OUI');
       if (refFields.length === 0) {
@@ -2856,19 +2886,20 @@ RAPPEL : Si instance_hint est fourni, retourne EXACTEMENT 1 résultat pour ce ch
       const pct        = total > 0 ? Math.round((conformes / total) * 100) : 0;
       const now        = new Date();
       const entry = {
-        id:         now.getTime(),
-        date:       now.toLocaleDateString('fr-FR'),
-        time:       now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-        auditFile:  state.auditFileName || '—',
-        vtFile:     state.vtFileName    || '—',
-        score:      pct,
-        total:      total,
-        conformes:  conformes,
-        oranges:    oranges,
-        rouges:     rouges,
-        manquants:  manquants,
-        exportFile: null,
-        results: JSON.stringify(state.analysisResults)
+        id:          now.getTime(),
+        date:        now.toLocaleDateString('fr-FR'),
+        time:        now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+        nomDossier:  state.nomDossier || '—',
+        auditFile:   state.auditFileName || '—',
+        vtFile:      state.vtFileName    || '—',
+        score:       pct,
+        total:       total,
+        conformes:   conformes,
+        oranges:     oranges,
+        rouges:      rouges,
+        manquants:   manquants,
+        exportFile:  null,
+        results:     JSON.stringify(state.analysisResults)
       };
       historyData.unshift(entry); // plus récent en premier
       lastAnalysisHistoryId = entry.id;
@@ -2929,30 +2960,47 @@ RAPPEL : Si instance_hint est fourni, retourne EXACTEMENT 1 résultat pour ce ch
     }
 
     function renderHistory() {
-      const empty = document.getElementById('history-empty');
-      const wrap  = document.getElementById('history-table-wrap');
-      const tbody = document.getElementById('history-tbody');
+      const empty  = document.getElementById('history-empty');
+      const wrap   = document.getElementById('history-table-wrap');
+      const tbody  = document.getElementById('history-tbody');
+      const searchEl = document.getElementById('history-search');
+      const query  = searchEl ? searchEl.value.trim().toLowerCase() : '';
+
+      const filtered = (historyData || []).filter(function(e) {
+        if (!query) return true;
+        const nom = (e.nomDossier || '').toLowerCase();
+        return nom.includes(query);
+      });
+
       if (!historyData || historyData.length === 0) {
         empty.classList.remove('hidden');
         wrap.classList.add('hidden');
         return;
       }
+      if (filtered.length === 0) {
+        empty.classList.remove('hidden');
+        wrap.classList.add('hidden');
+        empty.querySelector('p').textContent = 'Aucun dossier ne correspond à "' + escHtml(query) + '".';
+        return;
+      }
       empty.classList.add('hidden');
       wrap.classList.remove('hidden');
-      tbody.innerHTML = historyData.map(function(e) {
-        const scoreClass = e.score >= 90 ? 'score-high' : e.score >= 70 ? 'score-mid' : 'score-low';
+      tbody.innerHTML = filtered.map(function(e) {
+        const scoreClass  = e.score >= 90 ? 'score-high' : e.score >= 70 ? 'score-mid' : 'score-low';
         const dlBtn = e.results
           ? '<button class="dl-btn" onclick="downloadHistoryEntry(' + e.id + ')" title="T\u00e9l\u00e9charger le fichier Excel"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>'
           : '';
-        const delBtn = '<button class="hist-del-btn" onclick="deleteHistoryEntry(' + e.id + ')" title="Supprimer cette entr\u00e9e">\u00d7</button>';
-        const fileCell = e.exportFile
+        const delBtn    = '<button class="hist-del-btn" onclick="deleteHistoryEntry(' + e.id + ')" title="Supprimer cette entr\u00e9e">\u00d7</button>';
+        const fileCell  = e.exportFile
           ? '<span class="history-filename">&#128196; ' + escHtml(e.exportFile) + '</span>'
           : '<span class="history-no-export">Non export\u00e9</span>';
-        const auditShort = e.auditFile.length > 35 ? e.auditFile.slice(0, 33) + '\u2026' : e.auditFile;
-        const vtShort    = e.vtFile.length > 35    ? e.vtFile.slice(0, 33) + '\u2026'    : e.vtFile;
+        const nomShort   = (e.nomDossier || '—').length > 30 ? (e.nomDossier || '—').slice(0, 28) + '\u2026' : (e.nomDossier || '—');
+        const auditShort = e.auditFile.length > 28 ? e.auditFile.slice(0, 26) + '\u2026' : e.auditFile;
+        const vtShort    = e.vtFile.length > 28    ? e.vtFile.slice(0, 26) + '\u2026'    : e.vtFile;
         return '<tr>' +
           '<td style="white-space:nowrap;font-weight:600">' + escHtml(e.date) + '</td>' +
           '<td style="white-space:nowrap;color:var(--text-muted)">' + escHtml(e.time) + '</td>' +
+          '<td style="font-weight:600;color:var(--primary)" title="' + escHtml(e.nomDossier || '—') + '">' + escHtml(nomShort) + '</td>' +
           '<td title="' + escHtml(e.auditFile) + '">' + escHtml(auditShort) + '</td>' +
           '<td title="' + escHtml(e.vtFile) + '">' + escHtml(vtShort) + '</td>' +
           '<td><span class="score-badge ' + scoreClass + '">' + e.score + '%</span></td>' +
