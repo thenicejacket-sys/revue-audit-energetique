@@ -2723,6 +2723,31 @@
       document.getElementById('btn-analyze').disabled = false;
     }
 
+    // Extrait une valeur numérique (m², m2) après un terme dans le texte VT — pour SHAB et surfaces générales
+    function extractVtSingleNumValue(vtText, termHints) {
+      if (!vtText) return null;
+      var lower = vtText.toLowerCase();
+      for (var t = 0; t < termHints.length; t++) {
+        var term = termHints[t].toLowerCase().trim();
+        if (term.length < 3) continue;
+        var idx = lower.indexOf(term);
+        while (idx >= 0) {
+          var after = vtText.substring(idx + term.length, idx + term.length + 120);
+          // Cherche un nombre suivi optionnellement de m² dans les 120 chars suivants
+          var nm = after.match(/[:\s]*(\d+[\s,.]?\d*\s*(?:m[²2u]|m\u00b2)?)/i);
+          if (nm) {
+            var v = nm[1].trim().replace(/\s+/g, ' ');
+            var num = parseFloat(v.replace(',', '.'));
+            if (!isNaN(num) && num > 5 && num < 1000) { // surface logement entre 5 et 1000 m²
+              return v;
+            }
+          }
+          idx = lower.indexOf(term, idx + 1);
+        }
+      }
+      return null;
+    }
+
     function extractVtLexiqueHint(vtText, lexique) {
       if (!vtText || !lexique || !lexique.includes('+')) return null;
       var alt0 = lexique.split(/\s*;\s*/)[0].trim();
@@ -2960,13 +2985,27 @@ Pour CHAQUE valeur non-MANQUANT que tu retournes, tu DOIS fournir l'extrait exac
 
 Réponds UNIQUEMENT en JSON valide, sans markdown, sans commentaire.`;
 
+      // Synonymes VT pour les champs de surface générale du logement (SHAB)
+      var SHAB_VT_SYNS = ['shab', 'surface habitable', 'surface de plancher', 'sdp', 'surface de r\u00e9f\u00e9rence', 'surface de reference', 'surface totale', 'surface utile', 'surface tax\u00e9e'];
+
       // Pré-extraction VT via lexique de composition pour ce batch
       const vtPreExtracted = {};
       fields.forEach(function(f) {
         var vtHint = extractVtLexiqueHint(vtText, f.lexique);
+        if (!vtHint) {
+          // Fallback SHAB : pour les champs "surface de référence / habitable / SHAB" sans formule composée
+          var nomLC2 = (f.nom || '').toLowerCase();
+          if (/surface.*r[eé]f[eé]rence|surface.*habit|shab|sdp|surface.*plancher|surface.*totale|surface.*utile/.test(nomLC2)) {
+            // Cherche d'abord le terme du lexique s'il est simple (sans '+')
+            var lex0 = f.lexique ? f.lexique.split(/[;,|]/)[0].trim() : '';
+            var searchTerms = (lex0 && !lex0.includes('+') && lex0.length > 2) ? [lex0].concat(SHAB_VT_SYNS) : SHAB_VT_SYNS;
+            vtHint = extractVtSingleNumValue(vtText, searchTerms);
+            if (vtHint) console.log('[VT-SHAB] "' + f.nom + '" \u2192 VT "' + vtHint + '"');
+          }
+        }
         if (vtHint) {
           vtPreExtracted[f.id] = vtHint;
-          console.log('[VT-LEXIQUE] "' + f.nom + '" → "' + vtHint + '"');
+          if (!vtHint.startsWith('[VT-SHAB]')) console.log('[VT-LEXIQUE] "' + f.nom + '" \u2192 "' + vtHint + '"');
         }
       });
 
