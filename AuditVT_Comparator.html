@@ -2986,8 +2986,8 @@ Conduite à tenir pour les autres anomalies physiques :
 
 RÈGLE CITATION OBLIGATOIRE — TRAÇABILITÉ (ABSOLUE) :
 Pour CHAQUE valeur non-MANQUANT que tu retournes, tu DOIS fournir l'extrait exact du document source.
-- extrait_audit : copie mot pour mot la phrase ou l'entrée de l'Audit où tu as trouvé valeur_audit (20-150 chars). Laisse vide si valeur_audit = MANQUANT ou si la valeur vient de valeur_audit_pre_extraite.
-- extrait_vt : copie mot pour mot la phrase ou l'entrée de la VT où tu as trouvé valeur_vt (20-150 chars). Laisse vide si valeur_vt = MANQUANT.
+- extrait_audit : copie mot pour mot la phrase ou l'entrée de l'Audit où se trouve valeur_audit (20-150 chars). OBLIGATOIRE même si valeur_audit_pre_extraite est fourni — cherche le passage dans l'Audit qui contient cette valeur et cite-le. Laisse vide UNIQUEMENT si valeur_audit = MANQUANT.
+- extrait_vt : copie mot pour mot la phrase ou l'entrée de la VT où se trouve valeur_vt (20-150 chars). OBLIGATOIRE même si valeur_vt_pre_extraite est fourni — cherche le passage dans la VT. Laisse vide UNIQUEMENT si valeur_vt = MANQUANT.
 - INTERDIT de paraphraser ou reformuler — copie-colle le texte exact tel qu'il apparaît dans le document.
 - Si tu ne peux pas citer un extrait exact pour une valeur → cette valeur doit être MANQUANT. Pas de valeur sans source.
 
