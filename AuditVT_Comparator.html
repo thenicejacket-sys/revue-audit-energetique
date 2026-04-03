@@ -2920,6 +2920,12 @@ RÈGLE ANTI-HALLUCINATION (ABSOLUE) :
 - En cas de doute sur l'association label↔valeur : retourne "MANQUANT" plutôt qu'une valeur incertaine.
 - Une valeur_vt doit pouvoir être retrouvée mot pour mot (ou proche) dans le texte de la VT, dans le contexte du champ demandé.
 
+RÈGLE ANTI-HALLUCINATION SURFACES (ABSOLUE) :
+- Pour tout champ représentant une surface en m² d'une paroi structurelle (mur, plancher, toiture, plafond), la valeur Audit ET la valeur VT DOIVENT être présentes littéralement dans le document source sous la forme d'un nombre explicite suivi de m² (ex: "36,00 m²", "45 m²").
+- INTERDIT : calculer, estimer ou déduire une surface à partir de dimensions (longueur × hauteur, périmètre, etc.) — même si les dimensions sont présentes.
+- INTERDIT : inférer une surface à partir d'une surface totale et d'un pourcentage, d'une décomposition ou d'un raisonnement géométrique.
+- Si aucune valeur numérique explicite de surface n'est trouvée dans le document source pour la paroi concernée → retourne MANQUANT. Pas d'exception.
+
 RÈGLES SPÉCIFIQUES TABLEAU FAÇADES (CRITIQUE) :
 La VT contient un tableau FAÇADES avec des colonnes DISTINCTES et INDÉPENDANTES : Orientation | Mitoyenneté | Composition | Dimensions | Surface...
 Chaque colonne a une signification propre — NE JAMAIS confondre les valeurs d'une colonne avec celles d'une autre :
@@ -3644,15 +3650,6 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
         else if (ctxV) { lines.push('\ud83d\udd0d VT : "' + ctxV + '"'); }
 
         if (!extA && !ctxA && !extV && !ctxV) lines.push('\u2014 Non cit\u00e9 par l\'IA \u2014 valeur introuvable dans les sources');
-
-        // Noms de fichiers sources en bas de cellule
-        var auditFile = (state && state.auditFileName) || '';
-        var vtFile    = (state && state.vtFileName)    || '';
-        if (auditFile || vtFile) {
-          lines.push('');
-          if (auditFile) lines.push('\ud83d\udcc4 Audit : ' + auditFile);
-          if (vtFile)    lines.push('\ud83d\udcc4 VT : '    + vtFile);
-        }
 
         var hasWarn  = iA==='non_verifie' || iV==='non_verifie';
         var bg, fg;
