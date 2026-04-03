@@ -1130,112 +1130,6 @@
       font-size: 13px;
     }
 
-    /* ===== AUDIT ÉNERGÉTIQUE TABLE (pivotée) ===== */
-    .energ-table-wrap {
-      overflow-x: auto;
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      margin-top: 12px;
-      margin-bottom: 32px;
-    }
-    .energ-table {
-      border-collapse: collapse;
-      font-size: 12px;
-      background: var(--white);
-      white-space: nowrap;
-    }
-    .energ-table thead tr:first-child {
-      background: linear-gradient(90deg, var(--primary-dark) 0%, var(--primary) 100%);
-    }
-    .energ-table thead tr:last-child {
-      background: rgba(27,63,139,0.07);
-    }
-    .energ-th-inst {
-      padding: 10px 16px;
-      color: #fff;
-      font-family: 'Montserrat', sans-serif;
-      font-weight: 700;
-      font-size: 11px;
-      text-align: left;
-      border-right: 2px solid rgba(255,255,255,0.25);
-      min-width: 140px;
-      position: sticky;
-      left: 0;
-      z-index: 2;
-      background: var(--primary-dark);
-    }
-    .energ-th-field {
-      padding: 10px 10px;
-      color: #fff;
-      font-family: 'Montserrat', sans-serif;
-      font-weight: 600;
-      font-size: 10px;
-      text-align: center;
-      border-left: 1px solid rgba(255,255,255,0.15);
-      max-width: 180px;
-      white-space: normal;
-      vertical-align: middle;
-    }
-    .energ-th-sub {
-      padding: 5px 8px;
-      font-size: 10px;
-      font-weight: 700;
-      text-align: center;
-      color: var(--primary);
-      border: 1px solid var(--border);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-    .energ-td-inst {
-      padding: 8px 14px;
-      font-weight: 700;
-      font-size: 11px;
-      color: var(--primary);
-      border: 1px solid var(--border);
-      background: rgba(27,63,139,0.03);
-      white-space: nowrap;
-      position: sticky;
-      left: 0;
-      z-index: 1;
-    }
-    .energ-td-val {
-      padding: 7px 10px;
-      text-align: center;
-      border: 1px solid var(--border);
-      font-size: 11px;
-      min-width: 70px;
-      max-width: 130px;
-      white-space: normal;
-      word-break: break-word;
-    }
-    .energ-table tbody tr:hover .energ-td-inst { filter: brightness(0.95); }
-    .energ-section-title {
-      font-family: 'Montserrat', sans-serif;
-      font-weight: 700;
-      font-size: 15px;
-      color: var(--primary);
-      margin: 20px 0 8px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .energ-section-title::before {
-      content: '';
-      display: inline-block;
-      width: 4px;
-      height: 20px;
-      background: var(--accent-teal);
-      border-radius: 2px;
-      flex-shrink: 0;
-    }
-    .energ-empty-cat {
-      color: var(--text-muted);
-      font-style: italic;
-      font-size: 12px;
-      padding: 8px 0;
-      margin-bottom: 20px;
-    }
-
     /* ===== TOOLBAR ===== */
     .toolbar {
       display: flex;
@@ -1404,14 +1298,6 @@
     <button class="nav-tab" data-tab="rapport" onclick="switchTab('rapport')">
       <i data-lucide="file-text" style="width:15px;height:15px"></i>
       Rapport
-    </button>
-    <button class="nav-tab" data-tab="conformite" onclick="switchTab('conformite')">
-      <i data-lucide="alert-triangle" style="width:15px;height:15px"></i>
-      Rapport de conformité
-    </button>
-    <button class="nav-tab" data-tab="audit-energetique" onclick="switchTab('audit-energetique')">
-      <i data-lucide="layers" style="width:15px;height:15px"></i>
-      Audit énergétique
     </button>
     <button class="nav-tab" data-tab="parametres" onclick="switchTab('parametres')">
       <i data-lucide="settings" style="width:15px;height:15px"></i>
@@ -1663,75 +1549,6 @@
 
     </div>
 
-    <!-- ============================= ONGLET RAPPORT DE CONFORMITÉ ============================= -->
-    <div id="tab-conformite" class="tab-panel">
-
-      <div id="conformite-empty" class="empty-state">
-        <div class="empty-state-icon">⚠️</div>
-        <div class="empty-state-title">Aucune analyse disponible</div>
-        <div class="empty-state-sub">Lancez une analyse depuis l'onglet Comparaison pour voir les non-conformités et approximations.</div>
-      </div>
-
-      <div id="conformite-content" class="hidden">
-        <!-- Top bar -->
-        <div class="report-topbar">
-          <div>
-            <div class="section-title" style="margin-bottom:4px">Rapport de conformité</div>
-            <div style="font-size:12px;color:var(--text-muted)" id="conformite-subtitle"></div>
-          </div>
-          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-            <div class="filter-row">
-              <button class="filter-btn active-all" id="conf-filter-all" onclick="setConformiteFilter('all')">Tous</button>
-              <button class="filter-btn" id="conf-filter-orange" onclick="setConformiteFilter('ORANGE')">⚠️ Approximatifs</button>
-              <button class="filter-btn" id="conf-filter-rouge" onclick="setConformiteFilter('ROUGE')">❌ Non conformes</button>
-            </div>
-            <div class="filter-row" style="margin-top:6px;">
-              <span style="font-size:11px;color:var(--text-muted);margin-right:4px;">Revue Analyse :</span>
-              <button class="filter-btn active-all" id="revu-conf-filter-all" onclick="setConformiteRevuFilter('all')">Tous</button>
-              <button class="filter-btn" id="revu-conf-filter-vt" onclick="setConformiteRevuFilter('VT')">📋 VT</button>
-              <button class="filter-btn" id="revu-conf-filter-audit" onclick="setConformiteRevuFilter('Audit')">📄 Audit</button>
-            </div>
-            <button class="btn btn-success" onclick="exportExcel()">
-              <i data-lucide="download" style="width:14px;height:14px"></i>
-              Télécharger Excel
-            </button>
-          </div>
-        </div>
-
-        <!-- Main Table -->
-        <div class="report-table-wrap">
-          <table class="report-table" id="conformite-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Champ Audit</th>
-                <th>Valeur Audit</th>
-                <th>Valeur VT</th>
-                <th>Statut</th>
-                <th>Commentaire IA</th>
-                <th>Revue Analyse</th>
-              </tr>
-            </thead>
-            <tbody id="conformite-tbody"></tbody>
-          </table>
-        </div>
-      </div>
-
-    </div>
-
-    <!-- ============================= ONGLET AUDIT ÉNERGÉTIQUE ============================= -->
-    <div id="tab-audit-energetique" class="tab-panel">
-
-      <div id="audit-energ-empty" class="empty-state">
-        <div class="empty-state-icon">🏗️</div>
-        <div class="empty-state-title">Aucune donnée disponible</div>
-        <div class="empty-state-sub">Lancez une analyse depuis l'onglet Comparaison pour voir les parois et menuiseries.</div>
-      </div>
-
-      <div id="audit-energ-content" class="hidden"></div>
-
-    </div>
-
     <!-- ============================= ONGLET PARAMETRES ============================= -->
     <div id="tab-parametres" class="tab-panel">
 
@@ -1972,7 +1789,6 @@
       referentiel: [],
       checkOptions: [],
       analysisResults: [],
-      detectedInstances: { murs: [], planchers: [], toitures: [], menuiseries: [] },
       lexiqueSuggestions: [],
       config: {
         provider: 'openai',
@@ -2529,7 +2345,6 @@
       }
 
       var detectedInstances = detectBatiauditInstances(auditFull);
-      state.detectedInstances = detectedInstances;
       (function(){
         var log = Object.keys(detectedInstances).filter(function(k){return detectedInstances[k].length>0;})
           .map(function(k){return k+'('+detectedInstances[k].length+'): '+detectedInstances[k].join(' / ');}).join(' | ');
@@ -2888,8 +2703,6 @@
       showProgress(false);
       renderResults();
       renderRapport();
-      renderConformite();
-      renderAuditEnergetique();
       renderSuggestions();
       saveAnalysisToHistory();
       playCompletionBell();
@@ -3333,122 +3146,7 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
     // =====================================================================
     let currentFilter = 'all';
     let currentRevuFilter = 'all';
-    let currentConformiteFilter = 'all';
-    let currentConformiteRevuFilter = 'all';
     let inlineEdits = {};
-
-    function setConformiteFilter(f) {
-      currentConformiteFilter = f;
-      document.querySelectorAll('[id^="conf-filter-"]').forEach(function(b) { b.className = 'filter-btn'; });
-      if (f === 'all') document.getElementById('conf-filter-all').className = 'filter-btn active-all';
-      else if (f === 'ORANGE') document.getElementById('conf-filter-orange').className = 'filter-btn active-orange';
-      else if (f === 'ROUGE') document.getElementById('conf-filter-rouge').className = 'filter-btn active-rouge';
-      renderConformiteTable(f);
-    }
-
-    function setConformiteRevuFilter(f) {
-      document.querySelectorAll('#conformite-tbody .revu-select').forEach(function(sel) {
-        const match = sel.getAttribute('onchange').match(/setRevuDoc\('([^']+)'/);
-        if (!match) return;
-        const parts = match[1].split('|');
-        const id_champ = parts[0];
-        const instance_label = parts.length > 1 ? parts.slice(1).join('|') : null;
-        const val = sel.value;
-        state.analysisResults.forEach(function(r) {
-          if (r.id_champ === id_champ && (r.instance_label || null) === (instance_label || null)) {
-            r.revu_doc = val;
-          }
-        });
-      });
-      currentConformiteRevuFilter = f;
-      document.querySelectorAll('[id^="revu-conf-filter-"]').forEach(function(b) { b.className = 'filter-btn'; });
-      if (f === 'all') document.getElementById('revu-conf-filter-all').className = 'filter-btn active-all';
-      else if (f === 'VT') document.getElementById('revu-conf-filter-vt').className = 'filter-btn active-revu-vt';
-      else if (f === 'Audit') document.getElementById('revu-conf-filter-audit').className = 'filter-btn active-revu-audit';
-      renderConformiteTable(currentConformiteFilter);
-    }
-
-    function renderConformite() {
-      if (state.analysisResults.length === 0) {
-        document.getElementById('conformite-empty').classList.remove('hidden');
-        document.getElementById('conformite-content').classList.add('hidden');
-        return;
-      }
-      document.getElementById('conformite-empty').classList.add('hidden');
-      document.getElementById('conformite-content').classList.remove('hidden');
-      const date = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
-      document.getElementById('conformite-subtitle').textContent =
-        (state.auditFileName || 'Audit') + ' vs ' + (state.vtFileName || 'VT') + ' — ' + date;
-      renderConformiteTable(currentConformiteFilter);
-      lucide.createIcons();
-    }
-
-    function renderConformiteTable(filter) {
-      const tbody = document.getElementById('conformite-tbody');
-      tbody.innerHTML = '';
-
-      let base = state.analysisResults.filter(function(r) { return r.statut === 'ROUGE' || r.statut === 'ORANGE'; });
-      let filtered = filter === 'all' ? base : base.filter(function(r) { return r.statut === filter; });
-      if (currentConformiteRevuFilter && currentConformiteRevuFilter !== 'all') {
-        filtered = filtered.filter(function(r) { return r.revu_doc === currentConformiteRevuFilter; });
-      }
-
-      if (filtered.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:28px;color:var(--text-muted);font-style:italic;">Aucun résultat pour ce filtre.</td></tr>';
-        return;
-      }
-
-      const sectionOrder = [];
-      const sectionSeen = new Set();
-      state.referentiel.forEach(function(r) {
-        const s = r.parentSection || r.section || '';
-        if (s && !sectionSeen.has(s)) { sectionSeen.add(s); sectionOrder.push(s); }
-      });
-
-      const bySection = {};
-      const noSection = [];
-      filtered.forEach(function(r) {
-        const sec = getFieldSection(r.id_champ) || '';
-        if (!sec) { noSection.push(r); return; }
-        if (!bySection[sec]) bySection[sec] = [];
-        bySection[sec].push(r);
-      });
-
-      let rowNum = 0;
-
-      function appendConformiteRows(rows) {
-        rows.forEach(function(r) {
-          rowNum++;
-          const row = document.createElement('tr');
-          const instanceTag = r.instance_label
-            ? '<br><span style="display:inline-block;margin-top:3px;padding:1px 7px;background:rgba(27,63,139,0.08);border-radius:10px;font-size:10px;color:var(--primary);font-weight:600">' + escHtml(r.instance_label) + '</span>'
-            : '';
-          row.innerHTML =
-            '<td>' + rowNum + '</td>' +
-            '<td><strong>' + escHtml(r.id_champ || '') + '</strong><br><span style="font-size:11px;color:var(--text-muted)">' + escHtml(getFieldNom(r.id_champ)) + '</span>' + instanceTag + '</td>' +
-            '<td style="max-width:180px;font-size:12px">' + escHtml(r.valeur_audit || '\u2014') + '</td>' +
-            '<td style="max-width:180px;font-size:12px">' + escHtml(r.valeur_vt || '\u2014') + '</td>' +
-            '<td>' + statusChip(r.statut) + '</td>' +
-            '<td style="max-width:200px;font-size:12px;color:var(--text-muted)">' + escHtml(r.commentaire || '\u2014') + '</td>' +
-            '<td>' + revuSelectHtml(r.id_champ, r.instance_label, r.revu_doc) + '</td>';
-          tbody.appendChild(row);
-        });
-      }
-
-      sectionOrder.forEach(function(sec) {
-        const rows = bySection[sec];
-        if (!rows || !rows.length) return;
-        const secRow = document.createElement('tr');
-        secRow.className = 'rapport-section-row';
-        secRow.innerHTML = '<td colspan="7">&#9656; ' + escHtml(sec) + '<span class="rapport-section-count">(' + rows.length + ' champ' + (rows.length > 1 ? 's' : '') + ')</span></td>';
-        tbody.appendChild(secRow);
-        appendConformiteRows(rows);
-      });
-
-      if (noSection.length > 0) {
-        appendConformiteRows(noSection);
-      }
-    }
 
     function revuSelectHtml(id_champ, instance_label, current) {
       const key = id_champ + (instance_label ? '|' + instance_label : '');
@@ -3663,201 +3361,6 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
       if (chevron) chevron.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
     }
 
-    // =====================================================================
-    // AUDIT ÉNERGÉTIQUE — tableau pivoté par paroi/menuiserie
-    // =====================================================================
-
-    function classifyResultEnv(r) {
-      var di = state.detectedInstances || { murs: [], planchers: [], toitures: [], menuiseries: [] };
-      var il = r.instance_label || '';
-
-      // Priorité 1 : instance dans les listes détectées
-      if (di.menuiseries.indexOf(il) !== -1) return 'menuiseries';
-      if (di.murs.indexOf(il) !== -1) return 'murs';
-      if (di.planchers.indexOf(il) !== -1) return 'planchers';
-      if (di.toitures.indexOf(il) !== -1) return 'toitures';
-
-      // Priorité 2 : section du champ dans le référentiel
-      var sec = (getFieldSection(r.id_champ) || '').toLowerCase();
-      if (sec.match(/menuiserie|ouvrant|baie|fen[eê]tre|vitr/)) return 'menuiseries';
-      if (sec.match(/plancher|dalle|vide[\s-]san|terre[\s-]plein/)) return 'planchers';
-      if (sec.match(/toiture|comble|couverture|plancher[\s-]haut|plafond[\s-]haut/)) return 'toitures';
-      if (sec.match(/\bmur\b|paroi.*opaque|fa[çc]ade|paroi\s+verticale/)) return 'murs';
-
-      // Priorité 3 : pattern dans le libellé de l'instance elle-même
-      var ilL = il.toLowerCase();
-      if (ilL.match(/fen[eê]tre|ouvrant|baie|velux|porte.fen[eê]tre/)) return 'menuiseries';
-      if (ilL.match(/plancher|dalle|vide.san|terre.plein/)) return 'planchers';
-      if (ilL.match(/toiture|comble|couverture|plancher.haut/)) return 'toitures';
-      if (ilL.match(/\bmur\b|paroi|fa[çc]ade/)) return 'murs';
-
-      return null;
-    }
-
-    function renderAuditEnergetique() {
-      var results = state.analysisResults;
-      var emptyEl  = document.getElementById('audit-energ-empty');
-      var contentEl = document.getElementById('audit-energ-content');
-      if (!emptyEl || !contentEl) return;
-
-      if (!results || results.length === 0) {
-        emptyEl.classList.remove('hidden');
-        contentEl.classList.add('hidden');
-        return;
-      }
-
-      emptyEl.classList.add('hidden');
-      contentEl.classList.remove('hidden');
-      contentEl.innerHTML = '';
-
-      var categories = [
-        { key: 'murs',        label: 'Murs',         icon: '🧱' },
-        { key: 'planchers',   label: 'Planchers',    icon: '▦' },
-        { key: 'toitures',    label: 'Toitures',     icon: '🏠' },
-        { key: 'menuiseries', label: 'Menuiseries',  icon: '🪟' }
-      ];
-
-      var hasAny = false;
-
-      categories.forEach(function(cat) {
-        var catResults = results.filter(function(r) { return classifyResultEnv(r) === cat.key; });
-
-        // Titre de section (toujours visible pour les 4 catégories)
-        var titleEl = document.createElement('div');
-        titleEl.className = 'energ-section-title';
-        titleEl.textContent = cat.icon + ' ' + cat.label;
-        contentEl.appendChild(titleEl);
-
-        if (catResults.length === 0) {
-          var emptyMsg = document.createElement('div');
-          emptyMsg.className = 'energ-empty-cat';
-          emptyMsg.textContent = 'Aucune donnée détectée pour cette catégorie.';
-          contentEl.appendChild(emptyMsg);
-          return;
-        }
-
-        hasAny = true;
-
-        // Instances uniques (ordre d'apparition)
-        var instSeen = {};
-        var instances = [];
-        catResults.forEach(function(r) {
-          var inst = r.instance_label || 'Général';
-          if (!instSeen[inst]) { instSeen[inst] = true; instances.push(inst); }
-        });
-
-        // Champs uniques (ordre référentiel)
-        var fieldSeen = {};
-        var fields = [];
-        state.referentiel.forEach(function(rf) {
-          if (catResults.some(function(r) { return r.id_champ === rf.id; }) && !fieldSeen[rf.id]) {
-            fieldSeen[rf.id] = true; fields.push(rf.id);
-          }
-        });
-        catResults.forEach(function(r) {
-          if (!fieldSeen[r.id_champ]) { fieldSeen[r.id_champ] = true; fields.push(r.id_champ); }
-        });
-
-        // Matrice [instance][field] = résultat
-        var matrix = {};
-        catResults.forEach(function(r) {
-          var inst = r.instance_label || 'Général';
-          if (!matrix[inst]) matrix[inst] = {};
-          matrix[inst][r.id_champ] = r;
-        });
-
-        // Couleur selon statut
-        function bgStat(statut) {
-          if (statut === 'VERT')     return '#C6EFCE';
-          if (statut === 'ORANGE')   return '#FFEB9C';
-          if (statut === 'ROUGE')    return '#FFC7CE';
-          if (statut === 'MANQUANT') return '#F0F0F0';
-          return 'transparent';
-        }
-
-        // Construction du tableau
-        var wrap = document.createElement('div');
-        wrap.className = 'energ-table-wrap';
-
-        var table = document.createElement('table');
-        table.className = 'energ-table';
-
-        // THEAD — ligne 1 : Instance (rowspan 2) + champs (colspan 2)
-        var thead = document.createElement('thead');
-        var tr1 = document.createElement('tr');
-        var thInst = document.createElement('th');
-        thInst.rowSpan = 2;
-        thInst.className = 'energ-th-inst';
-        thInst.textContent = 'Instance / Paroi';
-        tr1.appendChild(thInst);
-
-        fields.forEach(function(fid) {
-          var nom = getFieldNom(fid) || fid;
-          var th = document.createElement('th');
-          th.colSpan = 2;
-          th.className = 'energ-th-field';
-          th.textContent = nom;
-          tr1.appendChild(th);
-        });
-        thead.appendChild(tr1);
-
-        // THEAD — ligne 2 : Audit | VT pour chaque champ
-        var tr2 = document.createElement('tr');
-        fields.forEach(function() {
-          var thA = document.createElement('th');
-          thA.className = 'energ-th-sub';
-          thA.textContent = 'Audit';
-          var thV = document.createElement('th');
-          thV.className = 'energ-th-sub';
-          thV.textContent = 'VT';
-          tr2.appendChild(thA);
-          tr2.appendChild(thV);
-        });
-        thead.appendChild(tr2);
-        table.appendChild(thead);
-
-        // TBODY — une ligne par instance
-        var tbody = document.createElement('tbody');
-        instances.forEach(function(inst) {
-          var tr = document.createElement('tr');
-          var tdInst = document.createElement('td');
-          tdInst.className = 'energ-td-inst';
-          tdInst.textContent = inst;
-          tr.appendChild(tdInst);
-
-          fields.forEach(function(fid) {
-            var r = matrix[inst] ? matrix[inst][fid] : null;
-            var bg = r ? bgStat(r.statut) : 'transparent';
-
-            var tdA = document.createElement('td');
-            tdA.className = 'energ-td-val';
-            tdA.style.background = bg;
-            tdA.textContent = r && r.valeur_audit ? r.valeur_audit : '—';
-
-            var tdV = document.createElement('td');
-            tdV.className = 'energ-td-val';
-            tdV.style.background = bg;
-            tdV.textContent = r && r.valeur_vt ? r.valeur_vt : '—';
-
-            tr.appendChild(tdA);
-            tr.appendChild(tdV);
-          });
-          tbody.appendChild(tr);
-        });
-        table.appendChild(tbody);
-        wrap.appendChild(table);
-        contentEl.appendChild(wrap);
-      });
-
-      if (!hasAny) {
-        emptyEl.classList.remove('hidden');
-        contentEl.classList.add('hidden');
-      }
-
-      lucide.createIcons();
-    }
-
-    // =====================================================================
     function setFilter(f) {
       currentFilter = f;
       document.querySelectorAll('.filter-btn').forEach(b => {
@@ -4188,6 +3691,131 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
         var r=ws4.addRow([sec,lib,rv.valeur_vt||'-',statLbl4]); r.height=14;
         sc(r.getCell(1),rowBg4,rowTxt4,{}); sc(r.getCell(2),rowBg4,rowTxt4,{bold:true});
         sc(r.getCell(3),rowBg4,rowTxt4,{}); sc(r.getCell(4),badgeBg4,C.WHT,{bold:true,align:'center'});
+      });
+
+      // ── ONGLET 5 : Audit énergétique (tableau pivoté par catégorie) ──────
+      var ws5 = wb.addWorksheet('Audit \u00e9nerg\u00e9tique');
+      var ENE_HDR='FF0D47A1', ENE_CAT='FF1565C0', ENE_FLD='FF1976D2', ENE_SUB='FF42A5F5';
+      var ENE_AUD_BG='FFE3F2FD', ENE_VT_BG='FFE8F5E9';
+
+      // Catégories enveloppe et mots-clés section
+      var ENE_CATS = [
+        { label:'MURS',       inst:'Paroi',   keys:['mur','paroi','fa\u00e7ade','facade','wall'] },
+        { label:'PLANCHERS',  inst:'Paroi',   keys:['plancher','bas','dalle','floor','vide sanitaire'] },
+        { label:'TOITURES',   inst:'Paroi',   keys:['toiture','comble','toit','rampant','roof'] },
+        { label:'MENUISERIES',inst:'Ouvrant', keys:['menuiserie','fen\u00eatre','fenetre','ouvrant','baie vitree','vitrage','porte-fen','window'] },
+      ];
+
+      function eneGetResults(keys) {
+        return state.analysisResults.filter(function(rv) {
+          var sec = (getFieldSection(rv.id_champ)||'').toLowerCase();
+          var nom = (getFieldNom(rv.id_champ)||'').toLowerCase();
+          return keys.some(function(k){ return sec.indexOf(k)>=0 || nom.indexOf(k)>=0; });
+        });
+      }
+
+      // Titre
+      var ne5t = ws5.addRow(['OT \u00c9NERGIE \u2014 Audit \u00c9nerg\u00e9tique \u2014 D\u00e9tail par Paroi / Ouvrant']);
+      ne5t.height = 28;
+      ws5.mergeCells(ne5t.number,1,ne5t.number,30);
+      sc(ne5t.getCell(1), ENE_HDR, C.WHT, {bold:true,sz:14,align:'center'});
+      var ne5d = ws5.addRow(['G\u00e9n\u00e9r\u00e9 le : '+date+'  \u2014  Audit : '+(state.auditFileName||'-')+'  \u2014  VT : '+(state.vtFileName||'-')]);
+      ne5d.height = 14;
+      ws5.mergeCells(ne5d.number,1,ne5d.number,30);
+      sc(ne5d.getCell(1), C.GRY_META, C.BLU_DARK, {sz:9,italic:true});
+
+      ENE_CATS.forEach(function(cat) {
+        var catRes = eneGetResults(cat.keys);
+
+        // Séparateur
+        ws5.addRow([]).height = 8;
+
+        // Titre catégorie
+        var catRow = ws5.addRow(['\u25b6  '+cat.label]);
+        catRow.height = 22;
+        ws5.mergeCells(catRow.number,1,catRow.number,30);
+        sc(catRow.getCell(1), ENE_CAT, C.WHT, {bold:true,sz:12,align:'center'});
+
+        if (!catRes.length) {
+          var ndRow = ws5.addRow(['  Aucune donn\u00e9e pour cette cat\u00e9gorie dans le r\u00e9f\u00e9rentiel']);
+          ndRow.height = 16;
+          ws5.mergeCells(ndRow.number,1,ndRow.number,30);
+          sc(ndRow.getCell(1), 'FFF5F5F5', 'FF888888', {italic:true,align:'center'});
+          return;
+        }
+
+        // Instances uniques (ordre d'apparition)
+        var instSeen={}; var instances=[];
+        catRes.forEach(function(rv){
+          var k = rv.instance_label||'\u2014';
+          if(!instSeen[k]){instSeen[k]=true; instances.push(k);}
+        });
+        // Champs uniques (ordre d'apparition)
+        var fldSeen={}; var fields=[];
+        catRes.forEach(function(rv){
+          if(!fldSeen[rv.id_champ]){fldSeen[rv.id_champ]=true; fields.push({id:rv.id_champ,nom:getFieldNom(rv.id_champ)});}
+        });
+        // Index résultats
+        var ridx={};
+        catRes.forEach(function(rv){
+          ridx[(rv.instance_label||'\u2014')+'||'+rv.id_champ]=rv;
+        });
+
+        var NC = 1 + fields.length*2;
+
+        // Ligne champs (merged 2 par 2 pour Audit|VT)
+        var fhVals=[cat.inst+' / Instance'];
+        fields.forEach(function(f){fhVals.push(f.nom);fhVals.push('');});
+        var fhRow=ws5.addRow(fhVals); fhRow.height=20;
+        sc(fhRow.getCell(1),ENE_FLD,C.WHT,{bold:true,align:'center'});
+        fields.forEach(function(f,i){
+          var col=2+i*2;
+          if(col+1<=NC) ws5.mergeCells(fhRow.number,col,fhRow.number,col+1);
+          sc(fhRow.getCell(col),ENE_FLD,C.WHT,{bold:true,align:'center',wrap:true});
+        });
+
+        // Ligne sous-entêtes Audit | VT
+        var shVals=[''];
+        fields.forEach(function(){shVals.push('Audit');shVals.push('VT');});
+        var shRow=ws5.addRow(shVals); shRow.height=15;
+        sc(shRow.getCell(1),ENE_SUB,C.WHT,{bold:true,align:'center'});
+        fields.forEach(function(f,i){
+          sc(shRow.getCell(2+i*2),   ENE_AUD_BG,'FF0D47A1',{bold:true,align:'center'});
+          sc(shRow.getCell(2+i*2+1), ENE_VT_BG, 'FF1B5E20',{bold:true,align:'center'});
+        });
+
+        // Largeurs colonnes
+        ws5.getColumn(1).width=24;
+        fields.forEach(function(f,i){
+          ws5.getColumn(2+i*2).width=18;
+          ws5.getColumn(2+i*2+1).width=18;
+        });
+
+        // Lignes de données (une par instance)
+        var alt=false;
+        instances.forEach(function(inst){
+          var rowBg=alt?'FFF8FBFF':'FFFFFFFF'; alt=!alt;
+          var dVals=[inst];
+          fields.forEach(function(f){
+            var rv=ridx[inst+'||'+f.id]||null;
+            dVals.push(rv?(rv.valeur_audit||'\u2014'):'\u2014');
+            dVals.push(rv?(rv.valeur_vt   ||'\u2014'):'\u2014');
+          });
+          var dr=ws5.addRow(dVals); dr.height=15;
+          sc(dr.getCell(1),ENE_CAT,C.WHT,{bold:true});
+          fields.forEach(function(f,i){
+            var rv=ridx[inst+'||'+f.id]||null;
+            var bg=rowBg;
+            if(rv){
+              if(rv.statut==='VERT')    bg=C.VERT_ROW;
+              else if(rv.statut==='ROUGE')   bg=C.RGE_ROW;
+              else if(rv.statut==='ORANGE')  bg=C.ORA_ROW;
+              else if(rv.statut==='MANQUANT')bg=C.MAN_ROW;
+            }
+            sc(dr.getCell(2+i*2),  bg,'FF37474F',{});
+            sc(dr.getCell(2+i*2+1),bg,'FF37474F',{});
+          });
+        });
       });
 
       var dateFile='OTEnergie_Rapport_AuditVT_'+new Date().toISOString().slice(0,10)+'.xlsx';
