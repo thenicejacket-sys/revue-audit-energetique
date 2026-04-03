@@ -2036,7 +2036,9 @@ RÈGLE ABSOLUE : Le document Audit est le MAÎTRE. Tu compares la VT à l'Audit,
 
 Pour chaque champ fourni (issu du référentiel) :
 1. Localise la (ou les) valeur(s) dans l'Audit
-2. Cherche la (ou les) valeur(s) correspondante(s) dans la VT en utilisant le lexique de synonymes
+2. Cherche la (ou les) valeur(s) correspondante(s) dans la VT :
+   a. Si le champ "lexique_vt" est renseigné (non vide) : utilise les termes du lexique comme clés de recherche PRIORITAIRES dans la VT — cherche-les mot pour mot dans le document VT AVANT de chercher le nom du champ lui-même. Le lexique contient les libellés exacts tels qu'ils apparaissent dans la VT.
+   b. Si le lexique_vt est vide : cherche le nom du champ directement dans la VT.
 3. Compare et retourne un statut :
    - "VERT" : correspondance exacte ou quasi-exacte
    - "ORANGE" : même sens mais formulation/unité/arrondi différent
@@ -2049,6 +2051,8 @@ Pour les champs de type ville, commune, adresse, code postal ou département :
 - Les différences d'accents, de casse, de tirets ou d'espaces entre deux mots (ex: "Serémange - Erzange" vs "Sérémange-Herzange") = même lieu → statut "VERT"
 - Une légère variation orthographique sur le nom d'une commune connue = statut "VERT" (ne pas mettre ROUGE ni ORANGE pour une faute de frappe mineure)
 - Ne mettre ROUGE que si les deux valeurs désignent clairement deux lieux différents (ex: "Paris" vs "Lyon")
+RÈGLE ADRESSE COMBINÉE (VT) :
+Dans la VT, l'adresse du logement est souvent regroupée en un seul champ contenant "adresse + code postal + ville" (ex: "12 rue des Lilas, 57290 Serémange-Erzange"). Si le champ demandé est uniquement l'adresse (rue/numéro), extraire la partie adresse de ce champ combiné pour valeur_vt. Si le champ demandé est le code postal ou la ville, extraire la partie correspondante. Ne jamais mettre MANQUANT pour l'adresse, le CP ou la ville si l'information est présente dans un champ combiné de la VT.
 5. Si tu identifies un terme VT non présent dans le lexique, signale-le dans "nouveaux_termes"
 
 RÈGLE ABSOLUE SUR LES VALEURS (CRITIQUE) :
