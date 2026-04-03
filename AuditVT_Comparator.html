@@ -1130,6 +1130,112 @@
       font-size: 13px;
     }
 
+    /* ===== AUDIT ÉNERGÉTIQUE TABLE (pivotée) ===== */
+    .energ-table-wrap {
+      overflow-x: auto;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      margin-top: 12px;
+      margin-bottom: 32px;
+    }
+    .energ-table {
+      border-collapse: collapse;
+      font-size: 12px;
+      background: var(--white);
+      white-space: nowrap;
+    }
+    .energ-table thead tr:first-child {
+      background: linear-gradient(90deg, var(--primary-dark) 0%, var(--primary) 100%);
+    }
+    .energ-table thead tr:last-child {
+      background: rgba(27,63,139,0.07);
+    }
+    .energ-th-inst {
+      padding: 10px 16px;
+      color: #fff;
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 700;
+      font-size: 11px;
+      text-align: left;
+      border-right: 2px solid rgba(255,255,255,0.25);
+      min-width: 140px;
+      position: sticky;
+      left: 0;
+      z-index: 2;
+      background: var(--primary-dark);
+    }
+    .energ-th-field {
+      padding: 10px 10px;
+      color: #fff;
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 600;
+      font-size: 10px;
+      text-align: center;
+      border-left: 1px solid rgba(255,255,255,0.15);
+      max-width: 180px;
+      white-space: normal;
+      vertical-align: middle;
+    }
+    .energ-th-sub {
+      padding: 5px 8px;
+      font-size: 10px;
+      font-weight: 700;
+      text-align: center;
+      color: var(--primary);
+      border: 1px solid var(--border);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .energ-td-inst {
+      padding: 8px 14px;
+      font-weight: 700;
+      font-size: 11px;
+      color: var(--primary);
+      border: 1px solid var(--border);
+      background: rgba(27,63,139,0.03);
+      white-space: nowrap;
+      position: sticky;
+      left: 0;
+      z-index: 1;
+    }
+    .energ-td-val {
+      padding: 7px 10px;
+      text-align: center;
+      border: 1px solid var(--border);
+      font-size: 11px;
+      min-width: 70px;
+      max-width: 130px;
+      white-space: normal;
+      word-break: break-word;
+    }
+    .energ-table tbody tr:hover .energ-td-inst { filter: brightness(0.95); }
+    .energ-section-title {
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 700;
+      font-size: 15px;
+      color: var(--primary);
+      margin: 20px 0 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .energ-section-title::before {
+      content: '';
+      display: inline-block;
+      width: 4px;
+      height: 20px;
+      background: var(--accent-teal);
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+    .energ-empty-cat {
+      color: var(--text-muted);
+      font-style: italic;
+      font-size: 12px;
+      padding: 8px 0;
+      margin-bottom: 20px;
+    }
+
     /* ===== TOOLBAR ===== */
     .toolbar {
       display: flex;
@@ -1298,6 +1404,10 @@
     <button class="nav-tab" data-tab="rapport" onclick="switchTab('rapport')">
       <i data-lucide="file-text" style="width:15px;height:15px"></i>
       Rapport
+    </button>
+    <button class="nav-tab" data-tab="audit-energetique" onclick="switchTab('audit-energetique')">
+      <i data-lucide="layers" style="width:15px;height:15px"></i>
+      Audit énergétique
     </button>
     <button class="nav-tab" data-tab="parametres" onclick="switchTab('parametres')">
       <i data-lucide="settings" style="width:15px;height:15px"></i>
@@ -1549,6 +1659,19 @@
 
     </div>
 
+    <!-- ============================= ONGLET AUDIT ÉNERGÉTIQUE ============================= -->
+    <div id="tab-audit-energetique" class="tab-panel">
+
+      <div id="audit-energ-empty" class="empty-state">
+        <div class="empty-state-icon">🏗️</div>
+        <div class="empty-state-title">Aucune donnée disponible</div>
+        <div class="empty-state-sub">Lancez une analyse depuis l'onglet Comparaison pour voir les parois et menuiseries.</div>
+      </div>
+
+      <div id="audit-energ-content" class="hidden"></div>
+
+    </div>
+
     <!-- ============================= ONGLET PARAMETRES ============================= -->
     <div id="tab-parametres" class="tab-panel">
 
@@ -1789,6 +1912,7 @@
       referentiel: [],
       checkOptions: [],
       analysisResults: [],
+      detectedInstances: { murs: [], planchers: [], toitures: [], menuiseries: [] },
       lexiqueSuggestions: [],
       config: {
         provider: 'openai',
@@ -2345,6 +2469,7 @@
       }
 
       var detectedInstances = detectBatiauditInstances(auditFull);
+      state.detectedInstances = detectedInstances;
       (function(){
         var log = Object.keys(detectedInstances).filter(function(k){return detectedInstances[k].length>0;})
           .map(function(k){return k+'('+detectedInstances[k].length+'): '+detectedInstances[k].join(' / ');}).join(' | ');
@@ -2703,6 +2828,7 @@
       showProgress(false);
       renderResults();
       renderRapport();
+      renderAuditEnergetique();
       renderSuggestions();
       saveAnalysisToHistory();
       playCompletionBell();
@@ -3361,6 +3487,201 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
       if (chevron) chevron.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
     }
 
+    // =====================================================================
+    // AUDIT ÉNERGÉTIQUE — tableau pivoté par paroi/menuiserie
+    // =====================================================================
+
+    function classifyResultEnv(r) {
+      var di = state.detectedInstances || { murs: [], planchers: [], toitures: [], menuiseries: [] };
+      var il = r.instance_label || '';
+
+      // Priorité 1 : instance dans les listes détectées
+      if (di.menuiseries.indexOf(il) !== -1) return 'menuiseries';
+      if (di.murs.indexOf(il) !== -1) return 'murs';
+      if (di.planchers.indexOf(il) !== -1) return 'planchers';
+      if (di.toitures.indexOf(il) !== -1) return 'toitures';
+
+      // Priorité 2 : section du champ dans le référentiel
+      var sec = (getFieldSection(r.id_champ) || '').toLowerCase();
+      if (sec.match(/menuiserie|ouvrant|baie|fen[eê]tre|vitr/)) return 'menuiseries';
+      if (sec.match(/plancher|dalle|vide[\s-]san|terre[\s-]plein/)) return 'planchers';
+      if (sec.match(/toiture|comble|couverture|plancher[\s-]haut|plafond[\s-]haut/)) return 'toitures';
+      if (sec.match(/\bmur\b|paroi.*opaque|fa[çc]ade|paroi\s+verticale/)) return 'murs';
+
+      // Priorité 3 : pattern dans le libellé de l'instance elle-même
+      var ilL = il.toLowerCase();
+      if (ilL.match(/fen[eê]tre|ouvrant|baie|velux|porte.fen[eê]tre/)) return 'menuiseries';
+      if (ilL.match(/plancher|dalle|vide.san|terre.plein/)) return 'planchers';
+      if (ilL.match(/toiture|comble|couverture|plancher.haut/)) return 'toitures';
+      if (ilL.match(/\bmur\b|paroi|fa[çc]ade/)) return 'murs';
+
+      return null;
+    }
+
+    function renderAuditEnergetique() {
+      var results = state.analysisResults;
+      var emptyEl  = document.getElementById('audit-energ-empty');
+      var contentEl = document.getElementById('audit-energ-content');
+      if (!emptyEl || !contentEl) return;
+
+      if (!results || results.length === 0) {
+        emptyEl.classList.remove('hidden');
+        contentEl.classList.add('hidden');
+        return;
+      }
+
+      emptyEl.classList.add('hidden');
+      contentEl.classList.remove('hidden');
+      contentEl.innerHTML = '';
+
+      var categories = [
+        { key: 'murs',        label: 'Murs',         icon: '🧱' },
+        { key: 'planchers',   label: 'Planchers',    icon: '▦' },
+        { key: 'toitures',    label: 'Toitures',     icon: '🏠' },
+        { key: 'menuiseries', label: 'Menuiseries',  icon: '🪟' }
+      ];
+
+      var hasAny = false;
+
+      categories.forEach(function(cat) {
+        var catResults = results.filter(function(r) { return classifyResultEnv(r) === cat.key; });
+
+        // Titre de section (toujours visible pour les 4 catégories)
+        var titleEl = document.createElement('div');
+        titleEl.className = 'energ-section-title';
+        titleEl.textContent = cat.icon + ' ' + cat.label;
+        contentEl.appendChild(titleEl);
+
+        if (catResults.length === 0) {
+          var emptyMsg = document.createElement('div');
+          emptyMsg.className = 'energ-empty-cat';
+          emptyMsg.textContent = 'Aucune donnée détectée pour cette catégorie.';
+          contentEl.appendChild(emptyMsg);
+          return;
+        }
+
+        hasAny = true;
+
+        // Instances uniques (ordre d'apparition)
+        var instSeen = {};
+        var instances = [];
+        catResults.forEach(function(r) {
+          var inst = r.instance_label || 'Général';
+          if (!instSeen[inst]) { instSeen[inst] = true; instances.push(inst); }
+        });
+
+        // Champs uniques (ordre référentiel)
+        var fieldSeen = {};
+        var fields = [];
+        state.referentiel.forEach(function(rf) {
+          if (catResults.some(function(r) { return r.id_champ === rf.id; }) && !fieldSeen[rf.id]) {
+            fieldSeen[rf.id] = true; fields.push(rf.id);
+          }
+        });
+        catResults.forEach(function(r) {
+          if (!fieldSeen[r.id_champ]) { fieldSeen[r.id_champ] = true; fields.push(r.id_champ); }
+        });
+
+        // Matrice [instance][field] = résultat
+        var matrix = {};
+        catResults.forEach(function(r) {
+          var inst = r.instance_label || 'Général';
+          if (!matrix[inst]) matrix[inst] = {};
+          matrix[inst][r.id_champ] = r;
+        });
+
+        // Couleur selon statut
+        function bgStat(statut) {
+          if (statut === 'VERT')     return '#C6EFCE';
+          if (statut === 'ORANGE')   return '#FFEB9C';
+          if (statut === 'ROUGE')    return '#FFC7CE';
+          if (statut === 'MANQUANT') return '#F0F0F0';
+          return 'transparent';
+        }
+
+        // Construction du tableau
+        var wrap = document.createElement('div');
+        wrap.className = 'energ-table-wrap';
+
+        var table = document.createElement('table');
+        table.className = 'energ-table';
+
+        // THEAD — ligne 1 : Instance (rowspan 2) + champs (colspan 2)
+        var thead = document.createElement('thead');
+        var tr1 = document.createElement('tr');
+        var thInst = document.createElement('th');
+        thInst.rowSpan = 2;
+        thInst.className = 'energ-th-inst';
+        thInst.textContent = 'Instance / Paroi';
+        tr1.appendChild(thInst);
+
+        fields.forEach(function(fid) {
+          var nom = getFieldNom(fid) || fid;
+          var th = document.createElement('th');
+          th.colSpan = 2;
+          th.className = 'energ-th-field';
+          th.textContent = nom;
+          tr1.appendChild(th);
+        });
+        thead.appendChild(tr1);
+
+        // THEAD — ligne 2 : Audit | VT pour chaque champ
+        var tr2 = document.createElement('tr');
+        fields.forEach(function() {
+          var thA = document.createElement('th');
+          thA.className = 'energ-th-sub';
+          thA.textContent = 'Audit';
+          var thV = document.createElement('th');
+          thV.className = 'energ-th-sub';
+          thV.textContent = 'VT';
+          tr2.appendChild(thA);
+          tr2.appendChild(thV);
+        });
+        thead.appendChild(tr2);
+        table.appendChild(thead);
+
+        // TBODY — une ligne par instance
+        var tbody = document.createElement('tbody');
+        instances.forEach(function(inst) {
+          var tr = document.createElement('tr');
+          var tdInst = document.createElement('td');
+          tdInst.className = 'energ-td-inst';
+          tdInst.textContent = inst;
+          tr.appendChild(tdInst);
+
+          fields.forEach(function(fid) {
+            var r = matrix[inst] ? matrix[inst][fid] : null;
+            var bg = r ? bgStat(r.statut) : 'transparent';
+
+            var tdA = document.createElement('td');
+            tdA.className = 'energ-td-val';
+            tdA.style.background = bg;
+            tdA.textContent = r && r.valeur_audit ? r.valeur_audit : '—';
+
+            var tdV = document.createElement('td');
+            tdV.className = 'energ-td-val';
+            tdV.style.background = bg;
+            tdV.textContent = r && r.valeur_vt ? r.valeur_vt : '—';
+
+            tr.appendChild(tdA);
+            tr.appendChild(tdV);
+          });
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        wrap.appendChild(table);
+        contentEl.appendChild(wrap);
+      });
+
+      if (!hasAny) {
+        emptyEl.classList.remove('hidden');
+        contentEl.classList.add('hidden');
+      }
+
+      lucide.createIcons();
+    }
+
+    // =====================================================================
     function setFilter(f) {
       currentFilter = f;
       document.querySelectorAll('.filter-btn').forEach(b => {
