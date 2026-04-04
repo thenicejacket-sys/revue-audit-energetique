@@ -3448,7 +3448,17 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
       let rowNum = 0;
 
       function appendDataRows(rows) {
+        let lastInstance = undefined;
         rows.forEach(function(r) {
+          // Ligne vide entre blocs de parois/instances différentes pour lisibilité
+          const currInst = r.instance_label || null;
+          if (lastInstance !== undefined && currInst !== lastInstance) {
+            const spacer = document.createElement('tr');
+            spacer.innerHTML = '<td colspan="7" style="padding:0;background:transparent;border:none;height:10px"></td>';
+            tbody.appendChild(spacer);
+          }
+          lastInstance = currInst;
+
           rowNum++;
           const row = document.createElement('tr');
           const instanceTag = r.instance_label
@@ -3913,17 +3923,50 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
           .split(/\s*(?:—|–)\s*/)[0].trim();
       }
 
+      // Reclassification sémantique de detectedInstances avant le rendu
+      // Si un label dans 'murs' contient des mots de plancher ou toiture, le déplacer dans la bonne catégorie
+      var _DI = state.detectedInstances || {};
+      var _SEM_PLANCHER = /plancher|mitoyen(?!\s*mur)|dalle\s*(?:bas|b[eé]ton|sol)|vide[\s-]san|terre[\s-]plein/i;
+      var _SEM_TOITURE = /toiture|comble|plafond[\s-]*haut|plancher[\s-]*haut|rampant/i;
+      if (_DI.murs) {
+        _DI.murs = _DI.murs.filter(function(lbl) {
+          if (_SEM_PLANCHER.test(lbl)) {
+            if (!_DI.planchers) _DI.planchers = [];
+            if (_DI.planchers.indexOf(lbl) < 0) _DI.planchers.push(lbl);
+            return false;
+          }
+          if (_SEM_TOITURE.test(lbl)) {
+            if (!_DI.toitures) _DI.toitures = [];
+            if (_DI.toitures.indexOf(lbl) < 0) _DI.toitures.push(lbl);
+            return false;
+          }
+          return true;
+        });
+      }
+      // Idem pour planchers → toitures si mal classé
+      if (_DI.planchers) {
+        _DI.planchers = _DI.planchers.filter(function(lbl) {
+          if (_SEM_TOITURE.test(lbl) && !/plancher\s*bas/i.test(lbl)) {
+            if (!_DI.toitures) _DI.toitures = [];
+            if (_DI.toitures.indexOf(lbl) < 0) _DI.toitures.push(lbl);
+            return false;
+          }
+          return true;
+        });
+      }
+
       // Mapping exclusif : catKey → [liste de labels normalisés] depuis detectedInstances
       // Chaque instance appartient à UNE SEULE catégorie (la première assignation gagne)
       var _instCatNorm = {};
       ['murs','planchers','toitures','menuiseries'].forEach(function(ck) {
-        _instCatNorm[ck] = ((state.detectedInstances||{})[ck]||[]).map(normInstForEne);
+        _instCatNorm[ck] = ((_DI)[ck]||[]).map(normInstForEne);
       });
 
       // Map clé normalisée → label original (pour affichage fidèle : "Paroi 01" pas "paroi 1")
+      // Utilise _DI (déjà reclassifié sémantiquement) au lieu de state.detectedInstances brut
       var _origLabelMap = {};
       ['murs','planchers','toitures','menuiseries'].forEach(function(ck) {
-        ((state.detectedInstances||{})[ck]||[]).forEach(function(orig) {
+        (_DI[ck]||[]).forEach(function(orig) {
           _origLabelMap[normInstForEne(orig)] = orig;
         });
       });
@@ -4003,8 +4046,8 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
         // Instances uniques avec normalisation (évite "Paroi 01" + "Paroi 1" en double)
         // On garde le label original (depuis detectedInstances) pour l'affichage
         var instSeen={}, instances=[];
-        // Priorité : prendre l'ordre depuis detectedInstances (source de vérité)
-        var detInsts = ((state.detectedInstances||{})[cat.catKey]||[]);
+        // Priorité : prendre l'ordre depuis _DI (déjà reclassifié sémantiquement)
+        var detInsts = (_DI[cat.catKey]||[]);
         if (detInsts.length > 0) {
           detInsts.forEach(function(orig) {
             var k = normInstForEne(orig);
