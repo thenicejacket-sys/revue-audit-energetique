@@ -2161,7 +2161,7 @@
             // Override sémantique : si la description de la paroi indique clairement une autre catégorie
             var descL0 = desc0.toLowerCase();
             var semCat0 = curCat0;
-            if (/plancher|mitoyen(?!\s*mur)|dalle\s*(?:b[eé]ton|bois)|vide.san|terre.plein/.test(descL0) && curCat0 !== 'planchers') semCat0 = 'planchers';
+            if (/plancher(?!\s*haut)|mitoyen(?!\s*mur)|dalle(?!\s*(?:haut|haute|plafond|toiture))|vide.san|terre.plein/.test(descL0) && curCat0 !== 'planchers') semCat0 = 'planchers';
             else if (/toiture|comble|plafond.haut|plancher.haut|rampant/.test(descL0) && curCat0 !== 'toitures') semCat0 = 'toitures';
             if (semCat0==='murs') addUniq(murs, lblp0);
             else if (semCat0==='planchers') addUniq(planchers, lblp0);
@@ -3926,7 +3926,7 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
       // Reclassification sémantique de detectedInstances avant le rendu
       // Si un label dans 'murs' contient des mots de plancher ou toiture, le déplacer dans la bonne catégorie
       var _DI = state.detectedInstances || {};
-      var _SEM_PLANCHER = /plancher|mitoyen(?!\s*mur)|dalle\s*(?:bas|b[eé]ton|sol)|vide[\s-]san|terre[\s-]plein/i;
+      var _SEM_PLANCHER = /plancher(?!\s*haut)|mitoyen(?!\s*mur)|dalle(?!\s*(?:haut|haute|plafond|toiture))|vide[\s-]san|terre[\s-]plein/i;
       var _SEM_TOITURE = /toiture|comble|plafond[\s-]*haut|plancher[\s-]*haut|rampant/i;
       if (_DI.murs) {
         _DI.murs = _DI.murs.filter(function(lbl) {
