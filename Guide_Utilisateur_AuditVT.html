@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AuditVT Comparator — Guide Utilisateur</title>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --blue-dark:  #1b3f8b;
+      --blue-med:   #2d4e9e;
+      --blue-light: #4a6fc0;
+      --cyan:       #00BCD4;
+      --cyan-light: #e0f7fa;
+      --vert:       #2E7D32;
+      --vert-bg:    #e8f5e9;
+      --orange:     #E65100;
+      --orange-bg:  #fff3e0;
+      --rouge:      #B71C1C;
+      --rouge-bg:   #ffebee;
+      --grey:       #546E7A;
+      --grey-bg:    #eceff1;
+      --text:       #1a2744;
+      --text-light: #4a5568;
+      --border:     #e2e8f0;
+      --bg:         #f4f7fc;
+    }
+
+    body {
+      font-family: 'Nunito', sans-serif;
+      color: var(--text);
+      background: #fff;
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    /* ── PRINT BUTTON ── */
+    .print-btn {
+      position: fixed; top: 18px; right: 24px; z-index: 999;
+      background: var(--blue-dark); color: #fff;
+      border: none; border-radius: 8px; padding: 10px 22px;
+      font-family: 'Montserrat', sans-serif; font-size: 13px; font-weight: 700;
+      cursor: pointer; box-shadow: 0 4px 16px rgba(27,63,139,0.3);
+      display: flex; align-items: center; gap: 8px;
+      transition: background 0.15s;
+    }
+    .print-btn:hover { background: var(--blue-med); }
+
+    /* ── COVER PAGE ── */
+    .cover {
+      background: linear-gradient(145deg, var(--blue-dark) 0%, #0f2460 60%, #1a3a8a 100%);
+      color: #fff;
+      min-height: 100vh;
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      text-align: center;
+      padding: 60px 40px;
+      position: relative;
+      overflow: hidden;
+      page-break-after: always;
+    }
+    .cover::before {
+      content: '';
+      position: absolute; top: -80px; right: -80px;
+      width: 400px; height: 400px;
+      background: radial-gradient(circle, rgba(0,188,212,0.18) 0%, transparent 70%);
+      border-radius: 50%;
+    }
+    .cover::after {
+      content: '';
+      position: absolute; bottom: -60px; left: -60px;
+      width: 300px; height: 300px;
+      background: radial-gradient(circle, rgba(0,188,212,0.12) 0%, transparent 70%);
+      border-radius: 50%;
+    }
+    .cover-badge {
+      background: rgba(0,188,212,0.2);
+      border: 1px solid rgba(0,188,212,0.5);
+      border-radius: 20px; padding: 6px 20px;
+      font-size: 11px; font-weight: 700; letter-spacing: 2px;
+      text-transform: uppercase; color: #00BCD4;
+      margin-bottom: 32px; display: inline-block;
+    }
+    .cover-logo {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 42px; font-weight: 900;
+      line-height: 1.1; margin-bottom: 12px;
+    }
+    .cover-logo span { color: var(--cyan); }
+    .cover-title {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 18px; font-weight: 600;
+      color: rgba(255,255,255,0.85);
+      margin-bottom: 40px; letter-spacing: 0.5px;
+    }
+    .cover-divider {
+      width: 80px; height: 3px;
+      background: linear-gradient(90deg, var(--cyan), transparent);
+      margin: 32px auto;
+    }
+    .cover-desc {
+      font-size: 14px; color: rgba(255,255,255,0.7);
+      max-width: 520px; line-height: 1.8;
+      margin-bottom: 48px;
+    }
+    .cover-meta {
+      display: flex; gap: 40px; justify-content: center;
+      flex-wrap: wrap;
+    }
+    .cover-meta-item {
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+    }
+    .cover-meta-label {
+      font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px;
+      color: rgba(255,255,255,0.45);
+    }
+    .cover-meta-value {
+      font-family: 'Montserrat', sans-serif; font-size: 13px; font-weight: 700;
+      color: rgba(255,255,255,0.9);
+    }
+    .cover-url {
+      position: absolute; bottom: 32px; left: 0; right: 0;
+      text-align: center; font-size: 12px;
+      color: rgba(255,255,255,0.35); letter-spacing: 0.5px;
+    }
+
+    /* ── PAGE LAYOUT ── */
+    .page {
+      max-width: 860px; margin: 0 auto;
+      padding: 48px 40px;
+    }
+
+    /* ── TOC ── */
+    .toc-section {
+      background: var(--bg); border-radius: 16px;
+      padding: 36px 40px; margin-bottom: 48px;
+      border: 1px solid var(--border);
+    }
+    .toc-title {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 13px; font-weight: 700; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--blue-light);
+      margin-bottom: 20px;
+    }
+    .toc-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px 32px;
+    }
+    .toc-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 8px 0; border-bottom: 1px dashed var(--border);
+      text-decoration: none; color: var(--text);
+      font-size: 13px;
+    }
+    .toc-item:hover { color: var(--blue-dark); }
+    .toc-num {
+      width: 24px; height: 24px; border-radius: 6px;
+      background: var(--blue-dark); color: #fff;
+      font-family: 'Montserrat', sans-serif; font-size: 10px; font-weight: 800;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+
+    /* ── SECTION HEADERS ── */
+    .section-header {
+      display: flex; align-items: center; gap: 16px;
+      margin-bottom: 28px; margin-top: 48px;
+      padding-bottom: 16px;
+      border-bottom: 2px solid var(--border);
+    }
+    .section-num {
+      width: 40px; height: 40px; border-radius: 10px;
+      background: var(--blue-dark); color: #fff;
+      font-family: 'Montserrat', sans-serif; font-size: 16px; font-weight: 800;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .section-title {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 20px; font-weight: 800; color: var(--blue-dark);
+    }
+    .section-subtitle {
+      font-size: 12px; color: var(--text-light); margin-top: 2px;
+    }
+
+    /* ── SUB-SECTION ── */
+    h3 {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 14px; font-weight: 700; color: var(--blue-med);
+      margin: 24px 0 12px; display: flex; align-items: center; gap: 8px;
+    }
+    h3::before {
+      content: '';
+      width: 4px; height: 18px; border-radius: 2px;
+      background: var(--cyan); display: inline-block;
+      flex-shrink: 0;
+    }
+
+    p { margin-bottom: 12px; color: var(--text-light); }
+    p strong { color: var(--text); }
+
+    /* ── CARDS ── */
+    .card {
+      background: #fff; border: 1px solid var(--border);
+      border-radius: 12px; padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 8px rgba(27,63,139,0.05);
+    }
+    .card-title {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 13px; font-weight: 700; color: var(--blue-dark);
+      margin-bottom: 10px; display: flex; align-items: center; gap: 8px;
+    }
+    .card-icon {
+      width: 28px; height: 28px; border-radius: 8px;
+      background: var(--blue-dark); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px;
+    }
+
+    /* ── TAB CARDS ── */
+    .tab-card {
+      border-radius: 14px; padding: 24px 28px;
+      margin-bottom: 24px; border-left: 5px solid;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    }
+    .tab-card.comparaison { background: #eef2ff; border-color: var(--blue-dark); }
+    .tab-card.rapport     { background: #f0fdf4; border-color: var(--vert); }
+    .tab-card.manquants   { background: var(--grey-bg); border-color: var(--grey); }
+    .tab-card.historique  { background: #fff8e1; border-color: #F9A825; }
+    .tab-card.parametres  { background: #fce4ec; border-color: #c2185b; }
+
+    .tab-card-header {
+      display: flex; align-items: center; gap: 12px; margin-bottom: 14px;
+    }
+    .tab-icon {
+      width: 36px; height: 36px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; flex-shrink: 0;
+    }
+    .tab-icon.comparaison { background: var(--blue-dark); }
+    .tab-icon.rapport     { background: var(--vert); }
+    .tab-icon.manquants   { background: var(--grey); }
+    .tab-icon.historique  { background: #F9A825; }
+    .tab-icon.parametres  { background: #c2185b; }
+
+    .tab-name {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 15px; font-weight: 800;
+    }
+    .tab-name.comparaison { color: var(--blue-dark); }
+    .tab-name.rapport     { color: var(--vert); }
+    .tab-name.manquants   { color: var(--grey); }
+    .tab-name.historique  { color: #F57F17; }
+    .tab-name.parametres  { color: #c2185b; }
+
+    .tab-desc { font-size: 13px; color: var(--text-light); }
+
+    /* ── COLOR BADGES ── */
+    .color-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+      margin: 20px 0;
+    }
+    .color-card {
+      border-radius: 12px; padding: 20px;
+      border: 1px solid transparent;
+    }
+    .color-card.vert    { background: var(--vert-bg);   border-color: #a5d6a7; }
+    .color-card.orange  { background: var(--orange-bg); border-color: #ffcc80; }
+    .color-card.rouge   { background: var(--rouge-bg);  border-color: #ef9a9a; }
+    .color-card.manquant{ background: var(--grey-bg);   border-color: #b0bec5; }
+
+    .color-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 16px; border-radius: 20px; margin-bottom: 12px;
+      font-family: 'Montserrat', sans-serif; font-size: 11px; font-weight: 800;
+      letter-spacing: 1px; text-transform: uppercase; color: #fff;
+    }
+    .color-badge.vert    { background: var(--vert); }
+    .color-badge.orange  { background: var(--orange); }
+    .color-badge.rouge   { background: var(--rouge); }
+    .color-badge.manquant{ background: var(--grey); }
+
+    .color-title {
+      font-family: 'Montserrat', sans-serif; font-size: 13px; font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .color-title.vert    { color: var(--vert); }
+    .color-title.orange  { color: var(--orange); }
+    .color-title.rouge   { color: var(--rouge); }
+    .color-title.manquant{ color: var(--grey); }
+
+    /* ── STEPS ── */
+    .steps { counter-reset: step; margin: 20px 0; }
+    .step {
+      display: flex; gap: 16px; margin-bottom: 20px;
+      padding: 16px 20px; background: var(--bg);
+      border-radius: 10px; border: 1px solid var(--border);
+    }
+    .step-num {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--blue-dark); color: #fff;
+      font-family: 'Montserrat', sans-serif; font-weight: 800; font-size: 13px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .step-content { flex: 1; }
+    .step-title {
+      font-family: 'Montserrat', sans-serif; font-size: 13px; font-weight: 700;
+      color: var(--blue-dark); margin-bottom: 4px;
+    }
+    .step-desc { font-size: 13px; color: var(--text-light); }
+
+    /* ── INFO BOXES ── */
+    .info-box {
+      border-radius: 10px; padding: 16px 20px; margin: 16px 0;
+      display: flex; gap: 14px; align-items: flex-start;
+    }
+    .info-box.tip  { background: #e3f2fd; border-left: 4px solid #1976D2; }
+    .info-box.warn { background: #fff8e1; border-left: 4px solid #F9A825; }
+    .info-box.danger { background: var(--rouge-bg); border-left: 4px solid var(--rouge); }
+    .info-box-icon { font-size: 20px; flex-shrink: 0; margin-top: 1px; }
+    .info-box-text { font-size: 13px; color: var(--text-light); }
+    .info-box-text strong { color: var(--text); }
+
+    /* ── TABLE ── */
+    table {
+      width: 100%; border-collapse: collapse;
+      margin: 16px 0; font-size: 13px;
+    }
+    th {
+      background: var(--blue-dark); color: #fff;
+      font-family: 'Montserrat', sans-serif; font-weight: 700;
+      padding: 10px 14px; text-align: left; font-size: 12px;
+    }
+    td { padding: 10px 14px; border-bottom: 1px solid var(--border); }
+    tr:nth-child(even) td { background: var(--bg); }
+    tr:hover td { background: #eef2ff; }
+
+    /* ── SCORE BAR ── */
+    .score-example {
+      background: #fff; border: 1px solid var(--border); border-radius: 10px;
+      padding: 16px 20px; margin: 16px 0;
+    }
+    .score-bar-wrap {
+      background: #e2e8f0; border-radius: 6px; height: 10px; overflow: hidden;
+      margin: 8px 0;
+    }
+    .score-bar {
+      height: 100%; border-radius: 6px;
+      background: linear-gradient(90deg, var(--vert), #43a047);
+    }
+
+    /* ── FOOTER ── */
+    .doc-footer {
+      margin-top: 60px; padding: 28px 32px;
+      background: var(--blue-dark); color: rgba(255,255,255,0.6);
+      border-radius: 14px; text-align: center;
+      font-size: 12px; line-height: 2;
+    }
+    .doc-footer strong { color: #fff; }
+
+    /* ── PRINT ── */
+    @media print {
+      .print-btn { display: none !important; }
+      .cover { min-height: 100vh; page-break-after: always; }
+      .page { padding: 32px 28px; }
+      .section-header { margin-top: 32px; }
+      body { font-size: 12px; }
+      .cover-logo { font-size: 34px; }
+      @page { margin: 15mm 15mm; size: A4; }
+    }
+  </style>
+</head>
+<body>
+
+<button class="print-btn" onclick="window.print()">
+  ⬇ Enregistrer en PDF
+</button>
+
+<!-- ══════════════════════════════════════════════
+     PAGE DE COUVERTURE
+══════════════════════════════════════════════ -->
+<div class="cover">
+  <div class="cover-badge">Documentation Officielle · V1.0</div>
+  <div class="cover-logo">Audit<span>VT</span> Comparator</div>
+  <div class="cover-title">Solution de Revue Automatisée des Audits Énergétiques</div>
+  <div class="cover-divider"></div>
+  <div class="cover-desc">
+    Cet outil vous permet de comparer automatiquement un <strong style="color:#fff">Audit Énergétique</strong> avec
+    sa <strong style="color:#fff">Visite Technique</strong>, d'identifier les écarts, les champs manquants
+    et d'évaluer la conformité d'un dossier grâce à l'intelligence artificielle.
+  </div>
+  <div class="cover-meta">
+    <div class="cover-meta-item">
+      <span class="cover-meta-label">Édition par</span>
+      <span class="cover-meta-value">OT Énergie</span>
+    </div>
+    <div class="cover-meta-item">
+      <span class="cover-meta-label">Type de fichier</span>
+      <span class="cover-meta-value">HTML Autonome</span>
+    </div>
+    <div class="cover-meta-item">
+      <span class="cover-meta-label">Compatibilité</span>
+      <span class="cover-meta-value">Chrome · Edge · Firefox</span>
+    </div>
+    <div class="cover-meta-item">
+      <span class="cover-meta-label">Version</span>
+      <span class="cover-meta-value">2026 · R1</span>
+    </div>
+  </div>
+  <div class="cover-url">revue-audit-energetique.vercel.app · OT Énergie © 2026</div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     CONTENU PRINCIPAL
+══════════════════════════════════════════════ -->
+<div class="page">
+
+  <!-- TABLE DES MATIÈRES -->
+  <div class="toc-section">
+    <div class="toc-title">📋 Table des matières</div>
+    <div class="toc-grid">
+      <a class="toc-item" href="#s1"><span class="toc-num">1</span> Présentation de la solution</a>
+      <a class="toc-item" href="#s2"><span class="toc-num">2</span> Démarrage rapide</a>
+      <a class="toc-item" href="#s3"><span class="toc-num">3</span> Onglet Comparaison</a>
+      <a class="toc-item" href="#s4"><span class="toc-num">4</span> Onglet Rapport Détaillé</a>
+      <a class="toc-item" href="#s5"><span class="toc-num">5</span> Onglet Champs Manquants</a>
+      <a class="toc-item" href="#s6"><span class="toc-num">6</span> Onglet Historique</a>
+      <a class="toc-item" href="#s7"><span class="toc-num">7</span> Onglet Paramètres</a>
+      <a class="toc-item" href="#s8"><span class="toc-num">8</span> Code couleur & signification</a>
+      <a class="toc-item" href="#s9"><span class="toc-num">9</span> Export Excel</a>
+      <a class="toc-item" href="#s10"><span class="toc-num">10</span> Configuration IA</a>
+    </div>
+  </div>
+
+  <!-- ── SECTION 1 ── -->
+  <div id="s1" class="section-header">
+    <div class="section-num">1</div>
+    <div>
+      <div class="section-title">Présentation de la solution</div>
+      <div class="section-subtitle">Qu'est-ce qu'AuditVT Comparator ?</div>
+    </div>
+  </div>
+
+  <p>
+    <strong>AuditVT Comparator</strong> est une application web autonome développée pour <strong>OT Énergie</strong>.
+    Elle automatise la revue croisée entre un <strong>Audit Énergétique (document maître)</strong> et
+    une <strong>Visite Technique (document à comparer)</strong>, en identifiant les conformités,
+    les écarts et les champs manquants grâce à l'intelligence artificielle.
+  </p>
+  <p>
+    La solution fonctionne entièrement dans le navigateur — <strong>aucune installation, aucun serveur requis</strong>.
+    Les fichiers PDF sont analysés localement. Seul l'appel à l'API IA (OpenRouter) passe par internet.
+  </p>
+
+  <div class="card">
+    <div class="card-title"><span class="card-icon">✦</span> Points forts</div>
+    <table>
+      <tr><th>Caractéristique</th><th>Détail</th></tr>
+      <tr><td><strong>Fichier unique</strong></td><td>Un seul fichier HTML — aucune dépendance externe à installer</td></tr>
+      <tr><td><strong>Analyse IA par lots</strong></td><td>Traitement parallèle de 140+ champs via GPT-4o / Claude / OpenRouter</td></tr>
+      <tr><td><strong>Référentiel personnalisable</strong></td><td>Import Excel (.xlsx) pour adapter les champs à chaque projet</td></tr>
+      <tr><td><strong>Export Excel complet</strong></td><td>3 onglets : Rapport conformité · Champs manquants · Synthèse</td></tr>
+      <tr><td><strong>Historique local</strong></td><td>Sauvegarde automatique des 50 dernières analyses</td></tr>
+      <tr><td><strong>Accès en ligne</strong></td><td>Disponible sur <em>revue-audit-energetique.vercel.app</em></td></tr>
+    </table>
+  </div>
+
+  <!-- ── SECTION 2 ── -->
+  <div id="s2" class="section-header">
+    <div class="section-num">2</div>
+    <div>
+      <div class="section-title">Démarrage rapide</div>
+      <div class="section-subtitle">Lancer sa première analyse en 5 étapes</div>
+    </div>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <div class="step-title">Ouvrir l'application</div>
+        <div class="step-desc">Accéder à <strong>revue-audit-energetique.vercel.app/AuditVT_Comparator.html</strong> depuis Chrome, Edge ou Firefox. L'application s'ouvre directement sur l'onglet <em>Comparaison</em>.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <div class="step-title">Configurer la clé API IA</div>
+        <div class="step-desc">Aller dans l'onglet <strong>Paramètres</strong>, coller la clé API (OpenRouter : <em>sk-or-…</em> ou OpenAI : <em>sk-…</em>). Le fournisseur est détecté automatiquement. Sauvegarder.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <div class="step-title">Charger le référentiel</div>
+        <div class="step-desc">Dans <strong>Paramètres</strong>, importer le fichier Excel de référentiel OT Énergie (colonnes A=Section, B=Champ, D=Check OUI/NON, F-H=Lexique VT). <strong>140 champs</strong> seront chargés.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-content">
+        <div class="step-title">Déposer les deux PDFs</div>
+        <div class="step-desc">Dans l'onglet <strong>Comparaison</strong>, glisser-déposer l'<strong>Audit Énergétique</strong> (zone MAÎTRE, à gauche) et la <strong>Visite Technique</strong> (zone À COMPARER, à droite).</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">5</div>
+      <div class="step-content">
+        <div class="step-title">Lancer l'analyse</div>
+        <div class="step-desc">Cliquer sur <strong>Lancer l'analyse</strong>. L'IA traite les champs par lots. Résultats disponibles dans <em>Rapport</em> en quelques minutes. Exporter en Excel depuis le bouton <em>Télécharger Excel</em>.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="info-box warn">
+    <span class="info-box-icon">⚠️</span>
+    <div class="info-box-text">
+      <strong>Connexion internet requise</strong> uniquement pour l'appel IA et le chargement des polices. La lecture des PDFs et l'affichage des résultats fonctionnent hors-ligne une fois la page chargée.
+    </div>
+  </div>
+
+  <!-- ── SECTION 3 ── -->
+  <div id="s3" class="section-header">
+    <div class="section-num">3</div>
+    <div>
+      <div class="section-title">Onglet Comparaison</div>
+      <div class="section-subtitle">Point d'entrée principal — chargement et lancement</div>
+    </div>
+  </div>
+
+  <div class="tab-card comparaison">
+    <div class="tab-card-header">
+      <div class="tab-icon comparaison">📂</div>
+      <div>
+        <div class="tab-name comparaison">Comparaison</div>
+        <div style="font-size:12px;color:var(--text-light);margin-top:2px">Onglet principal — chargement des documents PDF</div>
+      </div>
+    </div>
+    <div class="tab-desc">
+      Cet onglet est le point de départ de chaque analyse. Il vous permet de charger les deux documents PDF,
+      de vérifier que tous les prérequis sont remplis, puis de déclencher l'analyse IA.
+    </div>
+  </div>
+
+  <h3>Zone de dépôt — MAÎTRE (Audit Énergétique)</h3>
+  <p>La zone de gauche reçoit le <strong>document de référence</strong> : l'Audit Énergétique complet.
+  C'est le document qui fait foi. L'IA extrait les valeurs de ce document pour les comparer.</p>
+
+  <h3>Zone de dépôt — À COMPARER (Visite Technique)</h3>
+  <p>La zone de droite reçoit la <strong>Visite Technique</strong> à contrôler. L'IA vérifie si les données
+  de ce document correspondent à celles de l'Audit Énergétique.</p>
+
+  <h3>Vérification des prérequis</h3>
+  <p>Avant de lancer l'analyse, l'application vérifie automatiquement 4 conditions :</p>
+  <table>
+    <tr><th>Prérequis</th><th>Indicateur</th><th>Description</th></tr>
+    <tr><td>Audit PDF</td><td>🟢 vert</td><td>Fichier PDF chargé et texte extrait</td></tr>
+    <tr><td>Visite Technique PDF</td><td>🟢 vert</td><td>Fichier PDF chargé et texte extrait</td></tr>
+    <tr><td>Référentiel</td><td>🟢 vert</td><td>Au moins 1 champ avec Check = OUI</td></tr>
+    <tr><td>Configuration IA</td><td>🟢 vert</td><td>Clé API renseignée et fournisseur détecté</td></tr>
+  </table>
+
+  <!-- ── SECTION 4 ── -->
+  <div id="s4" class="section-header">
+    <div class="section-num">4</div>
+    <div>
+      <div class="section-title">Onglet Rapport Détaillé</div>
+      <div class="section-subtitle">Visualisation complète des résultats champ par champ</div>
+    </div>
+  </div>
+
+  <div class="tab-card rapport">
+    <div class="tab-card-header">
+      <div class="tab-icon rapport">📋</div>
+      <div>
+        <div class="tab-name rapport">Rapport Détaillé</div>
+        <div style="font-size:12px;color:var(--text-light);margin-top:2px">Analyse champ par champ avec filtres et export</div>
+      </div>
+    </div>
+    <div class="tab-desc">
+      Affiche l'ensemble des résultats de l'analyse, organisés par <strong>sections du référentiel</strong>
+      puis <strong>groupés par statut</strong>. Chaque ligne indique la valeur dans l'Audit,
+      la valeur dans la Visite Technique, le statut et le commentaire IA.
+    </div>
+  </div>
+
+  <h3>Indicateurs KPI</h3>
+  <p>En haut du rapport, 4 compteurs synthétisent les résultats :</p>
+  <table>
+    <tr><th>KPI</th><th>Signification</th></tr>
+    <tr><td>✅ Conformes</td><td>Champs identiques ou équivalents entre Audit et VT</td></tr>
+    <tr><td>⚠ Approximatifs</td><td>Champs présents dans les deux mais avec des écarts mineurs</td></tr>
+    <tr><td>⛔ Non conformes</td><td>Champs présents mais avec des valeurs significativement différentes</td></tr>
+    <tr><td>□ Manquants</td><td>Champs présents dans l'Audit mais absents de la Visite Technique</td></tr>
+  </table>
+
+  <h3>Score de conformité</h3>
+  <p>Le score global (en %) représente la proportion de champs conformes. Trois niveaux d'appréciation :</p>
+  <div class="score-example">
+    <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700">
+      <span style="color:var(--rouge)">Dossier non conforme</span>
+      <span style="color:var(--orange)">À vérifier</span>
+      <span style="color:var(--vert)">Recevable</span>
+    </div>
+    <div class="score-bar-wrap" style="margin:10px 0">
+      <div class="score-bar" style="width:80%"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-light)">
+      <span>0%</span><span>80%</span><span>95%</span><span>100%</span>
+    </div>
+  </div>
+
+  <h3>Filtres par statut</h3>
+  <p>Des boutons de filtre permettent d'afficher uniquement les champs d'un statut donné :
+  <strong>Tous</strong> · <strong style="color:var(--vert)">VERT</strong> ·
+  <strong style="color:var(--orange)">ORANGE</strong> ·
+  <strong style="color:var(--rouge)">ROUGE</strong> ·
+  <strong style="color:var(--grey)">MANQUANT</strong>.</p>
+
+  <!-- ── SECTION 5 ── -->
+  <div id="s5" class="section-header">
+    <div class="section-num">5</div>
+    <div>
+      <div class="section-title">Onglet Champs Manquants</div>
+      <div class="section-subtitle">Champs présents dans l'Audit mais absents de la Visite Technique</div>
+    </div>
+  </div>
+
+  <div class="tab-card manquants">
+    <div class="tab-card-header">
+      <div class="tab-icon manquants">🔍</div>
+      <div>
+        <div class="tab-name manquants">Champs Manquants</div>
+        <div style="font-size:12px;color:var(--text-light);margin-top:2px">Vue dédiée aux omissions de la Visite Technique</div>
+      </div>
+    </div>
+    <div class="tab-desc">
+      Liste exhaustive des champs du référentiel qui apparaissent dans l'Audit Énergétique
+      mais sont <strong>totalement absents</strong> de la Visite Technique.
+      Chaque entrée inclut un <strong>commentaire IA</strong> suggérant où retrouver l'information.
+    </div>
+  </div>
+
+  <h3>À quoi sert cet onglet ?</h3>
+  <p>Il permet à l'opérateur de savoir <strong>ce qui manque dans la Visite Technique</strong> pour compléter le dossier.
+  Le commentaire IA oriente sur la section ou la rubrique où l'information devrait normalement apparaître.</p>
+
+  <div class="info-box tip">
+    <span class="info-box-icon">💡</span>
+    <div class="info-box-text">
+      <strong>Usage pratique :</strong> Communiquer cet onglet au technicien en charge de la Visite Technique
+      pour qu'il complète les rubriques manquantes avant soumission finale du dossier.
+    </div>
+  </div>
+
+  <!-- ── SECTION 6 ── -->
+  <div id="s6" class="section-header">
+    <div class="section-num">6</div>
+    <div>
+      <div class="section-title">Onglet Historique</div>
+      <div class="section-subtitle">Archive des analyses passées</div>
+    </div>
+  </div>
+
+  <div class="tab-card historique">
+    <div class="tab-card-header">
+      <div class="tab-icon historique">🕐</div>
+      <div>
+        <div class="tab-name historique">Historique</div>
+        <div style="font-size:12px;color:var(--text-light);margin-top:2px">50 dernières analyses sauvegardées automatiquement</div>
+      </div>
+    </div>
+    <div class="tab-desc">
+      Chaque analyse est automatiquement sauvegardée dans l'historique du navigateur (localStorage).
+      L'historique conserve jusqu'à <strong>50 entrées</strong>, avec date, noms de fichiers, score global et fichier Excel exporté.
+    </div>
+  </div>
+
+  <h3>Actions disponibles par entrée</h3>
+  <table>
+    <tr><th>Action</th><th>Description</th></tr>
+    <tr><td>📥 Télécharger</td><td>Re-télécharger le fichier Excel exporté lors de cette analyse</td></tr>
+    <tr><td>🗑 Supprimer</td><td>Supprimer définitivement cette entrée de l'historique</td></tr>
+  </table>
+
+  <div class="info-box warn">
+    <span class="info-box-icon">⚠️</span>
+    <div class="info-box-text">
+      <strong>Important :</strong> L'historique est stocké dans le navigateur (localStorage). Il sera perdu si vous videz le cache ou changez de navigateur. Pour archiver durablement, toujours exporter le rapport Excel.
+    </div>
+  </div>
+
+  <!-- ── SECTION 7 ── -->
+  <div id="s7" class="section-header">
+    <div class="section-num">7</div>
+    <div>
+      <div class="section-title">Onglet Paramètres</div>
+      <div class="section-subtitle">Configuration IA, référentiel et options avancées</div>
+    </div>
+  </div>
+
+  <div class="tab-card parametres">
+    <div class="tab-card-header">
+      <div class="tab-icon parametres">⚙️</div>
+      <div>
+        <div class="tab-name parametres">Paramètres</div>
+        <div style="font-size:12px;color:var(--text-light);margin-top:2px">Configuration complète de l'application</div>
+      </div>
+    </div>
+    <div class="tab-desc">
+      Cet onglet centralise toutes les configurations : clé API IA, modèle, référentiel des champs à analyser,
+      lexique VT et options d'export. À configurer <strong>une seule fois</strong> — tout est sauvegardé automatiquement.
+    </div>
+  </div>
+
+  <h3>Configuration IA</h3>
+  <table>
+    <tr><th>Paramètre</th><th>Valeur recommandée</th><th>Remarque</th></tr>
+    <tr><td>Fournisseur</td><td>OpenRouter</td><td>Détecté automatiquement depuis le format de la clé</td></tr>
+    <tr><td>Clé API</td><td><em>sk-or-…</em></td><td>Obtenir sur openrouter.ai</td></tr>
+    <tr><td>Modèle</td><td>gpt-4o-mini ou claude-3-haiku</td><td>Bon équilibre qualité/coût</td></tr>
+    <tr><td>Modèle premium</td><td>gpt-4o ou claude-3.5-sonnet</td><td>Meilleure précision, coût supérieur</td></tr>
+  </table>
+
+  <h3>Référentiel des champs</h3>
+  <p>Le référentiel définit la liste des champs à analyser. Il se présente sous la forme d'un fichier Excel
+  (.xlsx) avec la structure suivante :</p>
+  <table>
+    <tr><th>Colonne</th><th>Contenu</th><th>Exemple</th></tr>
+    <tr><td>A</td><td>Section</td><td>Enveloppe du bâtiment</td></tr>
+    <tr><td>B</td><td>Nom du champ</td><td>Surface plancher bas</td></tr>
+    <tr><td>D</td><td>Check (OUI/NON)</td><td>OUI</td></tr>
+    <tr><td>F</td><td>Lexique VT (synonyme 1)</td><td>Plancher sur terre-plein</td></tr>
+    <tr><td>G</td><td>Lexique VT (synonyme 2)</td><td>Dalle sol</td></tr>
+    <tr><td>H</td><td>Lexique VT (synonyme 3)</td><td>Sol bas</td></tr>
+  </table>
+
+  <div class="info-box tip">
+    <span class="info-box-icon">💡</span>
+    <div class="info-box-text">
+      Seuls les champs avec <strong>Check = OUI</strong> sont analysés par l'IA. Cela permet
+      de désactiver rapidement un champ sans le supprimer du référentiel.
+    </div>
+  </div>
+
+  <!-- ── SECTION 8 ── -->
+  <div id="s8" class="section-header">
+    <div class="section-num">8</div>
+    <div>
+      <div class="section-title">Code couleur & signification</div>
+      <div class="section-subtitle">Le système de 4 statuts utilisé dans toute l'application</div>
+    </div>
+  </div>
+
+  <p>L'ensemble de l'application repose sur un <strong>code couleur à 4 niveaux</strong> cohérent entre
+  le rapport HTML, le tableau de bord et le fichier Excel exporté.</p>
+
+  <div class="color-grid">
+    <div class="color-card vert">
+      <div class="color-badge vert">✔ VERT</div>
+      <div class="color-title vert">Conforme</div>
+      <p style="font-size:12px;margin:0">Le champ est présent dans la Visite Technique et sa valeur correspond — exactement ou de façon équivalente — à celle de l'Audit Énergétique. <strong>Aucune action requise.</strong></p>
+    </div>
+    <div class="color-card orange">
+      <div class="color-badge orange">⚠ ORANGE</div>
+      <div class="color-title orange">Approximatif</div>
+      <p style="font-size:12px;margin:0">Le champ est présent dans les deux documents mais les valeurs présentent un <strong>écart mineur</strong> (arrondi, libellé légèrement différent, unité différente). Une vérification manuelle est recommandée.</p>
+    </div>
+    <div class="color-card rouge">
+      <div class="color-badge rouge">⛔ ROUGE</div>
+      <div class="color-title rouge">Non conforme</div>
+      <p style="font-size:12px;margin:0">Le champ est présent dans les deux documents mais les valeurs sont <strong>significativement différentes</strong>. Une correction est nécessaire avant soumission du dossier.</p>
+    </div>
+    <div class="color-card manquant">
+      <div class="color-badge manquant">□ MANQUANT</div>
+      <div class="color-title manquant">Absent de la VT</div>
+      <p style="font-size:12px;margin:0">Le champ est identifié dans l'Audit Énergétique mais est <strong>totalement absent</strong> de la Visite Technique. Il doit être ajouté dans la VT pour que le dossier soit complet.</p>
+    </div>
+  </div>
+
+  <h3>Ordre de priorité dans le rapport</h3>
+  <p>Les résultats sont présentés dans l'ordre de priorité suivant, permettant de traiter en premier
+  les points positifs puis les anomalies :</p>
+  <table>
+    <tr><th>Priorité</th><th>Statut</th><th>Action recommandée</th></tr>
+    <tr><td>1</td><td style="color:var(--vert);font-weight:700">✔ VERT — Conformes</td><td>Validation — aucune action</td></tr>
+    <tr><td>2</td><td style="color:var(--rouge);font-weight:700">⛔ ROUGE — Non conformes</td><td>Correction urgente requise</td></tr>
+    <tr><td>3</td><td style="color:var(--orange);font-weight:700">⚠ ORANGE — Approximatifs</td><td>Vérification manuelle recommandée</td></tr>
+    <tr><td>4</td><td style="color:var(--grey);font-weight:700">□ MANQUANT</td><td>Compléter la Visite Technique</td></tr>
+  </table>
+
+  <!-- ── SECTION 9 ── -->
+  <div id="s9" class="section-header">
+    <div class="section-num">9</div>
+    <div>
+      <div class="section-title">Export Excel</div>
+      <div class="section-subtitle">Fichier .xlsx complet avec 3 onglets colorés</div>
+    </div>
+  </div>
+
+  <p>L'export Excel génère un fichier <strong>.xlsx</strong> prêt à partager, avec mise en forme professionnelle
+  aux couleurs OT Énergie. Le fichier est nommé automatiquement :
+  <code style="background:#f0f4ff;padding:2px 8px;border-radius:4px;font-size:12px">OTEnergie_Rapport_AuditVT_YYYY-MM-DD.xlsx</code></p>
+
+  <h3>Onglet 1 — Rapport de conformité</h3>
+  <p>Liste complète de tous les champs analysés, groupés par statut (VERT → ROUGE → ORANGE → MANQUANT)
+  puis par section. Chaque ligne indique le libellé, la valeur Audit, la valeur VT, le statut coloré
+  et le commentaire IA.</p>
+
+  <h3>Onglet 2 — Champs manquants</h3>
+  <p>Liste uniquement les champs avec statut MANQUANT, avec le commentaire IA suggérant où les trouver
+  dans la Visite Technique. Idéal pour transmission au technicien VT.</p>
+
+  <h3>Onglet 3 — Synthèse</h3>
+  <p>Tableau récapitulatif avec les KPIs principaux (totaux par statut, pourcentages), le score global
+  et le verdict de conformité du dossier.</p>
+
+  <div class="info-box tip">
+    <span class="info-box-icon">💡</span>
+    <div class="info-box-text">
+      <strong>Bouton Télécharger Excel</strong> disponible dans l'onglet <em>Rapport</em>.
+      Le fichier peut être re-téléchargé à tout moment depuis l'<em>Historique</em>.
+    </div>
+  </div>
+
+  <!-- ── SECTION 10 ── -->
+  <div id="s10" class="section-header">
+    <div class="section-num">10</div>
+    <div>
+      <div class="section-title">Configuration IA</div>
+      <div class="section-subtitle">Clé API, modèles et détection automatique</div>
+    </div>
+  </div>
+
+  <h3>Détection automatique du fournisseur</h3>
+  <p>L'application détecte automatiquement le fournisseur IA à partir du format de la clé API :</p>
+  <table>
+    <tr><th>Préfixe de la clé</th><th>Fournisseur détecté</th><th>Recommandé</th></tr>
+    <tr><td><code>sk-or-…</code></td><td>OpenRouter</td><td>✅ Oui — meilleure compatibilité web</td></tr>
+    <tr><td><code>sk-…</code> ou <code>sk-proj-…</code></td><td>OpenAI</td><td>⚠ Local uniquement</td></tr>
+  </table>
+
+  <div class="info-box danger">
+    <span class="info-box-icon">🔴</span>
+    <div class="info-box-text">
+      <strong>Important :</strong> Si vous accédez à l'application depuis le web (Vercel), utilisez
+      <strong>OpenRouter</strong> (<em>sk-or-…</em>). Les clés OpenAI directes peuvent échouer
+      depuis un navigateur web en raison des restrictions CORS.
+    </div>
+  </div>
+
+  <h3>Choisir son modèle</h3>
+  <table>
+    <tr><th>Modèle</th><th>Fournisseur</th><th>Usage recommandé</th></tr>
+    <tr><td>gpt-4o-mini</td><td>OpenAI / OpenRouter</td><td>Usage quotidien — bon rapport qualité/coût</td></tr>
+    <tr><td>gpt-4o</td><td>OpenAI / OpenRouter</td><td>Analyses complexes — meilleure précision</td></tr>
+    <tr><td>claude-3-haiku</td><td>OpenRouter</td><td>Rapide et économique</td></tr>
+    <tr><td>claude-3.5-sonnet</td><td>OpenRouter</td><td>Très haute qualité d'analyse</td></tr>
+  </table>
+
+  <!-- FOOTER -->
+  <div class="doc-footer">
+    <div><strong>AuditVT Comparator</strong> — Guide Utilisateur V1.0</div>
+    <div>OT Énergie © 2026 · <strong>revue-audit-energetique.vercel.app</strong></div>
+    <div style="margin-top:8px;font-size:11px">
+      Document généré par l'outil AuditVT Comparator · Usage interne OT Énergie
+    </div>
+  </div>
+
+</div><!-- /page -->
+
+</body>
+</html>

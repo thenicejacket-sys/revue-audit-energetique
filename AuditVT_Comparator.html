@@ -2655,12 +2655,14 @@
                                !_instRaw.match(/porte.fen[eê]|vitr[eé]|baie/);
           if (_isPorteOpaque) {
             var _fNomV = (getFieldNom(rv.id_champ) || '').toLowerCase();
-            var _isVitrageField = _fNomV.match(/vitrag|lame.d.air|lame\s*air|[eé]missiv|remplissage|inclinaison|survitrag|coat|argon|krypton|feuilletage|feuilleté|feuillet/);
+            var _isVitrageField = _fNomV.match(/vitrag|lame.d.air|lame\s*air|[eé]missiv|remplissage|inclinaison|survitrag|coat|argon|krypton|feuilletage|feuilleté|feuillet|\bug\b|espaceur|intercalaire|transmission.lum|facteur.sol/);
             if (_isVitrageField && (rv.valeur_audit || rv.valeur_vt)) {
               rv = Object.assign({}, rv, {
                 statut: 'MANQUANT',
                 valeur_audit: null,
                 valeur_vt: null,
+                extrait_audit: '',
+                extrait_vt: '',
                 commentaire: 'Porte opaque : champ vitrage non applicable. Valeur IA ignorée.'
               });
             }
@@ -3039,13 +3041,18 @@ Ne jamais transférer la valeur d'un ouvrant vers un autre ouvrant.
 
 RÈGLE PORTE OPAQUE (ABSOLUE) :
 Une "Porte" simple (sans "vitrée", "fenêtre", "baie" ou "porte-fenêtre" dans sa description) est une porte opaque — elle n'a PAS de vitrage.
-⛔ Pour une porte opaque, les champs suivants doivent OBLIGATOIREMENT retourner MANQUANT (valeur_audit null, valeur_vt null) :
+⛔ Pour une porte opaque, les champs suivants doivent OBLIGATOIREMENT retourner MANQUANT (valeur_audit null, valeur_vt null, extrait_audit vide, extrait_vt vide) :
   - Type de vitrage
   - Épaisseur lame d'air
   - Couche peu émissive
   - Gaz remplissage
-  - Tout champ lié au vitrage ou à la transparence
+  - Ug (coefficient de transmission thermique du vitrage)
+  - Espaceur / intercalaire
+  - Transmission lumineuse (TL)
+  - Facteur solaire (Sw)
+  - Tout champ lié au vitrage, à la transparence, ou aux performances thermiques du vitrage
 Ne jamais retourner "Double vitrage", "Simple vitrage", "Triple vitrage", ou tout autre type de vitrage pour une porte standard.
+Ne jamais remplir les champs extrait_audit ou extrait_vt avec des passages qui décrivent des fenêtres si l'ouvrant courant est une porte opaque.
 Cette règle est ABSOLUE même si des fenêtres avec vitrage apparaissent dans le même tableau juste au-dessus de la porte.
 
 EXCEPTION ABSOLUE — SURFACE DE RÉFÉRENCE / SHAB DU LOGEMENT :
