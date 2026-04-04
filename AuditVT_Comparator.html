@@ -3680,17 +3680,10 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
       // Calcule la hauteur de ligne en fonction du contenu des colonnes E et F
       function calcRowH(rv, vfCell) {
         // Col E : Commentaire IA — Calibri 10, largeur ~52 chars
+        // Col F masquée → hauteur basée uniquement sur col E
         var comment = rv.commentaire || '';
         var linesE = Math.max(1, Math.ceil(comment.length / 52));
-        // Col F : Source & vérif — Calibri 8, largeur ~64 chars, avec \n internes
-        var vfLines = 1;
-        if (vfCell && vfCell.txt) {
-          var parts = vfCell.txt.split('\n');
-          vfLines = parts.reduce(function(acc, l) {
-            return acc + Math.max(1, Math.ceil(l.length / 64));
-          }, 0);
-        }
-        return Math.max(Math.max(linesE, vfLines) * 14 + 4, 18);
+        return Math.max(linesE * 13 + 4, 16);
       }
 
       const wb = new ExcelJS.Workbook();
@@ -3737,7 +3730,7 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
 
       // ── ONGLET 2 ──────────────────────────────────────────────────────────
       var ws2=wb.addWorksheet('Rapport conformite');
-      ws2.columns=[{width:36},{width:22},{width:22},{width:15},{width:55},{width:58},{width:14}];
+      ws2.columns=[{width:36},{width:22},{width:22},{width:15},{width:55},{width:58,hidden:true},{width:14}];
       ws2.views=[{state:'frozen',xSplit:0,ySplit:7}];
       const N1=7;
 
@@ -3779,6 +3772,7 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
           var revuVal=rv.revu_doc||''; var revuFill=revuVal==='VT'?'FFDBEAFE':revuVal==='Audit'?'FFDCFCE7':g.row;
           var revuTxt=revuVal==='VT'?'FF1E40AF':revuVal==='Audit'?'FF166534':g.rtxt;
           sc(dr.getCell(7),revuFill,revuTxt,{bold:!!revuVal,align:'center'});
+          dr.getCell(7).dataValidation={type:'list',allowBlank:true,formulae:['"Audit,VT"'],showDropDown:false};
         });
       });
       var noSec2=state.analysisResults.filter(function(rv){return !getFieldSection(rv.id_champ);});
@@ -3796,6 +3790,7 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
           var revuVal=rv.revu_doc||''; var revuFill=revuVal==='VT'?'FFDBEAFE':revuVal==='Audit'?'FFDCFCE7':g.row;
           var revuTxt=revuVal==='VT'?'FF1E40AF':revuVal==='Audit'?'FF166534':g.rtxt;
           sc(dr.getCell(7),revuFill,revuTxt,{bold:!!revuVal,align:'center'});
+          dr.getCell(7).dataValidation={type:'list',allowBlank:true,formulae:['"Audit,VT"'],showDropDown:false};
         });
       }
 
