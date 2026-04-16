@@ -1624,6 +1624,34 @@
               </div>
             </div>
 
+            <div class="form-group" style="margin-top:12px;">
+              <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;flex-wrap:nowrap">
+                <input type="checkbox" id="fixc-toggle" onchange="onFixCToggle()" style="accent-color:#0D47A1;width:16px;height:16px;flex-shrink:0" />
+                <span style="white-space:nowrap">&#9670; Mode Pr\u00e9cision (Fix C)</span>
+              </label>
+              <p style="font-size:11px;color:var(--text-muted);margin-top:4px;margin-left:26px">
+                Mod\u00e8le plus puissant + batches r\u00e9duits (2 champs/appel). Plus lent, plus cher, mais extraction nettement meilleure.
+              </p>
+              <div id="fixc-model-group" style="margin-top:8px;margin-left:26px;display:none;">
+                <label class="form-label" style="font-size:12px;">Mod\u00e8le Fix C <span style="font-size:10px;color:var(--text-muted)">(extraction — mod\u00e8les \u00e0 forte capacit\u00e9 de raisonnement)</span></label>
+                <select class="form-select" id="fixc-model-select" onchange="onFixCModelChange()" style="max-width:320px;">
+                  <optgroup label="OpenAI">
+                    <option value="gpt-4o" selected>GPT-4o (recommand\u00e9)</option>
+                    <option value="gpt-4.1">GPT-4.1</option>
+                    <option value="gpt-4.1-mini">GPT-4.1 mini</option>
+                  </optgroup>
+                  <optgroup label="Anthropic (via OpenRouter)">
+                    <option value="anthropic/claude-sonnet-4-6">Claude Sonnet 4.6</option>
+                    <option value="anthropic/claude-haiku-4-5-20251001">Claude Haiku 4.5</option>
+                  </optgroup>
+                  <optgroup label="Google (via OpenRouter)">
+                    <option value="google/gemini-2.5-pro">Gemini 2.5 Pro</option>
+                    <option value="google/gemini-2.5-flash">Gemini 2.5 Flash</option>
+                  </optgroup>
+                </select>
+              </div>
+            </div>
+
             <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:8px;">
               <button class="btn btn-outline" onclick="testConnection()">
                 <i data-lucide="zap" style="width:14px;height:14px"></i>
@@ -1824,7 +1852,9 @@
         apiKey: '',
         model: 'gpt-4o-mini',
         customModel: '',
-        mayaEnabled: true
+        mayaEnabled: true,
+        fixCEnabled: false,
+        fixCModel: 'gpt-4o'
       },
       analysisRunning: false
     };
@@ -2460,10 +2490,10 @@
       }
 
       // Batching intelligent adaptatif :
-      // - Instances pré-labellisées : batchSize = 3 (réponses plus longues par champ)
-      // - Champs non-expansés (simples) : batchSize = 5
-      const BATCH_INSTANCE = 3;
-      const BATCH_SIMPLE   = 5;
+      // Fix C activé → batches réduits (2 champs) pour plus de précision
+      // Fix C désactivé → tailles normales (3 instances, 5 simples)
+      const BATCH_INSTANCE = state.config.fixCEnabled ? 2 : 3;
+      const BATCH_SIMPLE   = state.config.fixCEnabled ? 2 : 5;
       var batches = [];
       // Batches instance-par-instance pour les champs expansés
       _instOrderList.forEach(function(lbl) {
@@ -3290,9 +3320,15 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
         ? 'https://api.openai.com/v1/chat/completions'
         : 'https://openrouter.ai/api/v1/chat/completions';
 
-      const model = state.config.model === 'custom'
-        ? state.config.customModel
-        : state.config.model;
+      // Fix C : utiliser le modèle précision si activé
+      var model;
+      if (state.config.fixCEnabled && state.config.fixCModel) {
+        model = state.config.fixCModel;
+      } else if (state.config.model === 'custom') {
+        model = state.config.customModel;
+      } else {
+        model = state.config.model;
+      }
 
       const headers = {
         'Content-Type': 'application/json',
@@ -4931,6 +4967,14 @@ Si aucune correction nécessaire, retourne {"corrections": []}`;
       var mayaGroup = document.getElementById('maya-model-group');
       if (mayaGroup) mayaGroup.style.display = (state.config.mayaEnabled !== false) ? '' : 'none';
 
+      // Restaurer le toggle Fix C + modèle Fix C
+      var fixcEl = document.getElementById('fixc-toggle');
+      if (fixcEl) fixcEl.checked = !!state.config.fixCEnabled;
+      var fixcModelEl = document.getElementById('fixc-model-select');
+      if (fixcModelEl && state.config.fixCModel) fixcModelEl.value = state.config.fixCModel;
+      var fixcGroup = document.getElementById('fixc-model-group');
+      if (fixcGroup) fixcGroup.style.display = state.config.fixCEnabled ? '' : 'none';
+
       updatePrereqs();
     }
 
@@ -4997,6 +5041,16 @@ Si aucune correction nécessaire, retourne {"corrections": []}`;
 
     function onMayaModelChange() {
       state.config.mayaModel = document.getElementById('maya-model-select').value || '';
+    }
+
+    function onFixCToggle() {
+      state.config.fixCEnabled = document.getElementById('fixc-toggle').checked;
+      var fg = document.getElementById('fixc-model-group');
+      if (fg) fg.style.display = state.config.fixCEnabled ? '' : 'none';
+    }
+
+    function onFixCModelChange() {
+      state.config.fixCModel = document.getElementById('fixc-model-select').value || 'gpt-4o';
     }
 
     function onModelChange() {
@@ -5074,6 +5128,8 @@ Si aucune correction nécessaire, retourne {"corrections": []}`;
       state.config.provider   = document.querySelector('input[name="provider"]:checked').value;
       state.config.mayaEnabled = document.getElementById('maya-toggle').checked;
       state.config.mayaModel  = document.getElementById('maya-model-select').value || '';
+      state.config.fixCEnabled = document.getElementById('fixc-toggle').checked;
+      state.config.fixCModel   = document.getElementById('fixc-model-select').value || 'gpt-4o';
       const modelSel = document.getElementById('model-select').value;
       if (modelSel === 'custom') {
         state.config.model = document.getElementById('model-custom-input').value.trim();
@@ -5100,7 +5156,7 @@ Si aucune correction nécessaire, retourne {"corrections": []}`;
     function clearConfig() {
       if (!confirm('Effacer la configuration IA (clé API) ?')) return;
       localStorage.removeItem(STORAGE_KEY_CONFIG);
-      state.config = { provider: 'openai', apiKey: '', model: 'gpt-4o-mini', customModel: '', mayaEnabled: true };
+      state.config = { provider: 'openai', apiKey: '', model: 'gpt-4o-mini', customModel: '', mayaEnabled: true, fixCEnabled: false, fixCModel: 'gpt-4o' };
       applyConfigToUI();
       document.getElementById('api-key-input').value = '';
       updatePrereqs();
