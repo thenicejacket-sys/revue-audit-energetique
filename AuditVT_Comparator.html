@@ -2830,11 +2830,13 @@
             if (rf) r._fieldNom = rf.nom;
           });
           state.analysisResults = await callMaya(state.analysisResults, auditFull, vtFull);
-          var corrected = state.analysisResults.filter(function(r) { return r._maya_corrected; }).length;
-          if (corrected > 0) {
-            showAlert('alerts-area', 'info', '\u2726 Maya a corrigé ' + corrected + ' résultat(s) sur ' + suspectsCount + ' suspect(s). Les corrections sont marquées [\u2726 Maya] dans les résultats et l\'export Excel.');
-          } else {
-            showAlert('alerts-area', 'info', '\u2726 Maya a vérifié ' + suspectsCount + ' résultat(s) suspect(s) — aucune correction nécessaire.');
+          var ms = state.analysisResults._mayaStatus;
+          if (ms && ms.ran && ms.corrections > 0) {
+            showAlert('alerts-area', 'info', '\u2726 Maya a corrigé ' + ms.corrections + ' résultat(s) sur ' + ms.suspects + ' suspect(s). Les corrections sont marquées [\u2726 Maya] dans les résultats et l\'export Excel.');
+          } else if (ms && ms.ran && ms.corrections === 0) {
+            showAlert('alerts-area', 'info', '\u2726 Maya a vérifié ' + ms.suspects + ' résultat(s) suspect(s) — aucune correction nécessaire.');
+          } else if (ms && !ms.ran) {
+            showAlert('alerts-area', 'warning', '\u2726 Maya — Erreur lors de la validation : ' + (ms.error || 'inconnue') + '. Les résultats sont affichés sans validation Maya.');
           }
         } else {
           showAlert('alerts-area', 'info', '\u2726 Maya — Aucun résultat suspect détecté, validation non nécessaire.');
@@ -3484,6 +3486,7 @@ Si aucune correction nécessaire, retourne {"corrections": []}`;
 
         if (!mayaResult.corrections || mayaResult.corrections.length === 0) {
           console.log('[MAYA] Aucune correction — résultats confirmés.');
+          results._mayaStatus = { ran: true, corrections: 0, suspects: suspects.length, error: null };
           return results;
         }
 
@@ -3497,7 +3500,7 @@ Si aucune correction nécessaire, retourne {"corrections": []}`;
           });
           if (!target) return;
 
-          // Sauvegarder l'état original pour le bouton "Annuler"
+          // Sauvegarder l'état original
           if (!target._maya_original) {
             target._maya_original = {
               statut: target.statut,
@@ -3508,17 +3511,19 @@ Si aucune correction nécessaire, retourne {"corrections": []}`;
 
           if (corr.nouveau_statut) target.statut = corr.nouveau_statut;
           if (corr.valeur_vt_corrigee) target.valeur_vt = corr.valeur_vt_corrigee;
-          target.commentaire = (target.commentaire ? target.commentaire + ' ' : '') + '[Maya: ' + corr.raison + ']';
+          target.commentaire = (target.commentaire ? target.commentaire + ' ' : '') + '[\u2726 Maya: ' + corr.raison + ']';
           target._maya_corrected = true;
           corrCount++;
-          console.log('[MAYA] Correction : ' + corr.id_champ + (corr.instance_label ? ' (' + corr.instance_label + ')' : '') + ' → ' + corr.nouveau_statut + ' — ' + corr.raison);
+          console.log('[MAYA] Correction : ' + corr.id_champ + (corr.instance_label ? ' (' + corr.instance_label + ')' : '') + ' \u2192 ' + corr.nouveau_statut + ' \u2014 ' + corr.raison);
         });
 
         console.log('[MAYA] ' + corrCount + ' correction(s) appliquée(s).');
+        results._mayaStatus = { ran: true, corrections: corrCount, suspects: suspects.length, error: null };
         return results;
 
       } catch (mayaErr) {
-        console.warn('[MAYA] Erreur validation — résultats non modifiés :', mayaErr.message);
+        console.error('[MAYA] ERREUR :', mayaErr.message);
+        results._mayaStatus = { ran: false, corrections: 0, suspects: suspects.length, error: mayaErr.message };
         return results;
       }
     }
@@ -4014,6 +4019,28 @@ Si aucune correction nécessaire, retourne {"corrections": []}`;
       var vRow=ws1.addRow(['Verdict',verdict,'']); vRow.height=22;
       ws1.mergeCells(vRow.number,2,vRow.number,3);
       sc(vRow.getCell(1),SCORE_BG,SCORE_FG,{bold:true,sz:11}); sc(vRow.getCell(2),SCORE_BG,SCORE_FG,{bold:true,sz:11,wrap:true}); sc(vRow.getCell(3),SCORE_BG,SCORE_FG,{});
+
+      // Ligne Maya dans la synthèse
+      var mayaCorrected = state.analysisResults.filter(function(r){return r._maya_corrected;}).length;
+      var mayaSt = state.analysisResults._mayaStatus;
+      var mayaLabel, mayaColor;
+      if (!state.config.mayaEnabled) {
+        mayaLabel = 'D\u00e9sactiv\u00e9e'; mayaColor = 'FFA0A0A0';
+      } else if (mayaSt && mayaSt.ran && mayaCorrected > 0) {
+        mayaLabel = mayaCorrected + ' correction(s) sur ' + mayaSt.suspects + ' suspect(s)'; mayaColor = 'FF7B2D8E';
+      } else if (mayaSt && mayaSt.ran) {
+        mayaLabel = mayaSt.suspects + ' suspect(s) v\u00e9rifi\u00e9(s) \u2014 aucune correction'; mayaColor = 'FF4CAF50';
+      } else if (mayaSt && !mayaSt.ran) {
+        mayaLabel = 'Erreur : ' + (mayaSt.error || 'inconnue').substring(0, 80); mayaColor = 'FFE53935';
+      } else {
+        mayaLabel = 'Non ex\u00e9cut\u00e9e (0 suspect)'; mayaColor = 'FFA0A0A0';
+      }
+      ws1.addRow(['','','']).height=4;
+      var mRow=ws1.addRow(['\u2726 Maya \u2014 Validation', mayaLabel, '']); mRow.height=22;
+      ws1.mergeCells(mRow.number,2,mRow.number,3);
+      sc(mRow.getCell(1),'FFF3E5F5','FF7B2D8E',{bold:true,sz:11});
+      sc(mRow.getCell(2),'FFF3E5F5',mayaColor,{bold:true,sz:11,wrap:true});
+      sc(mRow.getCell(3),'FFF3E5F5','FF7B2D8E',{});
 
 
       // ── ONGLET 2 ──────────────────────────────────────────────────────────
