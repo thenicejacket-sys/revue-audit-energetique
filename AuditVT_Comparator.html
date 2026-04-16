@@ -2194,16 +2194,11 @@
             if (!pm0) continue;
             var desc0 = pm0[2].trim().split(/\s{3,}|\t/)[0].trim().substring(0,50);
             var lblp0 = desc0 ? 'Paroi '+pm0[1]+' \u2014 '+desc0 : 'Paroi '+pm0[1];
-            // Override sémantique : si la description de la paroi indique clairement une autre catégorie
-            var descL0 = desc0.toLowerCase();
-            var semCat0 = curCat0;
-            // "dalle" seul est ambigu (plancher bas OU plancher haut/toiture) → on ne l'override PAS.
-            // Seuls les termes explicitement "bas" forcent en plancher.
-            if (/plancher(?!\s*haut)|mitoyen(?!\s*mur)|dalle\s*(?:bas|sol|sur\s*(?:vide|terre))|vide.san|terre.plein/.test(descL0) && curCat0 !== 'planchers') semCat0 = 'planchers';
-            else if (/toiture|comble|plafond.haut|plancher.haut|rampant/.test(descL0) && curCat0 !== 'toitures') semCat0 = 'toitures';
-            if (semCat0==='murs') addUniq(murs, lblp0);
-            else if (semCat0==='planchers') addUniq(planchers, lblp0);
-            else if (semCat0==='toitures') addUniq(toitures, lblp0);
+            // La section PDF est l'AUTORITÉ — pas d'override sémantique.
+            // Si le PDF met une paroi sous "Toitures", c'est une toiture.
+            if (curCat0==='murs') addUniq(murs, lblp0);
+            else if (curCat0==='planchers') addUniq(planchers, lblp0);
+            else if (curCat0==='toitures') addUniq(toitures, lblp0);
           }
         }
 
