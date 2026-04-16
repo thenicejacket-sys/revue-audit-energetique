@@ -2898,7 +2898,16 @@
       });
 
       // ── Agent Maya — Validation post-extraction ──────────────────────────
+      // Détecter si des erreurs API sont survenues pendant l'analyse (inutile d'appeler Maya si l'API est down/quota)
+      var _apiErrors = state.analysisResults.filter(function(r) {
+        return r.commentaire && /Erreur API|API HTTP/i.test(r.commentaire);
+      }).length;
+
       if (state.config.mayaEnabled !== false) {
+        if (_apiErrors > 0) {
+          showAlert('alerts-area', 'warning', '\u2726 Maya — Validation ignorée : ' + _apiErrors + ' champ(s) ont échoué avec des erreurs API. Vérifiez vos crédits API avant de relancer.');
+          state.analysisResults._mayaStatus = { ran: false, corrections: 0, suspects: 0, error: 'Ignorée — erreurs API détectées (' + _apiErrors + ' champs)' };
+        } else {
         var suspectsCount = state.analysisResults.filter(function(r) { return r.statut === 'ROUGE' || r.statut === 'MANQUANT'; }).length;
         if (suspectsCount > 0) {
           updateProgress(92, '\u2726 Maya — Validation en cours...', suspectsCount + ' résultat(s) suspect(s) détecté(s) — Maya vérifie...');
@@ -2920,6 +2929,7 @@
         } else {
           showAlert('alerts-area', 'info', '\u2726 Maya — Aucun résultat suspect détecté, validation non nécessaire.');
         }
+        } // fin else _apiErrors
       }
 
       updateProgress(95, 'Compilation des résultats...', 'Extraction des contextes sources...');
