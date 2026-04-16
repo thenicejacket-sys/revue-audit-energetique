@@ -2112,8 +2112,8 @@
         function addUniq(arr, val) { if (arr.indexOf(val) < 0) arr.push(val); }
         function catFromLabel(lbl) {
           if (lbl.match(/fen[eê]tre|ouvrant|baie|velux|porte.fen[eê]tre|vitr[eé]/)) return 'menuiseries';
-          if (lbl.match(/plancher|dalle\s*(?:bas|sol)|vide.san|terre.plein/)) return 'planchers';
-          if (lbl.match(/toiture|comble|toit|couverture|plancher\s*haut|plafond\s*haut/)) return 'toitures';
+          if (lbl.match(/plancher(?!\s*haut)|dalle\s*(?:bas|sol)|vide.san|terre.plein/)) return 'planchers';
+          if (lbl.match(/toiture|comble|toit|couverture|plancher\s*haut|plafond\s*haut|dalle\s*(?:haut|plafond)/)) return 'toitures';
           return null; // indéterminé → laisser au contexte de section
         }
         function pushToCategory(label, sectionCtx) {
@@ -2122,10 +2122,10 @@
           if (lbl.match(/fen[eê]tre|ouvrant|baie|velux|porte.fen|vitr[eé]/) || sectionCtx === 'menuiseries') {
             return addUniq(menuiseries, label);
           }
-          if (lbl.match(/plancher|dalle|vide.san|terre.plein/) || sectionCtx === 'planchers') {
+          if (lbl.match(/plancher(?!\s*haut)|dalle\s*(?:bas|sol)|vide.san|terre.plein/) || sectionCtx === 'planchers') {
             return addUniq(planchers, label);
           }
-          if (lbl.match(/toiture|comble|toit|couverture|plancher\s*haut|plafond\s*haut/) || sectionCtx === 'toitures') {
+          if (lbl.match(/toiture|comble|toit|couverture|plancher\s*haut|plafond\s*haut|dalle\s*(?:haut|plafond)/) || sectionCtx === 'toitures') {
             return addUniq(toitures, label);
           }
           // Porte seule → menuiserie si dans section menuiseries, sinon mur par défaut
@@ -2197,7 +2197,9 @@
             // Override sémantique : si la description de la paroi indique clairement une autre catégorie
             var descL0 = desc0.toLowerCase();
             var semCat0 = curCat0;
-            if (/plancher(?!\s*haut)|mitoyen(?!\s*mur)|dalle(?!\s*(?:haut|haute|plafond|toiture))|vide.san|terre.plein/.test(descL0) && curCat0 !== 'planchers') semCat0 = 'planchers';
+            // "dalle" seul est ambigu (plancher bas OU plancher haut/toiture) → on ne l'override PAS.
+            // Seuls les termes explicitement "bas" forcent en plancher.
+            if (/plancher(?!\s*haut)|mitoyen(?!\s*mur)|dalle\s*(?:bas|sol|sur\s*(?:vide|terre))|vide.san|terre.plein/.test(descL0) && curCat0 !== 'planchers') semCat0 = 'planchers';
             else if (/toiture|comble|plafond.haut|plancher.haut|rampant/.test(descL0) && curCat0 !== 'toitures') semCat0 = 'toitures';
             if (semCat0==='murs') addUniq(murs, lblp0);
             else if (semCat0==='planchers') addUniq(planchers, lblp0);
@@ -2825,7 +2827,7 @@
       if (state.config.mayaEnabled !== false) {
         var suspectsCount = state.analysisResults.filter(function(r) { return r.statut === 'ROUGE' || r.statut === 'MANQUANT'; }).length;
         if (suspectsCount > 0) {
-          updateProgress(92, 'Validation Maya en cours...', suspectsCount + ' résultat(s) suspect(s) — agent Maya vérifie...');
+          updateProgress(92, '\u2726 Maya — Validation en cours...', suspectsCount + ' résultat(s) suspect(s) détecté(s) — Maya vérifie...');
           await sleep(100);
           // Enrichir les résultats avec le nom du champ pour Maya
           state.analysisResults.forEach(function(r) {
@@ -2835,8 +2837,12 @@
           state.analysisResults = await callMaya(state.analysisResults, auditFull, vtFull);
           var corrected = state.analysisResults.filter(function(r) { return r._maya_corrected; }).length;
           if (corrected > 0) {
-            showAlert('alerts-area', 'info', 'Maya a corrigé ' + corrected + ' résultat(s) suspect(s). Les corrections sont marquées [Maya] dans les commentaires.');
+            showAlert('alerts-area', 'info', '\u2726 Maya a corrigé ' + corrected + ' résultat(s) sur ' + suspectsCount + ' suspect(s). Les corrections sont marquées [\u2726 Maya] dans les résultats et l\'export Excel.');
+          } else {
+            showAlert('alerts-area', 'info', '\u2726 Maya a vérifié ' + suspectsCount + ' résultat(s) suspect(s) — aucune correction nécessaire.');
           }
+        } else {
+          showAlert('alerts-area', 'info', '\u2726 Maya — Aucun résultat suspect détecté, validation non nécessaire.');
         }
       }
 
