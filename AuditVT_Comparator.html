@@ -3420,20 +3420,81 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
 
       const data = await resp.json();
       const raw = data.choices[0].message.content.trim();
+      console.log('[callAI] Réponse brute : ' + raw.length + ' chars, finish_reason: ' + (data.choices[0].finish_reason || '?'));
 
-      // Strip markdown si présent
-      let jsonStr = raw;
-      if (raw.startsWith('```')) {
-        jsonStr = raw.replace(/^```[a-z]*\n?/, '').replace(/\n?```$/, '');
-      }
-
-      let parsed;
-      try {
-        parsed = JSON.parse(jsonStr);
-      } catch (parseErr) {
-        throw new Error('Réponse IA non JSON valide. Début reçu : ' + jsonStr.substring(0, 150));
+      // Extraction JSON robuste (gère markdown, texte autour, troncature)
+      var parsed = extractJSON(raw);
+      if (!parsed.resultats) {
+        console.warn('[callAI] JSON parsé mais pas de clé "resultats". Clés trouvées : ' + Object.keys(parsed).join(', '));
+        parsed = { resultats: [], nouveaux_termes: [] };
       }
       return parsed;
+    }
+
+    // ── Extraction JSON robuste depuis une réponse IA ──────────────────
+    // Gère : markdown wrapping, texte avant/après le JSON, JSON tronqué
+    function extractJSON(raw) {
+      var str = raw.trim();
+
+      // 1. Strip markdown code blocks (```json ... ``` ou ``` ... ```)
+      str = str.replace(/^```[a-z]*\s*\n?/i, '').replace(/\n?\s*```\s*$/i, '');
+      str = str.trim();
+
+      // 2. Trouver le premier { et le dernier }
+      var firstBrace = str.indexOf('{');
+      if (firstBrace === -1) throw new Error('Pas de JSON trouvé dans la réponse. Début : ' + raw.substring(0, 200));
+      var lastBrace = str.lastIndexOf('}');
+      if (lastBrace <= firstBrace) {
+        // JSON tronqué — pas de } fermante
+        str = str.substring(firstBrace);
+        // Tenter de réparer : fermer les crochets et accolades ouverts
+        str = repairTruncatedJSON(str);
+      } else {
+        str = str.substring(firstBrace, lastBrace + 1);
+      }
+
+      // 3. Parse
+      try {
+        return JSON.parse(str);
+      } catch (e) {
+        // 4. Dernière tentative : réparer le JSON tronqué
+        try {
+          var repaired = repairTruncatedJSON(str);
+          return JSON.parse(repaired);
+        } catch (e2) {
+          throw new Error('JSON invalide après extraction. Début : ' + str.substring(0, 200));
+        }
+      }
+    }
+
+    // Répare un JSON tronqué en fermant les structures ouvertes
+    function repairTruncatedJSON(str) {
+      // Couper au dernier objet complet dans le tableau "resultats" ou "corrections"
+      // Cherche le dernier }, suivi éventuellement de whitespace
+      var lastCompleteObj = str.lastIndexOf('}');
+      if (lastCompleteObj === -1) return str;
+      var truncated = str.substring(0, lastCompleteObj + 1);
+
+      // Compter les ouvertures/fermetures
+      var openBraces = 0, openBrackets = 0, inString = false, escape = false;
+      for (var i = 0; i < truncated.length; i++) {
+        var c = truncated[i];
+        if (escape) { escape = false; continue; }
+        if (c === '\\') { escape = true; continue; }
+        if (c === '"') { inString = !inString; continue; }
+        if (inString) continue;
+        if (c === '{') openBraces++;
+        if (c === '}') openBraces--;
+        if (c === '[') openBrackets++;
+        if (c === ']') openBrackets--;
+      }
+
+      // Fermer les structures ouvertes
+      var suffix = '';
+      for (var j = 0; j < openBrackets; j++) suffix += ']';
+      for (var k = 0; k < openBraces; k++) suffix += '}';
+      console.log('[JSON-REPAIR] Fermé ' + openBrackets + ' crochets, ' + openBraces + ' accolades');
+      return truncated + suffix;
     }
 
     function generateFallbackResults(fields) {
@@ -3564,12 +3625,9 @@ Si aucune correction nécessaire, retourne {"corrections": []}`;
 
         var data = await resp.json();
         var raw = data.choices[0].message.content.trim();
-        var jsonStr = raw;
-        if (raw.startsWith('```')) {
-          jsonStr = raw.replace(/^```[a-z]*\n?/, '').replace(/\n?```$/, '');
-        }
+        console.log('[MAYA] Réponse brute : ' + raw.length + ' chars, finish_reason: ' + (data.choices[0].finish_reason || '?'));
 
-        var mayaResult = JSON.parse(jsonStr);
+        var mayaResult = extractJSON(raw);
 
         if (!mayaResult.corrections || mayaResult.corrections.length === 0) {
           console.log('[MAYA] Aucune correction — résultats confirmés.');
