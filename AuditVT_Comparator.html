@@ -3419,6 +3419,7 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
 
       if (suspects.length === 0) {
         console.log('[MAYA] Aucun résultat suspect — validation non nécessaire.');
+        results._mayaStatus = { ran: true, corrections: 0, suspects: 0, error: null };
         return results;
       }
 
@@ -3508,6 +3509,7 @@ Si aucune correction nécessaire, retourne {"corrections": []}`;
 
         if (!resp.ok) {
           console.warn('[MAYA] API HTTP ' + resp.status + ' — validation ignorée.');
+          results._mayaStatus = { ran: false, corrections: 0, suspects: suspects.length, error: 'API HTTP ' + resp.status };
           return results;
         }
 
