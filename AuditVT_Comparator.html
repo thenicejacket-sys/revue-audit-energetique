@@ -2471,7 +2471,7 @@
         const progressPct = Math.round((processed / expandedFields.length) * 90);
         updateProgress(
           progressPct,
-          'Analyse du champ ' + (batchStart + 1) + '–' + Math.min(batchStart + batchSize, expandedFields.length) + ' / ' + expandedFields.length + ' : ' + batch[0].nom,
+          'Analyse du champ ' + (batchStart + 1) + '–' + Math.min(batchStart + batch.length, expandedFields.length) + ' / ' + expandedFields.length + ' : ' + batch[0].nom,
           'Lot ' + (b + 1) + ' / ' + batches.length + ' — Interrogation IA...'
         );
 
