@@ -2566,9 +2566,28 @@
           batchResults = await callAI(batch, vtSnippet, vtSnip2, preExtracted, detectedInstances);
         } catch (err) {
           console.warn('[RETRY] Erreur IA batch ' + b + ' (1er essai) :', err.message);
+
+          // ── Si c'est le premier batch ET erreur API (pas un parse error) → arrêter l'analyse
+          if (b === 0 && err.message && err.message.startsWith('API HTTP')) {
+            showAlert('alerts-area', 'error',
+              'Erreur API dès le premier lot — analyse interrompue. Vérifiez votre clé API et le modèle sélectionné.\n' + err.message.substring(0, 200));
+            // Fallback tous les champs en MANQUANT avec l'erreur réelle
+            state.analysisResults = expandedFields.map(function(f) {
+              return {
+                id_champ: f.id, instance_label: f._forced_instance || null,
+                valeur_audit: null, valeur_vt: null,
+                extrait_audit: '', extrait_vt: '',
+                statut: 'MANQUANT',
+                commentaire: 'Erreur API : ' + err.message.substring(0, 120)
+              };
+            });
+            break; // Sortir de la boucle de batches
+          }
+
           // Retry : découper le batch en sous-batches de 2 champs max
           if (batch.length > 2) {
             var retryOk = true;
+            var retryAllFailed = true;
             var mergedResultats = [];
             var mergedTermes = [];
             for (var rb = 0; rb < batch.length; rb += 2) {
@@ -2577,10 +2596,10 @@
                 var subResult = await callAI(subBatch, vtSnippet, vtSnip2, preExtracted, detectedInstances);
                 if (subResult.resultats) mergedResultats = mergedResultats.concat(subResult.resultats);
                 if (subResult.nouveaux_termes) mergedTermes = mergedTermes.concat(subResult.nouveaux_termes);
+                retryAllFailed = false;
                 console.log('[RETRY] Sous-batch ' + Math.floor(rb/2+1) + ' OK (' + subBatch.length + ' champs)');
               } catch (retryErr) {
                 console.error('[RETRY] Sous-batch ' + Math.floor(rb/2+1) + ' échoué aussi :', retryErr.message);
-                // Fallback MANQUANT pour ces champs uniquement
                 subBatch.forEach(function(f) {
                   mergedResultats.push({
                     id_champ: f.id,
@@ -2588,28 +2607,58 @@
                     valeur_audit: null, valeur_vt: null,
                     extrait_audit: '', extrait_vt: '',
                     statut: 'MANQUANT',
-                    commentaire: 'Extraction échouée après retry — vérifier manuellement'
+                    commentaire: 'Extraction échouée — ' + retryErr.message.substring(0, 80)
                   });
                 });
               }
             }
+            // Si TOUS les sous-batches ont échoué aussi → arrêter (problème systémique)
+            if (retryAllFailed && b === 0) {
+              showAlert('alerts-area', 'error',
+                'Erreur systémique — tous les appels API échouent. Vérifiez votre clé API, le provider et le modèle.\nErreur : ' + err.message.substring(0, 200));
+              state.analysisResults = expandedFields.map(function(f) {
+                return {
+                  id_champ: f.id, instance_label: f._forced_instance || null,
+                  valeur_audit: null, valeur_vt: null,
+                  extrait_audit: '', extrait_vt: '',
+                  statut: 'MANQUANT',
+                  commentaire: 'Erreur API : ' + err.message.substring(0, 120)
+                };
+              });
+              break;
+            }
             batchResults = { resultats: mergedResultats, nouveaux_termes: mergedTermes };
             showAlert('alerts-area', 'warning',
-              'Lot ' + (b + 1) + ' : retry en sous-batches appliqué — certains champs peuvent nécessiter une vérification manuelle.');
+              'Lot ' + (b + 1) + ' : retry en sous-batches appliqué. Erreur initiale : ' + err.message.substring(0, 120));
           } else {
             // Batch déjà petit → fallback MANQUANT
             console.error('[RETRY] Batch de ' + batch.length + ' champ(s) — pas de sous-découpe possible.');
+            // Si premier batch petit et échoué → arrêter
+            if (b === 0) {
+              showAlert('alerts-area', 'error',
+                'Erreur API dès le premier lot — analyse interrompue.\nErreur : ' + err.message.substring(0, 200));
+              state.analysisResults = expandedFields.map(function(f) {
+                return {
+                  id_champ: f.id, instance_label: f._forced_instance || null,
+                  valeur_audit: null, valeur_vt: null,
+                  extrait_audit: '', extrait_vt: '',
+                  statut: 'MANQUANT',
+                  commentaire: 'Erreur API : ' + err.message.substring(0, 120)
+                };
+              });
+              break;
+            }
             batchResults = { resultats: batch.map(function(f) {
               return {
                 id_champ: f.id, instance_label: f._forced_instance || null,
                 valeur_audit: null, valeur_vt: null,
                 extrait_audit: '', extrait_vt: '',
                 statut: 'MANQUANT',
-                commentaire: 'Extraction échouée — vérifier manuellement'
+                commentaire: 'Extraction échouée — ' + err.message.substring(0, 80)
               };
             }), nouveaux_termes: [] };
             showAlert('alerts-area', 'warning',
-              'Lot ' + (b + 1) + ' : extraction échouée pour ' + batch.length + ' champ(s) — marqués MANQUANT.');
+              'Lot ' + (b + 1) + ' : extraction échouée. Erreur : ' + err.message.substring(0, 120));
           }
         }
 
