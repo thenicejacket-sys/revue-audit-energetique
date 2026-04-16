@@ -1595,6 +1595,17 @@
               <input type="text" id="model-custom-input" class="form-input" placeholder="ex: openai/gpt-4o" oninput="onConfigChange()" />
             </div>
 
+            <div class="form-group" style="margin-top:12px;">
+              <label class="form-label" style="display:flex;align-items:center;gap:10px;cursor:pointer">
+                <input type="checkbox" id="maya-toggle" checked onchange="onMayaToggle()" style="accent-color:#7B2D8E;width:16px;height:16px" />
+                <span>Agent Maya — validation post-extraction</span>
+                <span style="font-size:10px;padding:2px 8px;background:#7B2D8E;color:white;border-radius:10px;font-weight:700">&#10022; Maya</span>
+              </label>
+              <p style="font-size:11px;color:var(--text-muted);margin-top:4px;margin-left:26px">
+                Vérifie automatiquement les résultats ROUGE et MANQUANT pour détecter les erreurs de confusion, valeurs aberrantes et faux MANQUANT. Ajoute un appel API supplémentaire par analyse.
+              </p>
+            </div>
+
             <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:8px;">
               <button class="btn btn-outline" onclick="testConnection()">
                 <i data-lucide="zap" style="width:14px;height:14px"></i>
@@ -1794,7 +1805,8 @@
         provider: 'openai',
         apiKey: '',
         model: 'gpt-4o-mini',
-        customModel: ''
+        customModel: '',
+        mayaEnabled: true
       },
       analysisRunning: false
     };
@@ -2055,8 +2067,14 @@
               var valMatch = afterOm.match(/observ[^a-z]*[\/]?\s*[Mm]esur[eé][^a-z]*\s+([^\n]{1,80})/i);
               if (valMatch) {
                 var val = valMatch[1].trim();
-                // Stoppe à la prochaine entrée (mot suivi de Observé/Mesuré)
-                val = val.split(/\s+[A-ZÀ-Ÿ][a-zà-ÿ]/)[0].trim();
+                // Stoppe uniquement sur un vrai début de nouvelle entrée BATIAUDIT
+                // (saut de ligne suivi d'un label Observé/Mesuré, ou une ligne vide)
+                val = val.split(/\n/)[0].trim();
+                // Sécurité : si la valeur contient "Observé" c'est le début du champ suivant → couper avant
+                var nextOmIdx = val.toLowerCase().indexOf('observ');
+                if (nextOmIdx > 0) val = val.substring(0, nextOmIdx).trim();
+                // Limiter à 120 chars max
+                if (val.length > 120) val = val.substring(0, 120).trim();
                 if (val) return val;
               }
             }
@@ -2410,20 +2428,21 @@
         console.log('[EXPANSION instance-first] ' + refFields.length + ' champs → ' + expandedFields.length + ' (' + _instOrderList.length + ' instances : ' + _instOrderList.join(' / ') + ')');
       }
 
-      // Batching intelligent : 1 batch par instance (tous les champs d'une fenêtre/paroi ensemble)
-      // Pour les champs non-expansés (autres sections), batch de 5 classique
-      const batchSize = 5;
+      // Batching intelligent adaptatif :
+      // - Instances pré-labellisées : batchSize = 3 (réponses plus longues par champ)
+      // - Champs non-expansés (simples) : batchSize = 5
+      const BATCH_INSTANCE = 3;
+      const BATCH_SIMPLE   = 5;
       var batches = [];
       // Batches instance-par-instance pour les champs expansés
       _instOrderList.forEach(function(lbl) {
         var instFields = expandedFields.filter(function(f) { return f._forced_instance === lbl; });
-        // Découper en chunks de batchSize pour ne pas dépasser les limites de l'API
-        for (var _bi = 0; _bi < instFields.length; _bi += batchSize) {
-          batches.push(instFields.slice(_bi, _bi + batchSize));
+        for (var _bi = 0; _bi < instFields.length; _bi += BATCH_INSTANCE) {
+          batches.push(instFields.slice(_bi, _bi + BATCH_INSTANCE));
         }
       });
       // Batches classiques pour les champs non-expansés
-      var chunkNonExp = chunkArray(_nonExpandedFields, batchSize);
+      var chunkNonExp = chunkArray(_nonExpandedFields, BATCH_SIMPLE);
       chunkNonExp.forEach(function(c) { batches.push(c); });
       let processed = 0;
 
@@ -2485,14 +2504,52 @@
         try {
           batchResults = await callAI(batch, vtSnippet, vtSnip2, preExtracted, detectedInstances);
         } catch (err) {
-          console.error('Erreur IA batch ' + b + ':', err);
-          showProgress(false);
-          state.analysisRunning = false;
-          document.getElementById('btn-analyze').disabled = false;
-          showAlert('alerts-area', 'error',
-            'Erreur API IA (lot ' + (b + 1) + '/' + batches.length + ') : ' + err.message +
-            ' — Vérifiez votre clé API, le modèle sélectionné, et votre connexion internet.');
-          return;
+          console.warn('[RETRY] Erreur IA batch ' + b + ' (1er essai) :', err.message);
+          // Retry : découper le batch en sous-batches de 2 champs max
+          if (batch.length > 2) {
+            var retryOk = true;
+            var mergedResultats = [];
+            var mergedTermes = [];
+            for (var rb = 0; rb < batch.length; rb += 2) {
+              var subBatch = batch.slice(rb, rb + 2);
+              try {
+                var subResult = await callAI(subBatch, vtSnippet, vtSnip2, preExtracted, detectedInstances);
+                if (subResult.resultats) mergedResultats = mergedResultats.concat(subResult.resultats);
+                if (subResult.nouveaux_termes) mergedTermes = mergedTermes.concat(subResult.nouveaux_termes);
+                console.log('[RETRY] Sous-batch ' + Math.floor(rb/2+1) + ' OK (' + subBatch.length + ' champs)');
+              } catch (retryErr) {
+                console.error('[RETRY] Sous-batch ' + Math.floor(rb/2+1) + ' échoué aussi :', retryErr.message);
+                // Fallback MANQUANT pour ces champs uniquement
+                subBatch.forEach(function(f) {
+                  mergedResultats.push({
+                    id_champ: f.id,
+                    instance_label: f._forced_instance || null,
+                    valeur_audit: null, valeur_vt: null,
+                    extrait_audit: '', extrait_vt: '',
+                    statut: 'MANQUANT',
+                    commentaire: 'Extraction échouée après retry — vérifier manuellement'
+                  });
+                });
+              }
+            }
+            batchResults = { resultats: mergedResultats, nouveaux_termes: mergedTermes };
+            showAlert('alerts-area', 'warning',
+              'Lot ' + (b + 1) + ' : retry en sous-batches appliqué — certains champs peuvent nécessiter une vérification manuelle.');
+          } else {
+            // Batch déjà petit → fallback MANQUANT
+            console.error('[RETRY] Batch de ' + batch.length + ' champ(s) — pas de sous-découpe possible.');
+            batchResults = { resultats: batch.map(function(f) {
+              return {
+                id_champ: f.id, instance_label: f._forced_instance || null,
+                valeur_audit: null, valeur_vt: null,
+                extrait_audit: '', extrait_vt: '',
+                statut: 'MANQUANT',
+                commentaire: 'Extraction échouée — vérifier manuellement'
+              };
+            }), nouveaux_termes: [] };
+            showAlert('alerts-area', 'warning',
+              'Lot ' + (b + 1) + ' : extraction échouée pour ' + batch.length + ' champ(s) — marqués MANQUANT.');
+          }
         }
 
         // ---- Helpers post-traitement ----
@@ -2729,6 +2786,25 @@
         // conditionnel : inclure uniquement si trouvé dans l'audit
         return !!(rv.valeur_audit && rv.valeur_audit.trim() && rv.valeur_audit.trim() !== '-');
       });
+
+      // ── Agent Maya — Validation post-extraction ──────────────────────────
+      if (state.config.mayaEnabled !== false) {
+        var suspectsCount = state.analysisResults.filter(function(r) { return r.statut === 'ROUGE' || r.statut === 'MANQUANT'; }).length;
+        if (suspectsCount > 0) {
+          updateProgress(92, 'Validation Maya en cours...', suspectsCount + ' résultat(s) suspect(s) — agent Maya vérifie...');
+          await sleep(100);
+          // Enrichir les résultats avec le nom du champ pour Maya
+          state.analysisResults.forEach(function(r) {
+            var rf = state.referentiel.find(function(ref) { return ref.id === r.id_champ; });
+            if (rf) r._fieldNom = rf.nom;
+          });
+          state.analysisResults = await callMaya(state.analysisResults, auditFull, vtFull);
+          var corrected = state.analysisResults.filter(function(r) { return r._maya_corrected; }).length;
+          if (corrected > 0) {
+            showAlert('alerts-area', 'info', 'Maya a corrigé ' + corrected + ' résultat(s) suspect(s). Les corrections sont marquées [Maya] dans les commentaires.');
+          }
+        }
+      }
 
       updateProgress(95, 'Compilation des résultats...', 'Extraction des contextes sources...');
       await sleep(200);
@@ -3193,7 +3269,7 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
 
       // AbortSignal compatible avec tous navigateurs
       const abortCtrl = new AbortController();
-      const timeoutId = setTimeout(function() { abortCtrl.abort(); }, 90000);
+      const timeoutId = setTimeout(function() { abortCtrl.abort(); }, 120000);
 
       let resp;
       try {
@@ -3207,7 +3283,7 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
               { role: 'user', content: userContent }
             ],
             temperature: 0.1,
-            max_tokens: 3500
+            max_tokens: 12000
           }),
           signal: abortCtrl.signal
         });
@@ -3250,6 +3326,166 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
         })),
         nouveaux_termes: []
       };
+    }
+
+    // =====================================================================
+    // AGENT MAYA — Validation post-extraction (Fix B)
+    // Vérifie les résultats ROUGE/MANQUANT pour détecter anomalies et corrections
+    // =====================================================================
+    async function callMaya(results, auditText, vtText) {
+      // Ne traiter que les résultats suspects (ROUGE, MANQUANT, ou valeurs aberrantes)
+      var suspects = results.filter(function(r) {
+        if (r.statut === 'ROUGE' || r.statut === 'MANQUANT') return true;
+        // Valeur aberrante : surface > 15 m² pour un ouvrant
+        if (r.instance_label && r.valeur_audit) {
+          var num = parseFloat(String(r.valeur_audit).replace(',', '.'));
+          if (!isNaN(num) && num > 15 && /fen[eê]tre|porte|baie|ouvrant/i.test(r.instance_label || '')) return true;
+        }
+        return false;
+      });
+
+      if (suspects.length === 0) {
+        console.log('[MAYA] Aucun résultat suspect — validation non nécessaire.');
+        return results;
+      }
+
+      console.log('[MAYA] ' + suspects.length + ' résultat(s) suspect(s) à valider.');
+
+      var mayaSystemPrompt = `Tu es Maya, experte en audit énergétique et contrôle qualité des données.
+Tu reçois des résultats d'analyse Audit vs VT qui semblent incorrects (ROUGE ou MANQUANT).
+
+Ton rôle : valider ou corriger ces résultats en te basant sur le texte source.
+
+RÈGLES :
+1. Pour chaque résultat, vérifie si la valeur est physiquement réaliste :
+   - Surface d'un ouvrant (fenêtre/porte/baie) : 0,3 à 6 m². Si > 10 m² = confusion avec SHAB
+   - Hauteur sous plafond : 2,0 à 3,5 m
+   - Résistance thermique R : 0 à 12 m².K/W
+   - Épaisseur lame d'air : 4 à 24 mm
+2. Pour les MANQUANT : vérifie si la valeur existe réellement dans le texte VT sous un autre libellé
+3. Pour les ROUGE : vérifie si les deux valeurs ne disent pas la même chose différemment
+   - "Non isolé" vs "Non" → même sens = devrait être VERT
+   - "1,0" vs "RDC" → même sens = devrait être VERT
+4. NE CORRIGE PAS les VERT existants
+5. Confiance minimale pour corriger : 0.85
+
+Réponds UNIQUEMENT en JSON strict :
+{
+  "corrections": [
+    {
+      "id_champ": "...",
+      "instance_label": "...",
+      "action": "corriger_statut|corriger_valeur|confirmer_manquant",
+      "nouveau_statut": "VERT|ORANGE|ROUGE|MANQUANT",
+      "valeur_vt_corrigee": "... ou null si pas de correction de valeur",
+      "raison": "explication courte (max 100 chars)"
+    }
+  ]
+}
+Si aucune correction nécessaire, retourne {"corrections": []}`;
+
+      var suspectsCompact = suspects.map(function(r) {
+        return {
+          id_champ: r.id_champ,
+          instance_label: r.instance_label || null,
+          nom: r._fieldNom || r.id_champ,
+          statut_actuel: r.statut,
+          valeur_audit: r.valeur_audit,
+          valeur_vt: r.valeur_vt,
+          commentaire: r.commentaire
+        };
+      });
+
+      // VT courte pour Maya (premiers 30K — suffisant pour validation)
+      var vtShort = vtText.substring(0, 30000);
+
+      var mayaContent = `RÉSULTATS SUSPECTS À VALIDER :\n${JSON.stringify(suspectsCompact, null, 2)}\n\n---\nEXTRAIT VT (pour vérification) :\n${vtShort}`;
+
+      var endpoint = state.config.provider === 'openai'
+        ? 'https://api.openai.com/v1/chat/completions'
+        : 'https://openrouter.ai/api/v1/chat/completions';
+
+      // Maya utilise le même modèle que l'analyse principale (ou un modèle plus léger si configuré)
+      var mayaModel = state.config.mayaModel || state.config.model;
+      if (mayaModel === 'custom') mayaModel = state.config.customModel;
+
+      var headers = {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + state.config.apiKey
+      };
+      if (state.config.provider === 'openrouter') {
+        headers['HTTP-Referer'] = window.location.href;
+        headers['X-Title'] = 'AuditVT Comparator - Maya Validation';
+      }
+
+      try {
+        var resp = await fetch(endpoint, {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify({
+            model: mayaModel,
+            messages: [
+              { role: 'system', content: mayaSystemPrompt },
+              { role: 'user', content: mayaContent }
+            ],
+            temperature: 0.05,
+            max_tokens: 4000
+          })
+        });
+
+        if (!resp.ok) {
+          console.warn('[MAYA] API HTTP ' + resp.status + ' — validation ignorée.');
+          return results;
+        }
+
+        var data = await resp.json();
+        var raw = data.choices[0].message.content.trim();
+        var jsonStr = raw;
+        if (raw.startsWith('```')) {
+          jsonStr = raw.replace(/^```[a-z]*\n?/, '').replace(/\n?```$/, '');
+        }
+
+        var mayaResult = JSON.parse(jsonStr);
+
+        if (!mayaResult.corrections || mayaResult.corrections.length === 0) {
+          console.log('[MAYA] Aucune correction — résultats confirmés.');
+          return results;
+        }
+
+        // Appliquer les corrections
+        var corrCount = 0;
+        mayaResult.corrections.forEach(function(corr) {
+          if (corr.action === 'confirmer_manquant') return; // pas de changement
+          var target = results.find(function(r) {
+            return r.id_champ === corr.id_champ &&
+                   (r.instance_label || null) === (corr.instance_label || null);
+          });
+          if (!target) return;
+
+          // Sauvegarder l'état original pour le bouton "Annuler"
+          if (!target._maya_original) {
+            target._maya_original = {
+              statut: target.statut,
+              valeur_vt: target.valeur_vt,
+              commentaire: target.commentaire
+            };
+          }
+
+          if (corr.nouveau_statut) target.statut = corr.nouveau_statut;
+          if (corr.valeur_vt_corrigee) target.valeur_vt = corr.valeur_vt_corrigee;
+          target.commentaire = (target.commentaire ? target.commentaire + ' ' : '') + '[Maya: ' + corr.raison + ']';
+          target._maya_corrected = true;
+          corrCount++;
+          console.log('[MAYA] Correction : ' + corr.id_champ + (corr.instance_label ? ' (' + corr.instance_label + ')' : '') + ' → ' + corr.nouveau_statut + ' — ' + corr.raison);
+        });
+
+        console.log('[MAYA] ' + corrCount + ' correction(s) appliquée(s).');
+        return results;
+
+      } catch (mayaErr) {
+        console.warn('[MAYA] Erreur validation — résultats non modifiés :', mayaErr.message);
+        return results;
+      }
     }
 
     function playCompletionBell() {
@@ -3470,7 +3706,7 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
             '<td style="max-width:180px;font-size:12px">' + escHtml(r.valeur_audit || '\u2014') + '</td>' +
             '<td style="max-width:180px;font-size:12px">' + escHtml(r.valeur_vt || '\u2014') + '</td>' +
             '<td>' + statusChip(r.statut) + '</td>' +
-            '<td style="max-width:200px;font-size:12px;color:var(--text-muted)">' + escHtml(r.commentaire || '\u2014') + '</td>' +
+            '<td style="max-width:200px;font-size:12px;color:var(--text-muted)">' + escHtml(r.commentaire || '\u2014') + (r._maya_corrected ? ' <span style="display:inline-block;margin-top:3px;padding:1px 7px;background:#7B2D8E;color:white;border-radius:10px;font-size:9px;font-weight:700">&#10022; Maya</span>' : '') + '</td>' +
             '<td>' + revuSelectHtml(r.id_champ, r.instance_label, r.revu_doc) + '</td>';
           tbody.appendChild(row);
         });
@@ -4622,6 +4858,10 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
         }
       }
 
+      // Restaurer le toggle Maya
+      var mayaEl = document.getElementById('maya-toggle');
+      if (mayaEl) mayaEl.checked = state.config.mayaEnabled !== false;
+
       updatePrereqs();
     }
 
@@ -4678,6 +4918,10 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
       }
 
       onModelChange();
+    }
+
+    function onMayaToggle() {
+      state.config.mayaEnabled = document.getElementById('maya-toggle').checked;
     }
 
     function onModelChange() {
@@ -4753,6 +4997,7 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
     function saveConfig() {
       state.config.apiKey     = document.getElementById('api-key-input').value.trim();
       state.config.provider   = document.querySelector('input[name="provider"]:checked').value;
+      state.config.mayaEnabled = document.getElementById('maya-toggle').checked;
       const modelSel = document.getElementById('model-select').value;
       if (modelSel === 'custom') {
         state.config.model = document.getElementById('model-custom-input').value.trim();
@@ -4779,7 +5024,7 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
     function clearConfig() {
       if (!confirm('Effacer la configuration IA (clé API) ?')) return;
       localStorage.removeItem(STORAGE_KEY_CONFIG);
-      state.config = { provider: 'openai', apiKey: '', model: 'gpt-4o-mini', customModel: '' };
+      state.config = { provider: 'openai', apiKey: '', model: 'gpt-4o-mini', customModel: '', mayaEnabled: true };
       applyConfigToUI();
       document.getElementById('api-key-input').value = '';
       updatePrereqs();
