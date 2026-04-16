@@ -1601,10 +1601,10 @@
                 <span style="white-space:nowrap">&#10022; Maya — Validation post-extraction</span>
               </label>
               <p style="font-size:11px;color:var(--text-muted);margin-top:4px;margin-left:26px">
-                Vérifie les résultats ROUGE / MANQUANT (erreurs de confusion, valeurs aberrantes, faux MANQUANT). +1 appel API.
+                Re-vérifie automatiquement les résultats suspects (+1 appel API).
               </p>
               <div id="maya-model-group" style="margin-top:8px;margin-left:26px;">
-                <label class="form-label" style="font-size:12px;">Modèle Maya Pass 2 <span style="font-size:10px;color:var(--text-muted)">(validation — un modèle plus puissant améliore les corrections)</span></label>
+                <label class="form-label" style="font-size:12px;">Modèle Maya</label>
                 <select class="form-select" id="maya-model-select" onchange="onMayaModelChange()" style="max-width:320px;">
                   <option value="">Même modèle que Pass 1</option>
                   <optgroup label="OpenAI">
@@ -1627,16 +1627,16 @@
             <div class="form-group" style="margin-top:12px;">
               <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;flex-wrap:nowrap">
                 <input type="checkbox" id="fixc-toggle" onchange="onFixCToggle()" style="accent-color:#0D47A1;width:16px;height:16px;flex-shrink:0" />
-                <span style="white-space:nowrap">&#9670; Mode Pr\u00e9cision (Fix C)</span>
+                <span style="white-space:nowrap">&#9670; Mod&#232;le avanc&#233; ++</span>
               </label>
               <p style="font-size:11px;color:var(--text-muted);margin-top:4px;margin-left:26px">
-                Mod\u00e8le plus puissant + batches r\u00e9duits (2 champs/appel). Plus lent, plus cher, mais extraction nettement meilleure.
+                Utilise un mod&#232;le plus puissant avec des batches r&#233;duits pour une extraction plus pr&#233;cise.
               </p>
               <div id="fixc-model-group" style="margin-top:8px;margin-left:26px;display:none;">
-                <label class="form-label" style="font-size:12px;">Mod\u00e8le Fix C <span style="font-size:10px;color:var(--text-muted)">(extraction — mod\u00e8les \u00e0 forte capacit\u00e9 de raisonnement)</span></label>
+                <label class="form-label" style="font-size:12px;">Mod&#232;le avanc&#233;</label>
                 <select class="form-select" id="fixc-model-select" onchange="onFixCModelChange()" style="max-width:320px;">
                   <optgroup label="OpenAI">
-                    <option value="gpt-4o" selected>GPT-4o (recommand\u00e9)</option>
+                    <option value="gpt-4o" selected>GPT-4o (recommand&#233;)</option>
                     <option value="gpt-4.1">GPT-4.1</option>
                     <option value="gpt-4.1-mini">GPT-4.1 mini</option>
                   </optgroup>
