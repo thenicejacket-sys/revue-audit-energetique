@@ -4066,8 +4066,8 @@ Si aucune correction nécessaire, retourne {"corrections": []}`;
         });
       }
 
-      // Réservation de la position 3 pour "Audit énergétique" (populé plus bas)
-      var wsENE = wb.addWorksheet('Audit \u00e9nerg\u00e9tique');
+      // Réservation de la position 3 pour "Parois" (populé plus bas)
+      var wsENE = wb.addWorksheet('Parois');
 
       // ── ONGLET 4 : Référentiel vs Audit ──────────────────────────────────
       var ws3=wb.addWorksheet('R\u00e9f\u00e9rentiel vs Audit');
@@ -4156,7 +4156,7 @@ Si aucune correction nécessaire, retourne {"corrections": []}`;
         sc(r.getCell(3),rowBg4,rowTxt4,{}); sc(r.getCell(4),badgeBg4,C.WHT,{bold:true,align:'center'});
       });
 
-      // ── ONGLET 3 : Audit énergétique (tableau pivoté par catégorie) ──────
+      // ── ONGLET 3 : Parois (tableau pivoté par catégorie) ──────
       var ws5 = wsENE; // sheet déjà créé en position 3 (voir réservation ci-dessus)
       var ENE_HDR='FF0D47A1', ENE_CAT='FF1565C0', ENE_FLD='FF1976D2', ENE_SUB='FF42A5F5';
       var ENE_AUD_BG='FFE3F2FD', ENE_VT_BG='FFE8F5E9';
