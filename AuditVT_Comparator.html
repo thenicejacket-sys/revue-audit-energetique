@@ -1604,6 +1604,25 @@
               <p style="font-size:11px;color:var(--text-muted);margin-top:4px;margin-left:26px">
                 Vérifie automatiquement les résultats ROUGE et MANQUANT pour détecter les erreurs de confusion, valeurs aberrantes et faux MANQUANT. Ajoute un appel API supplémentaire par analyse.
               </p>
+              <div id="maya-model-group" style="margin-top:8px;margin-left:26px;">
+                <label class="form-label" style="font-size:12px;">Modèle Maya Pass 2 <span style="font-size:10px;color:var(--text-muted)">(validation — un modèle plus puissant améliore les corrections)</span></label>
+                <select class="form-select" id="maya-model-select" onchange="onMayaModelChange()" style="max-width:320px;">
+                  <option value="">Même modèle que Pass 1</option>
+                  <optgroup label="OpenAI">
+                    <option value="gpt-4o">gpt-4o (recommandé)</option>
+                    <option value="gpt-4o-mini">gpt-4o-mini</option>
+                    <option value="gpt-4.1">gpt-4.1</option>
+                  </optgroup>
+                  <optgroup label="Anthropic (via OpenRouter)">
+                    <option value="anthropic/claude-sonnet-4-6">Claude Sonnet 4.6</option>
+                    <option value="anthropic/claude-haiku-4-5-20251001">Claude Haiku 4.5</option>
+                  </optgroup>
+                  <optgroup label="Google (via OpenRouter)">
+                    <option value="google/gemini-2.5-flash">Gemini 2.5 Flash</option>
+                    <option value="google/gemini-2.5-pro">Gemini 2.5 Pro</option>
+                  </optgroup>
+                </select>
+              </div>
             </div>
 
             <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:8px;">
@@ -4858,9 +4877,13 @@ Si aucune correction nécessaire, retourne {"corrections": []}`;
         }
       }
 
-      // Restaurer le toggle Maya
+      // Restaurer le toggle Maya + modèle Maya
       var mayaEl = document.getElementById('maya-toggle');
       if (mayaEl) mayaEl.checked = state.config.mayaEnabled !== false;
+      var mayaModelEl = document.getElementById('maya-model-select');
+      if (mayaModelEl && state.config.mayaModel) mayaModelEl.value = state.config.mayaModel;
+      var mayaGroup = document.getElementById('maya-model-group');
+      if (mayaGroup) mayaGroup.style.display = (state.config.mayaEnabled !== false) ? '' : 'none';
 
       updatePrereqs();
     }
@@ -4922,6 +4945,12 @@ Si aucune correction nécessaire, retourne {"corrections": []}`;
 
     function onMayaToggle() {
       state.config.mayaEnabled = document.getElementById('maya-toggle').checked;
+      var mg = document.getElementById('maya-model-group');
+      if (mg) mg.style.display = state.config.mayaEnabled ? '' : 'none';
+    }
+
+    function onMayaModelChange() {
+      state.config.mayaModel = document.getElementById('maya-model-select').value || '';
     }
 
     function onModelChange() {
@@ -4998,6 +5027,7 @@ Si aucune correction nécessaire, retourne {"corrections": []}`;
       state.config.apiKey     = document.getElementById('api-key-input').value.trim();
       state.config.provider   = document.querySelector('input[name="provider"]:checked').value;
       state.config.mayaEnabled = document.getElementById('maya-toggle').checked;
+      state.config.mayaModel  = document.getElementById('maya-model-select').value || '';
       const modelSel = document.getElementById('model-select').value;
       if (modelSel === 'custom') {
         state.config.model = document.getElementById('model-custom-input').value.trim();
