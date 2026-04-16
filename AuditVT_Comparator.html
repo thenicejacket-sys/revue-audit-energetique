@@ -2364,6 +2364,37 @@
           if (generic[gcat4].indexOf(glabel4) < 0) generic[gcat4].push(glabel4);
         }
 
+        // ===== DEDUP CROSS-CATÉGORIE =====
+        // Une paroi ne peut PAS apparaître dans 2 catégories.
+        // Si doublon : la catégorie sémantique (via catFromLabel) prime.
+        // Si indéterminé : on garde la première occurrence (PASS 0 > PASS 3).
+        var allCats = [
+          { name:'murs',        arr:murs },
+          { name:'planchers',   arr:planchers },
+          { name:'toitures',    arr:toitures },
+          { name:'menuiseries', arr:menuiseries }
+        ];
+        var seen = {};
+        allCats.forEach(function(cat) {
+          cat.arr.forEach(function(label) {
+            if (!seen[label]) seen[label] = [];
+            seen[label].push(cat);
+          });
+        });
+        Object.keys(seen).forEach(function(label) {
+          if (seen[label].length <= 1) return;
+          // Doublon détecté — déterminer la bonne catégorie par sémantique
+          var semCat = catFromLabel(label.toLowerCase());
+          var keepCat = semCat || seen[label][0].name; // sémantique, ou première occurrence
+          console.log('[DEDUP] "' + label + '" dans ' + seen[label].map(function(c){return c.name;}).join('+') + ' → gardé dans ' + keepCat);
+          seen[label].forEach(function(cat) {
+            if (cat.name !== keepCat) {
+              var idx = cat.arr.indexOf(label);
+              if (idx >= 0) cat.arr.splice(idx, 1);
+            }
+          });
+        });
+
         return { murs:murs, planchers:planchers, toitures:toitures, menuiseries:menuiseries, generic:generic };
       }
       // Vérifie qu'un extrait cité par l'IA existe réellement dans le texte source
