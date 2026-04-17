@@ -1614,7 +1614,7 @@
                   </optgroup>
                   <optgroup label="Anthropic (via OpenRouter)">
                     <option value="anthropic/claude-sonnet-4-6">Claude Sonnet 4.6</option>
-                    <option value="anthropic/claude-haiku-4-5-20251001">Claude Haiku 4.5</option>
+                    <option value="anthropic/claude-haiku-4-5">Claude Haiku 4.5</option>
                   </optgroup>
                   <optgroup label="Google (via OpenRouter)">
                     <option value="google/gemini-2.5-flash">Gemini 2.5 Flash</option>
@@ -1642,7 +1642,7 @@
                   </optgroup>
                   <optgroup label="Anthropic (via OpenRouter)">
                     <option value="anthropic/claude-sonnet-4-6">Claude Sonnet 4.6</option>
-                    <option value="anthropic/claude-haiku-4-5-20251001">Claude Haiku 4.5</option>
+                    <option value="anthropic/claude-haiku-4-5">Claude Haiku 4.5</option>
                   </optgroup>
                   <optgroup label="Google (via OpenRouter)">
                     <option value="google/gemini-2.5-pro">Gemini 2.5 Pro</option>
@@ -1837,9 +1837,11 @@
     // =====================================================================
     const state = {
       auditText: null,
+      auditTables: null,
       auditFileName: null,
       auditFileSize: null,
       vtText: null,
+      vtTables: null,
       vtFileName: null,
       vtFileSize: null,
       dossierName: '',
@@ -1926,15 +1928,20 @@
       reader.onload = async function(ev) {
         try {
           const arrayBuffer = ev.target.result;
-          const text = await extractPdfText(arrayBuffer, side);
+          const result = await extractPdfText(arrayBuffer, side);
+          const text = result.text;
           if (side === 'audit') {
             state.auditText = text;
             state.auditFileName = file.name;
             state.auditFileSize = file.size;
+            // Extraction tabulaire structurée — audit
+            state.auditTables = extractAuditTablesFromItems(result.items);
           } else {
             state.vtText = text;
             state.vtFileName = file.name;
             state.vtFileSize = file.size;
+            // Extraction tabulaire structurée — VT
+            state.vtTables = extractTablesFromItems(result.items);
           }
           setDropZoneLoaded(side, file.name, file.size, text);
           updatePrereqs();
@@ -1950,11 +1957,364 @@
       reader.readAsArrayBuffer(file);
     }
 
+    // Helper : matching mot-clé adapté à la longueur (exact match pour ≤3 chars, includes pour le reste)
+    function keywordMatchesCell(cellText, kw) {
+      if (kw.length <= 3) {
+        // Exact match ou mot isolé (word boundary) pour les keywords courts (u, r, up, nb)
+        var re = new RegExp('\\b' + kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b');
+        return re.test(cellText);
+      }
+      return cellText.includes(kw);
+    }
+
+    // =====================================================================
+    // EXTRACTION TABULAIRE STRUCTURÉE — VT
+    // =====================================================================
+    function extractTablesFromItems(items) {
+      if (!items || items.length === 0) return {};
+
+      // Mots-clés d'en-têtes connus dans les tableaux VT
+      const HEADER_KEYWORDS = [
+        'type', 'année', 'annee', 'marque', 'modèle', 'modele', 'puissance',
+        'énergie', 'energie', 'orientation', 'surface', 'dimensions',
+        'composition', 'matériaux', 'materiaux', 'mitoyenneté', 'mitoyennete',
+        'isolation', 'épaisseur', 'epaisseur', 'résistance', 'resistance',
+        'vitrage', 'menuiserie', 'largeur', 'hauteur', 'quantité', 'quantite',
+        'nature', 'état', 'etat', 'référence', 'reference', 'emplacement',
+        'ventilation', 'débit', 'debit', 'nb', 'nombre', 'description',
+        'doublage', 'r', 'u', 'up', 'façade', 'facade', 'paroi'
+      ];
+
+      // Catégories détectables par le contexte textuel au-dessus du tableau
+      const CATEGORY_PATTERNS = [
+        { key: 'CHAUFFAGE',    re: /chauffage|chaudière|chaudiere|radiateur|émetteur|emetteur|pac|pompe.*chaleur/i },
+        { key: 'ECS',          re: /eau.*chaude|ecs|ballon|chauffe.?eau|production.*sanitaire/i },
+        { key: 'VENTILATION',  re: /ventilation|vmc|extracteur|aération|aeration/i },
+        { key: 'FACADES',      re: /fa[çc]ade|paroi|mur.*ext[eé]rieur|murs|parois.*opaques/i },
+        { key: 'MENUISERIES',  re: /menuiserie|fen[eê]tre|vitrage|ouvrant|baie|porte.*fen/i },
+        { key: 'PLANCHERS',    re: /plancher|sol|dalle/i },
+        { key: 'TOITURES',     re: /toiture|toit|comble|plafond.*haut|couverture/i }
+      ];
+
+      // Y_TOLERANCE : items sur la même ligne si |y1 - y2| <= tolérance
+      const Y_TOLERANCE = 3;
+      // MIN_COLUMNS : nombre min de cellules pour considérer une ligne comme en-tête
+      const MIN_HEADER_CELLS = 3;
+
+      // 1) Grouper TOUS les items par Y (cross-page) — gère les tableaux multi-pages
+      // On crée une clé composite (page, Y) pour conserver l'ordre lecture haut→bas
+      var allSorted = items.slice().sort(function(a, b) {
+        if (a.page !== b.page) return a.page - b.page;
+        return b.y - a.y; // Y décroissant (haut → bas en PDF)
+      });
+
+      var yGroups = [];
+      var currentGroup = null;
+      var lastPage = -1;
+
+      allSorted.forEach(function(it) {
+        // Changement de page → forcer un nouveau groupe (même si Y proche)
+        var pageChanged = (it.page !== lastPage);
+        lastPage = it.page;
+        if (!currentGroup || pageChanged || Math.abs(currentGroup.y - it.y) > Y_TOLERANCE) {
+          currentGroup = { y: it.y, page: it.page, cells: [] };
+          yGroups.push(currentGroup);
+        }
+        currentGroup.cells.push(it);
+      });
+
+      // Trier les cellules de chaque ligne par X croissant
+      yGroups.forEach(function(g) {
+        g.cells.sort(function(a, b) { return a.x - b.x; });
+      });
+
+      var tables = {};
+
+      // 2) Détecter les lignes d'en-têtes
+      for (var gi = 0; gi < yGroups.length; gi++) {
+        var row = yGroups[gi];
+        if (row.cells.length < MIN_HEADER_CELLS) continue;
+
+        // Vérifier si cette ligne contient des mots-clés d'en-tête
+        var headerTexts = row.cells.map(function(c) { return c.str; });
+        var matchCount = 0;
+        headerTexts.forEach(function(t) {
+          var tLow = t.toLowerCase().trim();
+          if (HEADER_KEYWORDS.some(function(kw) { return keywordMatchesCell(tLow, kw); })) {
+            matchCount++;
+          }
+        });
+
+        // Au moins 2 mots-clés reconnus pour considérer comme en-tête
+        if (matchCount < 2) continue;
+
+        // Colonnes X de référence (positions des en-têtes)
+        var headerCols = row.cells.map(function(c) { return { x: c.x, name: c.str.trim() }; });
+
+        // 3) Détecter la catégorie via le texte au-dessus de l'en-tête
+        var category = 'AUTRE';
+        // Regarder les 5 lignes précédentes (même page) pour trouver un mot-clé de catégorie
+        for (var lookBack = 1; lookBack <= Math.min(5, gi); lookBack++) {
+          var prevRow = yGroups[gi - lookBack];
+          if (prevRow.page !== row.page) break; // ne pas remonter sur la page précédente
+          var prevText = prevRow.cells.map(function(c) { return c.str; }).join(' ');
+          for (var cp = 0; cp < CATEGORY_PATTERNS.length; cp++) {
+            if (CATEGORY_PATTERNS[cp].re.test(prevText)) {
+              category = CATEGORY_PATTERNS[cp].key;
+              break;
+            }
+          }
+          if (category !== 'AUTRE') break;
+        }
+        // Fallback : vérifier aussi dans la ligne d'en-tête elle-même
+        if (category === 'AUTRE') {
+          var headerFullText = headerTexts.join(' ');
+          for (var cp2 = 0; cp2 < CATEGORY_PATTERNS.length; cp2++) {
+            if (CATEGORY_PATTERNS[cp2].re.test(headerFullText)) {
+              category = CATEGORY_PATTERNS[cp2].key;
+              break;
+            }
+          }
+        }
+
+        // 4) Lire les lignes de données suivantes (cross-page : continue tant que la structure correspond)
+        var dataRows = [];
+        var lastDataIdx = gi; // Pour avancer gi après le tableau
+        for (var di = gi + 1; di < yGroups.length; di++) {
+          var dRow = yGroups[di];
+          // Rupture : ligne vide (0-1 cellules)
+          if (dRow.cells.length < 2) break;
+
+          // Vérifier si c'est un nouvel en-tête (contient ≥2 mots-clés)
+          var dTexts = dRow.cells.map(function(c) { return c.str.toLowerCase().trim(); });
+          var kwCount = 0;
+          dTexts.forEach(function(t) {
+            if (HEADER_KEYWORDS.some(function(kw) { return keywordMatchesCell(t, kw); })) kwCount++;
+          });
+          if (kwCount >= 2 && dRow.cells.length >= MIN_HEADER_CELLS) break;
+
+          // 5) Mapper chaque cellule à sa colonne d'en-tête par proximité X
+          var rowObj = {};
+          dRow.cells.forEach(function(cell) {
+            var bestCol = null;
+            var bestDist = Infinity;
+            headerCols.forEach(function(hc) {
+              var dist = Math.abs(cell.x - hc.x);
+              if (dist < bestDist) {
+                bestDist = dist;
+                bestCol = hc.name;
+              }
+            });
+            // Tolérance X : la cellule doit être dans un rayon raisonnable
+            if (bestCol && bestDist < 80) {
+              // Si la colonne a déjà une valeur, concaténer (multi-cellules sur la même colonne)
+              if (rowObj[bestCol]) {
+                rowObj[bestCol] += ' ' + cell.str.trim();
+              } else {
+                rowObj[bestCol] = cell.str.trim();
+              }
+            }
+          });
+
+          // Ignorer les lignes sans données significatives
+          var vals = Object.values(rowObj).filter(function(v) { return v && v.trim(); });
+          if (vals.length >= 2) {
+            dataRows.push(rowObj);
+            lastDataIdx = di;
+          }
+        }
+
+        // 6) Stocker le tableau s'il a des données
+        if (dataRows.length > 0) {
+          if (!tables[category]) tables[category] = [];
+          tables[category] = tables[category].concat(dataRows);
+          console.log('[VT-TABLES] Tableau ' + category + ' détecté page ' + row.page + ' : ' + dataRows.length + ' ligne(s), colonnes: ' + headerCols.map(function(h){return h.name;}).join(' | '));
+          // Avancer gi pour ne pas re-scanner les lignes de données comme en-têtes potentiels
+          gi = lastDataIdx;
+        }
+      }
+
+      // Log récapitulatif
+      var cats = Object.keys(tables);
+      if (cats.length > 0) {
+        var summary = cats.map(function(c) { return c + ' (' + tables[c].length + ' ligne' + (tables[c].length > 1 ? 's' : '') + ')'; }).join(', ');
+        console.log('[VT-TABLES] ' + cats.length + ' tableau(x) détecté(s) : ' + summary);
+      } else {
+        console.log('[VT-TABLES] Aucun tableau structuré détecté dans la VT');
+      }
+
+      return tables;
+    }
+
+    // =====================================================================
+    // EXTRACTION TABULAIRE STRUCTURÉE — AUDIT (BATIAUDIT)
+    // =====================================================================
+    function extractAuditTablesFromItems(items) {
+      if (!items || items.length === 0) return {};
+
+      // Mots-clés d'en-têtes spécifiques BATIAUDIT (plus sparse que VT)
+      const AUDIT_HEADER_KEYWORDS = [
+        'description', 'isolation', 'dimensions', 'surface', 'orientation',
+        'composition', 'matériaux', 'materiaux', 'épaisseur', 'epaisseur',
+        'résistance', 'resistance', 'vitrage', 'largeur', 'hauteur',
+        'quantité', 'quantite', 'nature', 'type', 'référence', 'reference',
+        'doublage', 'paroi', 'menuiserie', 'u', 'up', 'r'
+      ];
+
+      // Catégories BATIAUDIT — labels souvent sur la même ligne ou 1-2 lignes au-dessus
+      const AUDIT_CATEGORY_PATTERNS = [
+        { key: 'FACADES',      re: /fa[çc]ade|parois?\s*vert|murs?\s*ext[eé]r|parois?\s*opaque/i },
+        { key: 'MENUISERIES',  re: /menuiserie|fen[eê]tre|ouvrant|baie|porte.*fen/i },
+        { key: 'PLANCHERS',    re: /plancher(?!\s*haut)|dalle\s*bas|vide.san|terre.plein/i },
+        { key: 'TOITURES',     re: /toiture|comble|plancher\s*haut|plafond\s*haut/i },
+        { key: 'CHAUFFAGE',    re: /chauffage|chaudière|chaudiere|radiateur|émetteur|emetteur|pac|pompe.*chaleur/i },
+        { key: 'ECS',          re: /eau.*chaude|ecs|ballon|chauffe.?eau|production.*sanitaire/i },
+        { key: 'VENTILATION',  re: /ventilation|vmc|extracteur|aération|aeration/i }
+      ];
+
+      const Y_TOLERANCE = 3;
+      // BATIAUDIT a des en-têtes plus sparses — seuil réduit à 2 cellules min
+      const MIN_HEADER_CELLS = 2;
+
+      // Grouper tous les items cross-page par Y
+      var allSorted = items.slice().sort(function(a, b) {
+        if (a.page !== b.page) return a.page - b.page;
+        return b.y - a.y;
+      });
+
+      var yGroups = [];
+      var currentGroup = null;
+      var lastPage = -1;
+
+      allSorted.forEach(function(it) {
+        var pageChanged = (it.page !== lastPage);
+        lastPage = it.page;
+        if (!currentGroup || pageChanged || Math.abs(currentGroup.y - it.y) > Y_TOLERANCE) {
+          currentGroup = { y: it.y, page: it.page, cells: [] };
+          yGroups.push(currentGroup);
+        }
+        currentGroup.cells.push(it);
+      });
+
+      yGroups.forEach(function(g) {
+        g.cells.sort(function(a, b) { return a.x - b.x; });
+      });
+
+      var tables = {};
+
+      for (var gi = 0; gi < yGroups.length; gi++) {
+        var row = yGroups[gi];
+        if (row.cells.length < MIN_HEADER_CELLS) continue;
+
+        // Vérifier les mots-clés d'en-tête
+        var headerTexts = row.cells.map(function(c) { return c.str; });
+        var matchCount = 0;
+        headerTexts.forEach(function(t) {
+          var tLow = t.toLowerCase().trim();
+          if (AUDIT_HEADER_KEYWORDS.some(function(kw) { return keywordMatchesCell(tLow, kw); })) {
+            matchCount++;
+          }
+        });
+
+        // Seuil réduit : 2 mots-clés pour BATIAUDIT (en-têtes plus courts)
+        if (matchCount < 2) continue;
+
+        var headerCols = row.cells.map(function(c) { return { x: c.x, name: c.str.trim() }; });
+
+        // Détection catégorie — lookBack réduit à 3 lignes (BATIAUDIT met le label proche)
+        var category = 'AUTRE';
+        for (var lookBack = 1; lookBack <= Math.min(3, gi); lookBack++) {
+          var prevRow = yGroups[gi - lookBack];
+          if (prevRow.page !== row.page) break;
+          var prevText = prevRow.cells.map(function(c) { return c.str; }).join(' ');
+          for (var cp = 0; cp < AUDIT_CATEGORY_PATTERNS.length; cp++) {
+            if (AUDIT_CATEGORY_PATTERNS[cp].re.test(prevText)) {
+              category = AUDIT_CATEGORY_PATTERNS[cp].key;
+              break;
+            }
+          }
+          if (category !== 'AUTRE') break;
+        }
+        // Fallback : vérifier dans la ligne d'en-tête elle-même
+        if (category === 'AUTRE') {
+          var headerFullText = headerTexts.join(' ');
+          for (var cp2 = 0; cp2 < AUDIT_CATEGORY_PATTERNS.length; cp2++) {
+            if (AUDIT_CATEGORY_PATTERNS[cp2].re.test(headerFullText)) {
+              category = AUDIT_CATEGORY_PATTERNS[cp2].key;
+              break;
+            }
+          }
+        }
+
+        // Lire les lignes de données
+        var dataRows = [];
+        var lastDataIdx = gi;
+        for (var di = gi + 1; di < yGroups.length; di++) {
+          var dRow = yGroups[di];
+          if (dRow.cells.length < 2) break;
+
+          // Détection nouvel en-tête
+          var dTexts = dRow.cells.map(function(c) { return c.str.toLowerCase().trim(); });
+          var kwCount = 0;
+          dTexts.forEach(function(t) {
+            if (AUDIT_HEADER_KEYWORDS.some(function(kw) { return keywordMatchesCell(t, kw); })) kwCount++;
+          });
+          if (kwCount >= 2 && dRow.cells.length >= MIN_HEADER_CELLS) break;
+
+          // Mapper cellules aux colonnes d'en-tête par proximité X
+          var rowObj = {};
+          dRow.cells.forEach(function(cell) {
+            var bestCol = null;
+            var bestDist = Infinity;
+            headerCols.forEach(function(hc) {
+              var dist = Math.abs(cell.x - hc.x);
+              if (dist < bestDist) {
+                bestDist = dist;
+                bestCol = hc.name;
+              }
+            });
+            if (bestCol && bestDist < 80) {
+              if (rowObj[bestCol]) {
+                rowObj[bestCol] += ' ' + cell.str.trim();
+              } else {
+                rowObj[bestCol] = cell.str.trim();
+              }
+            }
+          });
+
+          var vals = Object.values(rowObj).filter(function(v) { return v && v.trim(); });
+          if (vals.length >= 2) {
+            dataRows.push(rowObj);
+            lastDataIdx = di;
+          }
+        }
+
+        if (dataRows.length > 0) {
+          if (!tables[category]) tables[category] = [];
+          tables[category] = tables[category].concat(dataRows);
+          console.log('[AUDIT-TABLES] Tableau ' + category + ' détecté page ' + row.page + ' : ' + dataRows.length + ' ligne(s), colonnes: ' + headerCols.map(function(h){return h.name;}).join(' | '));
+          gi = lastDataIdx;
+        }
+      }
+
+      // Log récapitulatif
+      var cats = Object.keys(tables);
+      if (cats.length > 0) {
+        var summary = cats.map(function(c) { return c + ' (' + tables[c].length + ' ligne' + (tables[c].length > 1 ? 's' : '') + ')'; }).join(', ');
+        console.log('[AUDIT-TABLES] ' + cats.length + ' tableau(x) détecté(s) : ' + summary);
+      } else {
+        console.log('[AUDIT-TABLES] Aucun tableau structuré détecté dans l\'audit');
+      }
+
+      return tables;
+    }
+
     async function extractPdfText(arrayBuffer, side) {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
       let fullText = '';
       const pageLog = [];
+      const allItems = []; // Items bruts avec coordonnées pour extraction tabulaire
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const content = await page.getTextContent();
@@ -1964,6 +2324,15 @@
         for (let k = 0; k < pageItems.length; k++) {
           const it = pageItems[k];
           pageText += it.str;
+          // Capturer les coordonnées X/Y pour chaque item non-vide
+          if (it.str.trim()) {
+            allItems.push({
+              str: it.str.trim(),
+              x: it.transform ? Math.round(it.transform[4] * 10) / 10 : 0,
+              y: it.transform ? Math.round(it.transform[5] * 10) / 10 : 0,
+              page: i
+            });
+          }
           if (it.hasEOL) {
             pageText += '\n';
           } else if (k + 1 < pageItems.length) {
@@ -1983,7 +2352,7 @@
       if (p26) {
         console.log('[PDF ' + (side||'') + '] Résumé: ' + pdf.numPages + ' pages, total ' + fullText.length + ' chars. Page 26 commence à offset ' + p26.offset + (p26.offset > 90000 ? ' ⚠️ AU-DELÀ DE LA LIMITE 90000' : ' ✅ dans la limite'));
       }
-      return fullText.trim();
+      return { text: fullText.trim(), items: allItems };
     }
 
     function setDropZoneLoading(side, name, size) {
@@ -3295,6 +3664,15 @@ Conduite à tenir pour les autres anomalies physiques :
 2. Commence le commentaire par "[ANOMALIE physique]"
 3. Explique brièvement pourquoi (ex: "[ANOMALIE physique] valeur hors plage normale pour ce champ")
 
+RÈGLE TABLEAUX STRUCTURÉS (PRIORITAIRE — AUDIT ET VT) :
+Si un bloc "TABLEAUX STRUCTURÉS AUDIT" et/ou "TABLEAUX STRUCTURÉS VT" est fourni dans le message, utilise-les EN PRIORITÉ pour extraire les valeurs des catégories correspondantes (CHAUFFAGE, ECS, VENTILATION, FACADES, MENUISERIES, PLANCHERS, TOITURES).
+- Chaque objet JSON = une ligne du tableau d'origine dans le document source.
+- Chaque clé = un en-tête de colonne du tableau (ex: "Type", "Année", "Surface", "Orientation", "Description", "Isolation"...).
+- Mappe les valeurs de ces objets aux champs demandés par correspondance sémantique (ex: clé "Année" → champ "Année d'installation", clé "Isolation" → champ "Qualité isolation").
+- Le texte brut de chaque document reste disponible en complément pour les informations hors-tableaux ou pour confirmation.
+- En cas de conflit entre un tableau structuré et le texte brut du même document, privilégie le tableau structuré (extraction positionnelle plus fiable que le parsing linéaire).
+- CROSS-VALIDATION : si une valeur_audit_pre_extraite (extraction BATIAUDIT) et le tableau structuré Audit donnent des valeurs différentes pour le même champ, signale-le dans le commentaire avec "[DIVERGENCE extraction]".
+
 RÈGLE CITATION OBLIGATOIRE — TRAÇABILITÉ (ABSOLUE) :
 Pour CHAQUE valeur non-MANQUANT que tu retournes, tu DOIS fournir l'extrait exact du document source.
 - extrait_audit : copie mot pour mot la phrase ou l'entrée de l'Audit où se trouve valeur_audit (20-150 chars). OBLIGATOIRE même si valeur_audit_pre_extraite est fourni — cherche le passage dans l'Audit qui contient cette valeur et cite-le. Laisse vide UNIQUEMENT si valeur_audit = MANQUANT.
@@ -3339,14 +3717,24 @@ Réponds UNIQUEMENT en JSON valide, sans markdown, sans commentaire.`;
         return fh;
       });
 
+      // Blocs tableaux structurés (si disponibles)
+      var auditTablesBlock = '';
+      if (state.auditTables && Object.keys(state.auditTables).length > 0) {
+        auditTablesBlock = '\n\nTABLEAUX STRUCTURÉS AUDIT (menuiseries/parois extraits automatiquement — PRIORITAIRE sur le texte brut) :\n' + JSON.stringify(state.auditTables) + '\n';
+      }
+      var vtTablesBlock = '';
+      if (state.vtTables && Object.keys(state.vtTables).length > 0) {
+        vtTablesBlock = '\n\nTABLEAUX STRUCTURÉS VT (données extraites automatiquement — PRIORITAIRE sur le texte brut pour les valeurs tabulaires) :\n' + JSON.stringify(state.vtTables) + '\n';
+      }
+
       const userContent = `TEXTE DE L'AUDIT ÉNERGÉTIQUE (MAÎTRE) :
 ${auditText}
-
+${auditTablesBlock}
 ---
 
 TEXTE DE LA VISITE TECHNIQUE (À COMPARER) :
 ${vtText}
-
+${vtTablesBlock}
 ---
 ${instancesBlock}
 CHAMPS À ANALYSER :
