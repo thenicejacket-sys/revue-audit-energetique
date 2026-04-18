@@ -3993,13 +3993,21 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
     // Vérifie les résultats ROUGE/MANQUANT pour détecter anomalies et corrections
     // =====================================================================
     async function callMaya(results, auditText, vtText) {
-      // Ne traiter que les résultats suspects (ROUGE, MANQUANT, ou valeurs aberrantes)
+      // Ne traiter que les résultats suspects (ROUGE, MANQUANT, valeurs aberrantes, ou VERT suspects d'hallucination)
       var suspects = results.filter(function(r) {
         if (r.statut === 'ROUGE' || r.statut === 'MANQUANT') return true;
         // Valeur aberrante : surface > 15 m² pour un ouvrant
         if (r.instance_label && r.valeur_audit) {
           var num = parseFloat(String(r.valeur_audit).replace(',', '.'));
           if (!isNaN(num) && num > 15 && /fen[eê]tre|porte|baie|ouvrant/i.test(r.instance_label || '')) return true;
+        }
+        // VERT suspect d'hallucination : citation VT non vérifiée
+        if (r.statut === 'VERT' && r._verif_vt === 'non_verifie') return true;
+        // VERT suspect : valeur_vt identique à valeur_audit avec une instance paroi
+        if (r.statut === 'VERT' && r.valeur_vt && r.valeur_audit && r.instance_label) {
+          var normA = String(r.valeur_audit).trim().toLowerCase();
+          var normV = String(r.valeur_vt).trim().toLowerCase();
+          if (normA === normV) return true;
         }
         return false;
       });
@@ -4013,12 +4021,21 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
       console.log('[MAYA] ' + suspects.length + ' résultat(s) suspect(s) à valider.');
 
       var mayaSystemPrompt = `Tu es Maya, experte en audit énergétique et contrôle qualité des données.
-Tu reçois des résultats d'analyse Audit vs VT qui semblent incorrects (ROUGE ou MANQUANT).
+Tu reçois des résultats d'analyse Audit vs VT qui peuvent être incorrects (ROUGE, MANQUANT, ou VERT suspects).
 
-Ton rôle : valider ou corriger ces résultats en te basant sur le texte source.
+Ton rôle PRINCIPAL : VÉRIFIER que chaque valeur existe RÉELLEMENT dans le document source correspondant.
+- Une valeur_audit doit exister dans le texte de l'Audit.
+- Une valeur_vt doit exister dans le texte de la VT.
+- Si une valeur est INTROUVABLE dans son document source → c'est une HALLUCINATION → action = corriger_statut, nouveau_statut = MANQUANT.
 
-RÈGLES :
-1. Pour chaque résultat, vérifie si la valeur est physiquement réaliste :
+MISSION ANTI-HALLUCINATION (PRIORITÉ MAXIMALE) :
+- Pour chaque résultat VERT, vérifie que valeur_vt existe RÉELLEMENT dans l'extrait VT ci-dessous.
+- Si valeur_vt = valeur_audit (identiques ou quasi-identiques) → SUSPECT. Vérifie que la valeur VT a une source distincte dans la VT.
+- Les VT ne contiennent généralement PAS de surfaces individuelles par paroi (mur, plancher, toiture). Si une surface de paroi VT est identique à l'audit et introuvable dans la VT → HALLUCINATION → MANQUANT.
+- "Référence paroi" = type d'adjacence (Extérieur, Terre-Plein, Locaux non chauffés, etc.) — pas le matériau.
+
+RÈGLES DE VALIDATION :
+1. Vérifie si la valeur est physiquement réaliste :
    - Surface d'un ouvrant (fenêtre/porte/baie) : 0,3 à 6 m². Si > 10 m² = confusion avec SHAB
    - Hauteur sous plafond : 2,0 à 3,5 m
    - Résistance thermique R : 0 à 12 m².K/W
@@ -4027,8 +4044,7 @@ RÈGLES :
 3. Pour les ROUGE : vérifie si les deux valeurs ne disent pas la même chose différemment
    - "Non isolé" vs "Non" → même sens = devrait être VERT
    - "1,0" vs "RDC" → même sens = devrait être VERT
-   - "Référence paroi" = type d'adjacence (Extérieur, Terre-Plein, Locaux non chauffés, etc.) — pas le matériau
-4. NE CORRIGE PAS les VERT existants
+4. Pour les VERT suspects : vérifie que valeur_vt est bien citable dans la VT — sinon → MANQUANT
 5. Confiance minimale pour corriger : 0.85
 
 Réponds UNIQUEMENT en JSON strict :
@@ -4037,7 +4053,7 @@ Réponds UNIQUEMENT en JSON strict :
     {
       "id_champ": "...",
       "instance_label": "...",
-      "action": "corriger_statut|corriger_valeur|confirmer_manquant",
+      "action": "corriger_statut|corriger_valeur|confirmer_manquant|hallucination_detectee",
       "nouveau_statut": "VERT|ORANGE|ROUGE|MANQUANT",
       "valeur_vt_corrigee": "... ou null si pas de correction de valeur",
       "raison": "explication courte (max 100 chars)"
@@ -4054,14 +4070,31 @@ Si aucune correction nécessaire, retourne {"corrections": []}`;
           statut_actuel: r.statut,
           valeur_audit: r.valeur_audit,
           valeur_vt: r.valeur_vt,
-          commentaire: r.commentaire
+          commentaire: r.commentaire,
+          citation_vt_verifiee: r._verif_vt || 'non_teste',
+          citation_audit_verifiee: r._verif_audit || 'non_teste'
         };
       });
 
-      // VT courte pour Maya (premiers 30K — suffisant pour validation)
+      // Textes sources pour Maya (extraits limités pour rester dans le budget tokens)
       var vtShort = vtText.substring(0, 30000);
+      var auditShort = auditText.substring(0, 20000);
 
-      var mayaContent = `RÉSULTATS SUSPECTS À VALIDER :\n${JSON.stringify(suspectsCompact, null, 2)}\n\n---\nEXTRAIT VT (pour vérification) :\n${vtShort}`;
+      var mayaContent = `RÉSULTATS SUSPECTS À VALIDER :
+${JSON.stringify(suspectsCompact, null, 2)}
+
+LÉGENDE citation_vt_verifiee / citation_audit_verifiee :
+- "verifie" = la citation a été retrouvée dans le texte source → fiable
+- "non_verifie" = la citation N'A PAS été retrouvée → SUSPECT, possible hallucination
+- "non_cite" = aucune citation fournie
+
+---
+EXTRAIT AUDIT (pour vérification des valeurs audit) :
+${auditShort}
+
+---
+EXTRAIT VT (pour vérification des valeurs VT) :
+${vtShort}`;
 
       var endpoint = state.config.provider === 'openai'
         ? 'https://api.openai.com/v1/chat/completions'
@@ -4128,8 +4161,20 @@ Si aucune correction nécessaire, retourne {"corrections": []}`;
             target._maya_original = {
               statut: target.statut,
               valeur_vt: target.valeur_vt,
+              valeur_audit: target.valeur_audit,
               commentaire: target.commentaire
             };
+          }
+
+          // Hallucination détectée : effacer la valeur hallucinée + forcer MANQUANT
+          if (corr.action === 'hallucination_detectee') {
+            target.statut = 'MANQUANT';
+            target.valeur_vt = null;
+            target.commentaire = (target.commentaire ? target.commentaire + ' ' : '') + '[\u2726 Maya \u2014 Hallucination : ' + corr.raison + ']';
+            target._maya_corrected = true;
+            corrCount++;
+            console.log('[MAYA-HALLUCINATION] ' + corr.id_champ + (corr.instance_label ? ' (' + corr.instance_label + ')' : '') + ' \u2192 valeur VT effac\u00e9e \u2014 ' + corr.raison);
+            return;
           }
 
           if (corr.nouveau_statut) target.statut = corr.nouveau_statut;
