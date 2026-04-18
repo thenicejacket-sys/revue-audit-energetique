@@ -3311,9 +3311,8 @@
           showAlert('alerts-area', 'warning', '\u2726 Maya — Validation ignorée : ' + _apiErrors + ' champ(s) ont échoué avec des erreurs API. Vérifiez vos crédits API avant de relancer.');
           state.analysisResults._mayaStatus = { ran: false, corrections: 0, suspects: 0, error: 'Ignorée — erreurs API détectées (' + _apiErrors + ' champs)' };
         } else {
-        var suspectsCount = state.analysisResults.filter(function(r) { return r.statut === 'ROUGE' || r.statut === 'MANQUANT'; }).length;
-        if (suspectsCount > 0) {
-          updateProgress(92, '\u2726 Maya — Validation en cours...', suspectsCount + ' résultat(s) suspect(s) détecté(s) — Maya vérifie...');
+          var totalResults = state.analysisResults.length;
+          updateProgress(92, '\u2726 Maya — Validation compl\u00e8te en cours...', totalResults + ' r\u00e9sultat(s) \u00e0 v\u00e9rifier dans les documents sources...');
           await sleep(100);
           // Enrichir les résultats avec le nom du champ pour Maya
           state.analysisResults.forEach(function(r) {
@@ -3323,16 +3322,13 @@
           state.analysisResults = await callMaya(state.analysisResults, auditFull, vtFull);
           var ms = state.analysisResults._mayaStatus;
           if (ms && ms.ran && ms.corrections > 0) {
-            showAlert('alerts-area', 'info', '\u2726 Maya a corrigé ' + ms.corrections + ' résultat(s) sur ' + ms.suspects + ' suspect(s). Les corrections sont marquées [\u2726 Maya] dans les résultats et l\'export Excel.');
+            showAlert('alerts-area', 'info', '\u2726 Maya a v\u00e9rifi\u00e9 ' + ms.suspects + ' r\u00e9sultat(s) et corrig\u00e9 ' + ms.corrections + '. Les corrections sont marqu\u00e9es [\u2726 Maya] dans les r\u00e9sultats et l\'export Excel.');
           } else if (ms && ms.ran && ms.corrections === 0) {
-            showAlert('alerts-area', 'info', '\u2726 Maya a vérifié ' + ms.suspects + ' résultat(s) suspect(s) — aucune correction nécessaire.');
+            showAlert('alerts-area', 'info', '\u2726 Maya a v\u00e9rifi\u00e9 ' + ms.suspects + ' r\u00e9sultat(s) — toutes les valeurs confirm\u00e9es dans les documents sources.');
           } else if (ms && !ms.ran) {
-            showAlert('alerts-area', 'warning', '\u2726 Maya — Erreur lors de la validation : ' + (ms.error || 'inconnue') + '. Les résultats sont affichés sans validation Maya.');
+            showAlert('alerts-area', 'warning', '\u2726 Maya — Erreur lors de la validation : ' + (ms.error || 'inconnue') + '. Les r\u00e9sultats sont affich\u00e9s sans validation Maya.');
           }
-        } else {
-          showAlert('alerts-area', 'info', '\u2726 Maya — Aucun résultat suspect détecté, validation non nécessaire.');
         }
-        } // fin else _apiErrors
       }
 
       updateProgress(95, 'Compilation des résultats...', 'Extraction des contextes sources...');
@@ -3993,59 +3989,52 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
     // Vérifie les résultats ROUGE/MANQUANT pour détecter anomalies et corrections
     // =====================================================================
     async function callMaya(results, auditText, vtText) {
-      // Ne traiter que les résultats suspects (ROUGE, MANQUANT, valeurs aberrantes, ou VERT suspects d'hallucination)
+      // Maya vérifie TOUS les résultats — chaque valeur doit exister dans son document source
       var suspects = results.filter(function(r) {
-        if (r.statut === 'ROUGE' || r.statut === 'MANQUANT') return true;
-        // Valeur aberrante : surface > 15 m² pour un ouvrant
-        if (r.instance_label && r.valeur_audit) {
-          var num = parseFloat(String(r.valeur_audit).replace(',', '.'));
-          if (!isNaN(num) && num > 15 && /fen[eê]tre|porte|baie|ouvrant/i.test(r.instance_label || '')) return true;
-        }
-        // VERT suspect d'hallucination : citation VT non vérifiée
-        if (r.statut === 'VERT' && r._verif_vt === 'non_verifie') return true;
-        // VERT suspect : valeur_vt identique à valeur_audit avec une instance paroi
-        if (r.statut === 'VERT' && r.valeur_vt && r.valeur_audit && r.instance_label) {
-          var normA = String(r.valeur_audit).trim().toLowerCase();
-          var normV = String(r.valeur_vt).trim().toLowerCase();
-          if (normA === normV) return true;
-        }
-        return false;
+        // Exclure les résultats d'erreur API (pas de valeur à vérifier)
+        if (r.commentaire && /Erreur API|API HTTP/i.test(r.commentaire)) return false;
+        // Inclure tout résultat qui a au moins une valeur
+        return !!(r.valeur_audit || r.valeur_vt);
       });
 
       if (suspects.length === 0) {
-        console.log('[MAYA] Aucun résultat suspect — validation non nécessaire.');
+        console.log('[MAYA] Aucun résultat avec valeurs — validation non nécessaire.');
         results._mayaStatus = { ran: true, corrections: 0, suspects: 0, error: null };
         return results;
       }
 
-      console.log('[MAYA] ' + suspects.length + ' résultat(s) suspect(s) à valider.');
+      console.log('[MAYA] Validation complète : ' + suspects.length + ' résultat(s) à vérifier dans les documents sources.');
 
       var mayaSystemPrompt = `Tu es Maya, experte en audit énergétique et contrôle qualité des données.
-Tu reçois des résultats d'analyse Audit vs VT qui peuvent être incorrects (ROUGE, MANQUANT, ou VERT suspects).
+Tu reçois TOUS les résultats d'analyse Audit vs VT (VERT, ROUGE, ORANGE, MANQUANT).
 
-Ton rôle PRINCIPAL : VÉRIFIER que chaque valeur existe RÉELLEMENT dans le document source correspondant.
-- Une valeur_audit doit exister dans le texte de l'Audit.
-- Une valeur_vt doit exister dans le texte de la VT.
-- Si une valeur est INTROUVABLE dans son document source → c'est une HALLUCINATION → action = corriger_statut, nouveau_statut = MANQUANT.
+TON RÔLE : VÉRIFIER SYSTÉMATIQUEMENT que chaque valeur existe RÉELLEMENT dans le document source correspondant.
+- Chaque valeur_audit DOIT être retrouvable dans l'extrait AUDIT ci-dessous.
+- Chaque valeur_vt DOIT être retrouvable dans l'extrait VT ci-dessous.
+- Si une valeur est INTROUVABLE dans son document source → HALLUCINATION → action = hallucination_detectee.
+- Le champ "citation_vt_verifiee" / "citation_audit_verifiee" t'indique si le système a déjà retrouvé la citation :
+  • "verifie" = citation retrouvée dans le texte → a priori fiable (mais vérifie quand même la cohérence)
+  • "non_verifie" = citation NON retrouvée → TRÈS SUSPECT, probable hallucination
+  • "non_cite" = aucune citation fournie → vérifie la valeur toi-même dans les textes
 
-MISSION ANTI-HALLUCINATION (PRIORITÉ MAXIMALE) :
-- Pour chaque résultat VERT, vérifie que valeur_vt existe RÉELLEMENT dans l'extrait VT ci-dessous.
-- Si valeur_vt = valeur_audit (identiques ou quasi-identiques) → SUSPECT. Vérifie que la valeur VT a une source distincte dans la VT.
-- Les VT ne contiennent généralement PAS de surfaces individuelles par paroi (mur, plancher, toiture). Si une surface de paroi VT est identique à l'audit et introuvable dans la VT → HALLUCINATION → MANQUANT.
-- "Référence paroi" = type d'adjacence (Extérieur, Terre-Plein, Locaux non chauffés, etc.) — pas le matériau.
-
-RÈGLES DE VALIDATION :
-1. Vérifie si la valeur est physiquement réaliste :
-   - Surface d'un ouvrant (fenêtre/porte/baie) : 0,3 à 6 m². Si > 10 m² = confusion avec SHAB
+CONTRÔLES À EFFECTUER SUR CHAQUE RÉSULTAT :
+1. EXISTENCE : la valeur (audit ou VT) est-elle réellement présente dans le document source ?
+   → Si non → hallucination_detectee
+2. COHÉRENCE : la valeur extraite correspond-elle bien au champ demandé (pas de confusion entre champs) ?
+3. RÉALISME : la valeur est-elle physiquement plausible ?
+   - Surface d'un ouvrant : 0,3 à 6 m² (> 10 m² = confusion avec SHAB)
    - Hauteur sous plafond : 2,0 à 3,5 m
    - Résistance thermique R : 0 à 12 m².K/W
-   - Épaisseur lame d'air : 4 à 24 mm
-2. Pour les MANQUANT : vérifie si la valeur existe réellement dans le texte VT sous un autre libellé
-3. Pour les ROUGE : vérifie si les deux valeurs ne disent pas la même chose différemment
-   - "Non isolé" vs "Non" → même sens = devrait être VERT
-   - "1,0" vs "RDC" → même sens = devrait être VERT
-4. Pour les VERT suspects : vérifie que valeur_vt est bien citable dans la VT — sinon → MANQUANT
-5. Confiance minimale pour corriger : 0.85
+4. COPIE AUDIT→VT : si valeur_vt = valeur_audit et citation_vt non vérifiée → probable copie → hallucination_detectee
+   - Les VT ne contiennent PAS de surfaces individuelles par paroi. Si une surface VT = surface audit → hallucination.
+5. ÉQUIVALENCES SÉMANTIQUES (pour les ROUGE) :
+   - "Non isolé" vs "Non" → même sens → corriger_statut VERT
+   - "1,0" vs "RDC" → même sens → corriger_statut VERT
+   - "Référence paroi" = type d'adjacence (Extérieur, Terre-Plein, Locaux non chauffés, etc.)
+6. MANQUANT RÉCUPÉRABLES : la valeur existe-t-elle dans la VT sous un synonyme ou libellé différent ?
+
+IMPORTANT : ne retourne une correction QUE si tu es sûr(e) à au moins 85%. En cas de doute, ne corrige pas.
+Ne retourne PAS de correction pour les résultats déjà corrects.
 
 Réponds UNIQUEMENT en JSON strict :
 {
@@ -4060,7 +4049,7 @@ Réponds UNIQUEMENT en JSON strict :
     }
   ]
 }
-Si aucune correction nécessaire, retourne {"corrections": []}`;
+Si tous les résultats sont corrects, retourne {"corrections": []}`;
 
       var suspectsCompact = suspects.map(function(r) {
         return {
