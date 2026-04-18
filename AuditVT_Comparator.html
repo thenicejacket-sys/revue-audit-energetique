@@ -2900,6 +2900,12 @@
             return;
           }
           var val = extractBatiauditValue(auditFull, f.nom);
+          // Synonymes BATIAUDIT : certains champs du référentiel ont un nom différent dans le format BATIAUDIT
+          // Ex: "Référence paroi" dans le référentiel = "type d'adjacence" dans le BATIAUDIT
+          if (!val && nomLC.match(/r[eé]f[eé]rence\s*paroi/)) {
+            val = extractBatiauditValue(auditFull, "type d'adjacence");
+            if (val) console.log('[BATIAUDIT-SYN] "' + f.nom + '" → synonyme "type d\'adjacence" → "' + val + '"');
+          }
           if (val) {
             // Sécurité supplémentaire : si champ "surface" ET section menuiserie/ouvrant ET valeur > 20 m² → probable SHAB confondue, bloquer
             // NE PAS bloquer "Surface de référence" (SHAB du logement) qui est dans la section générale
@@ -3201,6 +3207,34 @@
                 extrait_vt: '',
                 commentaire: 'Porte opaque : champ vitrage non applicable. Valeur IA ignorée.'
               });
+            }
+          }
+
+          // ---- Garde-fou anti-copie : surface de paroi copiée de l'Audit vers la VT ----
+          // Si le champ est une surface de paroi (avec instance_label = une paroi individuelle),
+          // et que valeur_vt == valeur_audit, vérifier que la valeur VT existe réellement dans la VT.
+          var _fNomSurf = (getFieldNom(rv.id_champ) || '').toLowerCase();
+          var _isSurfaceField = (_fNomSurf.includes('surface') || _fNomSurf.includes('m\u00b2') || _fNomSurf.includes('m2'));
+          var _hasParoiInstance = rv.instance_label && /paroi|mur|plancher|toiture|dalle|plafond/i.test(rv.instance_label);
+          // Exclure les champs de surface générale (SHAB, surface de référence, etc.)
+          var _isGeneralSurface = _fNomSurf.match(/r[eé]f[eé]rence|habit|shab|sdp|totale|utile/);
+          if (_isSurfaceField && _hasParoiInstance && !_isGeneralSurface && rv.valeur_audit && rv.valeur_vt) {
+            var _numA = parseFloat(String(rv.valeur_audit).replace(',', '.').replace(/[^0-9.]/g, ''));
+            var _numV = parseFloat(String(rv.valeur_vt).replace(',', '.').replace(/[^0-9.]/g, ''));
+            if (!isNaN(_numA) && !isNaN(_numV) && Math.abs(_numA - _numV) < 0.01) {
+              // Valeurs identiques — vérifier que la valeur VT existe dans le texte VT
+              var _vtValStr = String(rv.valeur_vt).replace(/\s*m[²2]\s*$/i, '').trim();
+              var _vtValAlt = _vtValStr.replace(',', '.');
+              var _vtValAlt2 = _vtValStr.replace('.', ',');
+              var _foundInVt = vtFull.includes(_vtValStr) || vtFull.includes(_vtValAlt) || vtFull.includes(_vtValAlt2);
+              if (!_foundInVt) {
+                console.log('[ANTI-COPIE] "' + _fNomSurf + '" instance="' + rv.instance_label + '" : valeur_vt "' + rv.valeur_vt + '" = valeur_audit mais INTROUVABLE dans VT → forcé MANQUANT');
+                rv = Object.assign({}, rv, {
+                  valeur_vt: null,
+                  statut: rv.valeur_audit ? 'MANQUANT' : rv.statut,
+                  commentaire: (rv.commentaire || '') + ' [Anti-copie : surface VT "' + rv.valeur_vt + '" identique \u00e0 l\u2019audit mais introuvable dans le texte VT \u2192 MANQUANT.]'
+                });
+              }
             }
           }
 
@@ -3517,6 +3551,17 @@ RÈGLE ANTI-HALLUCINATION SURFACES (ABSOLUE) :
 - INTERDIT : calculer, estimer ou déduire une surface à partir de dimensions (longueur × hauteur, périmètre, etc.) — même si les dimensions sont présentes.
 - INTERDIT : inférer une surface à partir d'une surface totale et d'un pourcentage, d'une décomposition ou d'un raisonnement géométrique.
 - Si aucune valeur numérique explicite de surface n'est trouvée dans le document source pour la paroi concernée → retourne MANQUANT. Pas d'exception.
+- INTERDIT ABSOLU : NE JAMAIS copier la valeur_audit dans valeur_vt (ou inversement). Chaque valeur DOIT provenir de son document source propre.
+  → La VT de type "visite technique" ne contient généralement PAS de surfaces individuelles par paroi (mur, plancher, toiture). Elle contient des surfaces de pièces, des surfaces totales (SHAB), et des surfaces de façades par orientation — mais PAS de surface individuelle par "Paroi 01", "Paroi 02", etc.
+  → Si la VT ne mentionne pas explicitement une surface pour la paroi demandée → valeur_vt = MANQUANT. Ne pas recopier la valeur audit.
+  → Si valeur_vt = valeur_audit mot pour mot et que tu n'as pas d'extrait_vt citable → c'est une hallucination. Retourne MANQUANT.
+
+RÈGLE RÉFÉRENCE PAROI = ADJACENCE (CRITIQUE) :
+Le champ "Référence paroi" dans le référentiel correspond au "type d'adjacence" dans le format BATIAUDIT.
+→ Pour un champ "Référence paroi", la valeur_audit DOIT être le type d'adjacence de la paroi (ex: "Extérieur", "Terre-Plein", "Locaux non chauffés non accessible", "Combles perdus", "Vide sanitaire", "Sous-sol non chauffé").
+→ Dans le BATIAUDIT, cherche "type d'adjacence Observé/Mesuré [valeur]" dans le bloc de la paroi concernée.
+→ INTERDIT : utiliser le matériau, le type de plancher ou l'état d'isolation comme "Référence paroi". Ces sont des champs séparés.
+→ Si valeur_audit_pre_extraite est fournie pour ce champ, elle contient déjà l'adjacence correcte — utilise-la directement.
 
 RÈGLES SPÉCIFIQUES TABLEAU FAÇADES (CRITIQUE) :
 La VT contient un tableau FAÇADES avec des colonnes DISTINCTES et INDÉPENDANTES : Orientation | Mitoyenneté | Composition | Dimensions | Surface...
@@ -3826,6 +3871,40 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
         console.warn('[callAI] JSON parsé mais pas de clé "resultats". Clés trouvées : ' + Object.keys(parsed).join(', '));
         parsed = { resultats: [], nouveaux_termes: [] };
       }
+
+      // ── Enforcement des valeurs pré-extraites ──────────────────────────
+      // Si l'IA a retourné une valeur incomplète (ex: "m²" au lieu de "36,00 m²"),
+      // on force la valeur pré-extraite qui est fiable (extraction directe du document).
+      if (parsed.resultats && parsed.resultats.length > 0) {
+        parsed.resultats = parsed.resultats.map(function(rv) {
+          // Enforcement Audit : preExtracted contient les valeurs BATIAUDIT fiables
+          var preAudit = preExtracted[rv.id_champ];
+          if (preAudit) {
+            var aiAudit = (rv.valeur_audit || '').trim();
+            var preHasDigit = /\d/.test(preAudit);
+            var aiHasDigit  = /\d/.test(aiAudit);
+            // Cas 1 : IA a retourné vide/null → utiliser pré-extrait
+            // Cas 2 : pré-extrait contient un nombre mais IA n'en a pas (ex: "m²" au lieu de "36,00 m²")
+            if (!aiAudit || (preHasDigit && !aiHasDigit && aiAudit.length < 10)) {
+              console.log('[ENFORCE-AUDIT] "' + rv.id_champ + '" : IA="' + aiAudit + '" → forcé="' + preAudit + '"');
+              rv = Object.assign({}, rv, { valeur_audit: preAudit });
+            }
+          }
+          // Enforcement VT : vtPreExtracted contient les valeurs lexique/SHAB fiables
+          var preVt = vtPreExtracted[rv.id_champ];
+          if (preVt) {
+            var aiVt = (rv.valeur_vt || '').trim();
+            var preVtHasDigit = /\d/.test(preVt);
+            var aiVtHasDigit  = /\d/.test(aiVt);
+            if (!aiVt || (preVtHasDigit && !aiVtHasDigit && aiVt.length < 10)) {
+              console.log('[ENFORCE-VT] "' + rv.id_champ + '" : IA="' + aiVt + '" → forcé="' + preVt + '"');
+              rv = Object.assign({}, rv, { valeur_vt: preVt });
+            }
+          }
+          return rv;
+        });
+      }
+
       return parsed;
     }
 
@@ -3948,6 +4027,7 @@ RÈGLES :
 3. Pour les ROUGE : vérifie si les deux valeurs ne disent pas la même chose différemment
    - "Non isolé" vs "Non" → même sens = devrait être VERT
    - "1,0" vs "RDC" → même sens = devrait être VERT
+   - "Référence paroi" = type d'adjacence (Extérieur, Terre-Plein, Locaux non chauffés, etc.) — pas le matériau
 4. NE CORRIGE PAS les VERT existants
 5. Confiance minimale pour corriger : 0.85
 
