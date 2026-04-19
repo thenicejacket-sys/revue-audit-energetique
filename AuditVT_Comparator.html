@@ -4107,11 +4107,11 @@ TON RÔLE : VÉRIFIER SYSTÉMATIQUEMENT que chaque valeur existe RÉELLEMENT dan
   • "non_verifie" = citation NON retrouvée → TRÈS SUSPECT, probable hallucination
   • "non_cite" = aucune citation fournie → vérifie la valeur toi-même dans les textes
 
-PAGES SOURCES : chaque résultat peut contenir "page_audit" et/ou "page_vt" — le numéro de page du PDF où la valeur a été trouvée. Utilise cette information pour vérifier directement dans la bonne zone du texte source. Si la page est indiquée, concentre ta vérification sur cette zone plutôt que de chercher dans tout le document.
+PAGES SOURCES : chaque résultat peut contenir "page_audit" et/ou "page_vt" — le numéro de page du PDF où la valeur a été trouvée. Les textes AUDIT et VT ci-dessous contiennent des marqueurs [--- PAGE X ---] qui délimitent chaque page. Quand un résultat indique page_vt: 27, cherche le marqueur [--- PAGE 27 ---] dans le texte VT et vérifie la donnée dans cette zone. Cela te permet de vérifier rapidement au lieu de parcourir tout le document.
 
 CONTRÔLES À EFFECTUER SUR CHAQUE RÉSULTAT :
 1. EXISTENCE : la valeur (audit ou VT) est-elle réellement présente dans le document source ?
-   → Utilise page_audit / page_vt pour localiser rapidement la donnée dans le texte.
+   → Cherche le marqueur [--- PAGE X ---] correspondant au page_audit / page_vt et vérifie dans cette zone.
    → Si non → hallucination_detectee
 2. COHÉRENCE : la valeur extraite correspond-elle bien au champ demandé (pas de confusion entre champs) ?
 3. RÉALISME : la valeur est-elle physiquement plausible ?
@@ -4161,9 +4161,20 @@ Si tous les résultats sont corrects, retourne {"corrections": []}`;
         return o;
       });
 
-      // Textes sources pour Maya (extraits limités pour rester dans le budget tokens)
-      var vtShort = vtText.substring(0, 30000);
-      var auditShort = auditText.substring(0, 20000);
+      // Insère des marqueurs [--- PAGE X ---] pour que Maya localise les données par page
+      function addPageMarkers(text, pageLog, maxLen) {
+        if (!pageLog || !pageLog.length || !text) return text.substring(0, maxLen);
+        var parts = [];
+        for (var i = 0; i < pageLog.length; i++) {
+          var start = pageLog[i].offset;
+          var end = (i + 1 < pageLog.length) ? pageLog[i + 1].offset : text.length;
+          parts.push('\n[--- PAGE ' + pageLog[i].page + ' ---]\n' + text.substring(start, end));
+        }
+        return parts.join('').substring(0, maxLen);
+      }
+      // Textes sources pour Maya avec marqueurs de page (budget tokens)
+      var vtShort = addPageMarkers(vtText, state.vtPageLog, 30000);
+      var auditShort = addPageMarkers(auditText, state.auditPageLog, 20000);
 
       var mayaContent = `RÉSULTATS SUSPECTS À VALIDER :
 ${JSON.stringify(suspectsCompact, null, 2)}
