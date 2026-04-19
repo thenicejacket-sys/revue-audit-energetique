@@ -3610,6 +3610,90 @@
       return learnings.slice(0, 5);
     }
 
+    async function kbMigrateHistory() {
+      var history = [];
+      try {
+        var raw = localStorage.getItem('otenergie_history');
+        history = raw ? JSON.parse(raw) : [];
+      } catch (e) { console.warn('[KB-MIGRATE] Impossible de lire l\'historique:', e.message); return; }
+
+      if (!history.length) { console.log('[KB-MIGRATE] Aucun historique trouvé.'); return; }
+
+      var allLearnings = [];
+      var analysesWithMaya = 0;
+
+      history.forEach(function(entry) {
+        if (!entry.results) return;
+        var results = [];
+        try { results = JSON.parse(entry.results); } catch (e) { return; }
+
+        var mayaCorrected = results.filter(function(r) { return r._maya_corrected; });
+        if (!mayaCorrected.length) return;
+        analysesWithMaya++;
+
+        mayaCorrected.forEach(function(r) {
+          var orig = r._maya_original || {};
+          var comment = r.commentaire || '';
+          // Extraire la raison Maya du commentaire
+          var mayaMatch = comment.match(/\u2726 Maya[^:]*:\s*([^\]]+)/);
+          var raison = mayaMatch ? mayaMatch[1].trim() : '';
+
+          if (/Hallucination/i.test(comment)) {
+            allLearnings.push({
+              category: 'correction',
+              content: 'Hallucination sur "' + r.id_champ + '"' + (r.instance_label ? ' (' + r.instance_label + ')' : '') + ' — ' + (raison || 'valeur VT inexistante dans le document source'),
+              topic: 'hallucination'
+            });
+          } else if (orig.statut && orig.statut !== r.statut) {
+            if (r.statut === 'VERT' && (orig.statut === 'ROUGE' || orig.statut === 'ORANGE')) {
+              allLearnings.push({
+                category: 'knowledge',
+                content: 'Équivalence sémantique : "' + r.id_champ + '" — ' + (raison || orig.statut + ' corrigé en VERT'),
+                topic: 'equivalence'
+              });
+            } else {
+              allLearnings.push({
+                category: 'correction',
+                content: 'Correction "' + r.id_champ + '" : ' + orig.statut + ' → ' + r.statut + ' — ' + (raison || 'correction de statut'),
+                topic: 'correction'
+              });
+            }
+          }
+        });
+      });
+
+      if (!allLearnings.length) {
+        console.log('[KB-MIGRATE] ' + history.length + ' analyses trouvées, mais aucune correction Maya exploitable.');
+        return;
+      }
+
+      // Dedup par contenu (first 60 chars)
+      var seen = {};
+      var unique = allLearnings.filter(function(l) {
+        var key = l.content.substring(0, 60);
+        if (seen[key]) return false;
+        seen[key] = true;
+        return true;
+      });
+
+      console.log('[KB-MIGRATE] ' + analysesWithMaya + ' analyse(s) avec corrections Maya, ' + unique.length + ' learning(s) unique(s) à migrer.');
+
+      // Envoyer en batches de 10
+      var totalSaved = 0, totalSkipped = 0;
+      for (var i = 0; i < unique.length; i += 10) {
+        var batch = unique.slice(i, i + 10);
+        var result = await kbReflect('maya', batch);
+        totalSaved += result.saved || 0;
+        totalSkipped += result.skipped || 0;
+      }
+
+      console.log('[KB-MIGRATE] Migration terminée : ' + totalSaved + ' learning(s) sauvegardé(s), ' + totalSkipped + ' ignoré(s) (déjà existants).');
+      return { migrated: totalSaved, skipped: totalSkipped, total: unique.length };
+    }
+
+    // Exposer pour utilisation depuis la console navigateur
+    window.kbMigrateHistory = kbMigrateHistory;
+
     async function callAI(fields, auditText, vtText, preExtracted, instanceHints) {
       preExtracted = preExtracted || {};
       instanceHints = instanceHints || {};
