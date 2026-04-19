@@ -3556,6 +3556,60 @@
       return result;
     }
 
+    // ── KB Auto-apprentissage Maya ─────────────────────────────────────────────
+    async function kbGetLearnings(agentId) {
+      try {
+        var res = await fetch('/api/kb', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'get_learnings', agent_id: agentId, max_tokens: 1500 })
+        });
+        if (!res.ok) return '';
+        var data = await res.json();
+        return data.learnings_text || '';
+      } catch (e) { console.warn('[KB] getLearnings error:', e.message); return ''; }
+    }
+
+    async function kbReflect(agentId, learnings) {
+      try {
+        var res = await fetch('/api/kb', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'reflect', agent_id: agentId, learnings: learnings })
+        });
+        if (!res.ok) return { saved: 0, skipped: 0 };
+        return await res.json();
+      } catch (e) { console.warn('[KB] reflect error:', e.message); return { saved: 0, skipped: 0 }; }
+    }
+
+    function extractMayaLearnings(corrections) {
+      if (!corrections || !corrections.length) return [];
+      var learnings = [];
+      corrections.forEach(function(c) {
+        if (c.action === 'hallucination_detectee') {
+          learnings.push({
+            category: 'correction',
+            content: 'Hallucination détectée sur champ "' + c.id_champ + '"' + (c.instance_label ? ' (instance: ' + c.instance_label + ')' : '') + ' — ' + c.raison,
+            topic: 'hallucination'
+          });
+        } else if (c.action === 'corriger_statut' && c.nouveau_statut === 'VERT') {
+          learnings.push({
+            category: 'knowledge',
+            content: 'Équivalence sémantique confirmée pour champ "' + c.id_champ + '" — ' + c.raison,
+            topic: 'equivalence'
+          });
+        } else if (c.action === 'corriger_statut' || c.action === 'corriger_valeur') {
+          learnings.push({
+            category: 'correction',
+            content: 'Correction ' + c.action + ' sur "' + c.id_champ + '"' + (c.instance_label ? ' (' + c.instance_label + ')' : '') + ' → ' + c.nouveau_statut + ' — ' + c.raison,
+            topic: 'correction'
+          });
+        }
+      });
+      // Cap à 5 learnings par analyse
+      return learnings.slice(0, 5);
+    }
+
     async function callAI(fields, auditText, vtText, preExtracted, instanceHints) {
       preExtracted = preExtracted || {};
       instanceHints = instanceHints || {};
@@ -4095,6 +4149,13 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
 
       console.log('[MAYA] Validation complète : ' + suspects.length + ' résultat(s) à vérifier dans les documents sources.');
 
+      // ── Auto-apprentissage : injection des learnings précédents ──
+      var learningsBlock = '';
+      try {
+        learningsBlock = await kbGetLearnings('maya');
+        if (learningsBlock) console.log('[MAYA-KB] ' + (learningsBlock.match(/^- /gm) || []).length + ' learning(s) injecté(s) dans le prompt.');
+      } catch (e) { console.warn('[MAYA-KB] Injection learnings échouée:', e.message); }
+
       var mayaSystemPrompt = `Tu es Maya, experte en audit énergétique et contrôle qualité des données.
 Tu reçois TOUS les résultats d'analyse Audit vs VT (VERT, ROUGE, ORANGE, MANQUANT).
 
@@ -4142,7 +4203,7 @@ Réponds UNIQUEMENT en JSON strict :
     }
   ]
 }
-Si tous les résultats sont corrects, retourne {"corrections": []}`;
+Si tous les résultats sont corrects, retourne {"corrections": []}` + (learningsBlock ? '\n' + learningsBlock : '');
 
       var suspectsCompact = suspects.map(function(r) {
         var o = {
@@ -4283,6 +4344,17 @@ ${vtShort}`;
 
         console.log('[MAYA] ' + corrCount + ' correction(s) appliquée(s).');
         results._mayaStatus = { ran: true, corrections: corrCount, suspects: suspects.length, error: null };
+
+        // ── Auto-apprentissage : sauvegarder les corrections comme learnings ──
+        try {
+          var mayaLearnings = extractMayaLearnings(mayaResult.corrections);
+          if (mayaLearnings.length > 0) {
+            kbReflect('maya', mayaLearnings).then(function(r) {
+              console.log('[MAYA-KB] Auto-apprentissage : ' + r.saved + ' learning(s) sauvegardé(s), ' + r.skipped + ' ignoré(s).');
+            }).catch(function() {});
+          }
+        } catch (e) { console.warn('[MAYA-KB] Extraction learnings échouée:', e.message); }
+
         return results;
 
       } catch (mayaErr) {
