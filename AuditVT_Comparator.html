@@ -3313,28 +3313,45 @@
         }
         return pageLog[0].page;
       }
+      // Recherche flexible : whitespace-insensitive dans le texte source
+      function findOffsetFlex(needle, haystack) {
+        if (!needle || !haystack) return -1;
+        var clean = needle.replace(/[\u2026\u2026\u00ab\u00bb""]/g,'').replace(/\s+/g,' ').trim().substring(0,35).toLowerCase();
+        if (clean.length < 5) return -1;
+        // Convertir en regex : chaque espace → \s+ pour matcher whitespace variable du PDF
+        var escaped = clean.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '\\s+');
+        try {
+          var rx = new RegExp(escaped);
+          var m = rx.exec(haystack.toLowerCase());
+          return m ? m.index : -1;
+        } catch(e) { return -1; }
+      }
       (function preComputePages() {
         var audit = auditFull || '';
         var vt    = vtFull    || '';
-        var auditLower = audit.toLowerCase();
-        var vtLower    = vt.toLowerCase();
         var auditPL = state.auditPageLog || [];
         var vtPL    = state.vtPageLog    || [];
         if (!auditPL.length && !vtPL.length) return;
+        var found = 0;
         state.analysisResults.forEach(function(rv) {
-          var needleA = rv.extrait_audit || '';
-          if (needleA && !rv._page_audit) {
-            var nA = needleA.replace(/[\u2026…]/g,'').replace(/\s+/g,' ').substring(0,40).toLowerCase();
-            var iA = auditLower.indexOf(nA);
-            if (iA >= 0) rv._page_audit = findPageForOffset(auditPL, iA);
+          // Page Audit : essayer extrait_audit, puis valeur_audit
+          if (!rv._page_audit) {
+            var iA = findOffsetFlex(rv.extrait_audit, audit);
+            if (iA < 0 && rv.valeur_audit && rv.valeur_audit !== 'MANQUANT') {
+              iA = findOffsetFlex(rv.valeur_audit, audit);
+            }
+            if (iA >= 0) { rv._page_audit = findPageForOffset(auditPL, iA); found++; }
           }
-          var needleV = rv.extrait_vt || '';
-          if (needleV && !rv._page_vt) {
-            var nV = needleV.replace(/[\u2026…]/g,'').replace(/\s+/g,' ').substring(0,40).toLowerCase();
-            var iV = vtLower.indexOf(nV);
-            if (iV >= 0) rv._page_vt = findPageForOffset(vtPL, iV);
+          // Page VT : essayer extrait_vt, puis valeur_vt
+          if (!rv._page_vt) {
+            var iV = findOffsetFlex(rv.extrait_vt, vt);
+            if (iV < 0 && rv.valeur_vt && rv.valeur_vt !== 'MANQUANT') {
+              iV = findOffsetFlex(rv.valeur_vt, vt);
+            }
+            if (iV >= 0) { rv._page_vt = findPageForOffset(vtPL, iV); found++; }
           }
         });
+        console.log('[PAGES] Pré-calcul pages sources : ' + found + ' pages trouvées sur ' + state.analysisResults.length + ' résultats');
       })();
 
       // ── Agent Maya — Validation post-extraction ──────────────────────────
@@ -3447,38 +3464,25 @@
         });
       })();
 
-      // ── Pass global : numéros de page PDF pour TOUS les résultats ──────
-      // Cherche la position de l'extrait ou du contexte dans le texte source,
-      // puis mappe l'offset vers un numéro de page via pageLog.
+      // ── Pass global : rattrapage pages manquantes après enrichContexts ──────
       (function computeSourcePages() {
         var audit = auditFull || '';
         var vt    = vtFull    || '';
-        var auditLower = audit.toLowerCase();
-        var vtLower    = vt.toLowerCase();
         var auditPL = state.auditPageLog || [];
         var vtPL    = state.vtPageLog    || [];
         if (!auditPL.length && !vtPL.length) return;
-
+        var found = 0;
         state.analysisResults.forEach(function(rv) {
-          // Page Audit
           if (!rv._page_audit) {
-            var needleA = rv.extrait_audit || rv._ctx_audit || '';
-            if (needleA) {
-              var nA = needleA.replace(/[\u2026…]/g,'').replace(/\s+/g,' ').substring(0,40).toLowerCase();
-              var iA = auditLower.indexOf(nA);
-              if (iA >= 0) rv._page_audit = findPageForOffset(auditPL, iA);
-            }
+            var iA = findOffsetFlex(rv._ctx_audit || rv.extrait_audit || rv.valeur_audit, audit);
+            if (iA >= 0) { rv._page_audit = findPageForOffset(auditPL, iA); found++; }
           }
-          // Page VT
           if (!rv._page_vt) {
-            var needleV = rv.extrait_vt || rv._ctx_vt || '';
-            if (needleV) {
-              var nV = needleV.replace(/[\u2026…]/g,'').replace(/\s+/g,' ').substring(0,40).toLowerCase();
-              var iV = vtLower.indexOf(nV);
-              if (iV >= 0) rv._page_vt = findPageForOffset(vtPL, iV);
-            }
+            var iV = findOffsetFlex(rv._ctx_vt || rv.extrait_vt || rv.valeur_vt, vt);
+            if (iV >= 0) { rv._page_vt = findPageForOffset(vtPL, iV); found++; }
           }
         });
+        console.log('[PAGES] Pass global rattrapage : ' + found + ' pages supplémentaires');
       })();
 
       updateProgress(100, 'Analyse terminée !', 'Rapport prêt.');
