@@ -3253,24 +3253,10 @@
           if (hasAuditVal && vA === 'non_verifie') warnParts.push('Audit: valeur non retrouv\u00e9e dans le texte');
           if (hasVtVal    && vV === 'non_verifie') warnParts.push('VT: valeur non retrouv\u00e9e dans le texte');
           var verif_comment = warnParts.length > 0 ? '\u26a0\ufe0f ' + warnParts.join(' / ') : '';
-          // ---- Page source PDF pour les extraits IA ----
-          var _pgA = null, _pgV = null;
-          if (rv.extrait_audit && auditFull) {
-            var _nA = rv.extrait_audit.replace(/\s+/g,' ').substring(0,40).toLowerCase();
-            var _iA = auditFull.toLowerCase().indexOf(_nA);
-            if (_iA >= 0) _pgA = findPageForOffset(state.auditPageLog || [], _iA);
-          }
-          if (rv.extrait_vt && vtFull) {
-            var _nV = rv.extrait_vt.replace(/\s+/g,' ').substring(0,40).toLowerCase();
-            var _iV = vtFull.toLowerCase().indexOf(_nV);
-            if (_iV >= 0) _pgV = findPageForOffset(state.vtPageLog || [], _iV);
-          }
           return Object.assign({}, rv, {
             _verif_audit: vA,
             _verif_vt:    vV,
-            _verif_warn:  verif_comment,
-            _page_audit:  rv._page_audit || _pgA,
-            _page_vt:     rv._page_vt    || _pgV
+            _verif_warn:  verif_comment
           });
         });
         // Récupération des résultats manquants : si l'IA n'a pas retourné de résultat
@@ -3319,6 +3305,38 @@
         return !!(rv.valeur_audit && rv.valeur_audit.trim() && rv.valeur_audit.trim() !== '-');
       });
 
+      // ── Pré-calcul des pages sources PDF (AVANT Maya pour qu'elle les utilise) ──
+      function findPageForOffset(pageLog, charIndex) {
+        if (!pageLog || !pageLog.length || charIndex < 0) return null;
+        for (var i = pageLog.length - 1; i >= 0; i--) {
+          if (charIndex >= pageLog[i].offset) return pageLog[i].page;
+        }
+        return pageLog[0].page;
+      }
+      (function preComputePages() {
+        var audit = auditFull || '';
+        var vt    = vtFull    || '';
+        var auditLower = audit.toLowerCase();
+        var vtLower    = vt.toLowerCase();
+        var auditPL = state.auditPageLog || [];
+        var vtPL    = state.vtPageLog    || [];
+        if (!auditPL.length && !vtPL.length) return;
+        state.analysisResults.forEach(function(rv) {
+          var needleA = rv.extrait_audit || '';
+          if (needleA && !rv._page_audit) {
+            var nA = needleA.replace(/[\u2026…]/g,'').replace(/\s+/g,' ').substring(0,40).toLowerCase();
+            var iA = auditLower.indexOf(nA);
+            if (iA >= 0) rv._page_audit = findPageForOffset(auditPL, iA);
+          }
+          var needleV = rv.extrait_vt || '';
+          if (needleV && !rv._page_vt) {
+            var nV = needleV.replace(/[\u2026…]/g,'').replace(/\s+/g,' ').substring(0,40).toLowerCase();
+            var iV = vtLower.indexOf(nV);
+            if (iV >= 0) rv._page_vt = findPageForOffset(vtPL, iV);
+          }
+        });
+      })();
+
       // ── Agent Maya — Validation post-extraction ──────────────────────────
       // Détecter si des erreurs API sont survenues pendant l'analyse (inutile d'appeler Maya si l'API est down/quota)
       var _apiErrors = state.analysisResults.filter(function(r) {
@@ -3352,15 +3370,6 @@
 
       updateProgress(95, 'Compilation des résultats...', 'Extraction des contextes sources...');
       await sleep(200);
-
-      // ── Helper : offset dans fullText → numéro de page PDF ──────
-      function findPageForOffset(pageLog, charIndex) {
-        if (!pageLog || !pageLog.length || charIndex < 0) return null;
-        for (var i = pageLog.length - 1; i >= 0; i--) {
-          if (charIndex >= pageLog[i].offset) return pageLog[i].page;
-        }
-        return pageLog[0].page;
-      }
 
       // ── Enrichissement JS : contexte source pour les extraits manquants ──────
       // Pour chaque résultat sans extrait_audit/extrait_vt, cherche le passage
@@ -3433,6 +3442,40 @@
                 if (resV.offset >= 0) rv._page_vt = findPageForOffset(vtPL, resV.offset);
                 break;
               }
+            }
+          }
+        });
+      })();
+
+      // ── Pass global : numéros de page PDF pour TOUS les résultats ──────
+      // Cherche la position de l'extrait ou du contexte dans le texte source,
+      // puis mappe l'offset vers un numéro de page via pageLog.
+      (function computeSourcePages() {
+        var audit = auditFull || '';
+        var vt    = vtFull    || '';
+        var auditLower = audit.toLowerCase();
+        var vtLower    = vt.toLowerCase();
+        var auditPL = state.auditPageLog || [];
+        var vtPL    = state.vtPageLog    || [];
+        if (!auditPL.length && !vtPL.length) return;
+
+        state.analysisResults.forEach(function(rv) {
+          // Page Audit
+          if (!rv._page_audit) {
+            var needleA = rv.extrait_audit || rv._ctx_audit || '';
+            if (needleA) {
+              var nA = needleA.replace(/[\u2026…]/g,'').replace(/\s+/g,' ').substring(0,40).toLowerCase();
+              var iA = auditLower.indexOf(nA);
+              if (iA >= 0) rv._page_audit = findPageForOffset(auditPL, iA);
+            }
+          }
+          // Page VT
+          if (!rv._page_vt) {
+            var needleV = rv.extrait_vt || rv._ctx_vt || '';
+            if (needleV) {
+              var nV = needleV.replace(/[\u2026…]/g,'').replace(/\s+/g,' ').substring(0,40).toLowerCase();
+              var iV = vtLower.indexOf(nV);
+              if (iV >= 0) rv._page_vt = findPageForOffset(vtPL, iV);
             }
           }
         });
@@ -4056,8 +4099,11 @@ TON RÔLE : VÉRIFIER SYSTÉMATIQUEMENT que chaque valeur existe RÉELLEMENT dan
   • "non_verifie" = citation NON retrouvée → TRÈS SUSPECT, probable hallucination
   • "non_cite" = aucune citation fournie → vérifie la valeur toi-même dans les textes
 
+PAGES SOURCES : chaque résultat peut contenir "page_audit" et/ou "page_vt" — le numéro de page du PDF où la valeur a été trouvée. Utilise cette information pour vérifier directement dans la bonne zone du texte source. Si la page est indiquée, concentre ta vérification sur cette zone plutôt que de chercher dans tout le document.
+
 CONTRÔLES À EFFECTUER SUR CHAQUE RÉSULTAT :
 1. EXISTENCE : la valeur (audit ou VT) est-elle réellement présente dans le document source ?
+   → Utilise page_audit / page_vt pour localiser rapidement la donnée dans le texte.
    → Si non → hallucination_detectee
 2. COHÉRENCE : la valeur extraite correspond-elle bien au champ demandé (pas de confusion entre champs) ?
 3. RÉALISME : la valeur est-elle physiquement plausible ?
@@ -4091,7 +4137,7 @@ Réponds UNIQUEMENT en JSON strict :
 Si tous les résultats sont corrects, retourne {"corrections": []}`;
 
       var suspectsCompact = suspects.map(function(r) {
-        return {
+        var o = {
           id_champ: r.id_champ,
           instance_label: r.instance_label || null,
           nom: r._fieldNom || r.id_champ,
@@ -4102,6 +4148,9 @@ Si tous les résultats sont corrects, retourne {"corrections": []}`;
           citation_vt_verifiee: r._verif_vt || 'non_teste',
           citation_audit_verifiee: r._verif_audit || 'non_teste'
         };
+        if (r._page_audit) o.page_audit = r._page_audit;
+        if (r._page_vt)    o.page_vt    = r._page_vt;
+        return o;
       });
 
       // Textes sources pour Maya (extraits limités pour rester dans le budget tokens)
