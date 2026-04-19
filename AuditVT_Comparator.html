@@ -3313,16 +3313,20 @@
         }
         return pageLog[0].page;
       }
-      // Recherche flexible : whitespace-insensitive dans le texte source
+      // Normalise les accents français (remplacement 1:1 → offsets préservés)
+      function stripAccents(s) {
+        return s.replace(/[àâäãÀÂÄÃ]/g,'a').replace(/[éèêëÉÈÊË]/g,'e').replace(/[îïìÎÏÌ]/g,'i').replace(/[ôöòÔÖÒ]/g,'o').replace(/[ùûüúÙÛÜÚ]/g,'u').replace(/[çÇ]/g,'c').replace(/[ñÑ]/g,'n');
+      }
+      // Recherche flexible : whitespace + accent insensitive dans le texte source
       function findOffsetFlex(needle, haystack) {
         if (!needle || !haystack) return -1;
-        var clean = needle.replace(/[\u2026\u2026\u00ab\u00bb""]/g,'').replace(/\s+/g,' ').trim().substring(0,35).toLowerCase();
+        var clean = stripAccents(needle.replace(/[\u2026\u00ab\u00bb\u201c\u201d""]/g,'').replace(/\s+/g,' ').trim().substring(0,50).toLowerCase());
         if (clean.length < 5) return -1;
         // Convertir en regex : chaque espace → \s+ pour matcher whitespace variable du PDF
         var escaped = clean.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '\\s+');
         try {
           var rx = new RegExp(escaped);
-          var m = rx.exec(haystack.toLowerCase());
+          var m = rx.exec(stripAccents(haystack.toLowerCase()));
           return m ? m.index : -1;
         } catch(e) { return -1; }
       }
@@ -3393,7 +3397,7 @@
       // dans le texte source en croisant label du champ + valeur numérique.
       (function enrichContexts() {
         function norm(s) {
-          return (s||'').replace(/[^\w\d\s,.\-\/]/g,' ').replace(/\s+/g,' ').toLowerCase();
+          return stripAccents((s||'').toLowerCase()).replace(/[^\w\d\s,.\-\/]/g,' ').replace(/\s+/g,' ');
         }
         // Cherche label puis valeur à proximité, ou juste la valeur si non trouvé
         // Retourne { snippet, offset } au lieu d'une simple string
