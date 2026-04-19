@@ -1641,14 +1641,17 @@
                     <option value="gpt-4.1-mini">GPT-4.1 mini</option>
                   </optgroup>
                   <optgroup label="Anthropic (via OpenRouter)">
-                    <option value="anthropic/claude-sonnet-4-6">Claude Sonnet 4.6</option>
                     <option value="anthropic/claude-haiku-4-5">Claude Haiku 4.5</option>
                   </optgroup>
                   <optgroup label="Google (via OpenRouter)">
                     <option value="google/gemini-2.5-pro">Gemini 2.5 Pro</option>
                     <option value="google/gemini-2.5-flash">Gemini 2.5 Flash</option>
                   </optgroup>
+                  <option value="custom">Personnalis&#233;...</option>
                 </select>
+                <div id="fixc-custom-group" style="margin-top:6px;display:none;">
+                  <input type="text" id="fixc-custom-input" class="form-input" placeholder="ex: anthropic/claude-haiku-4-5" oninput="onFixCCustomInput()" style="max-width:320px;" />
+                </div>
               </div>
             </div>
 
@@ -1934,12 +1937,14 @@
             state.auditText = text;
             state.auditFileName = file.name;
             state.auditFileSize = file.size;
+            state.auditPageLog = result.pageLog;
             // Extraction tabulaire structurée — audit
             state.auditTables = extractAuditTablesFromItems(result.items);
           } else {
             state.vtText = text;
             state.vtFileName = file.name;
             state.vtFileSize = file.size;
+            state.vtPageLog = result.pageLog;
             // Extraction tabulaire structurée — VT
             state.vtTables = extractTablesFromItems(result.items);
           }
@@ -2352,7 +2357,7 @@
       if (p26) {
         console.log('[PDF ' + (side||'') + '] Résumé: ' + pdf.numPages + ' pages, total ' + fullText.length + ' chars. Page 26 commence à offset ' + p26.offset + (p26.offset > 90000 ? ' ⚠️ AU-DELÀ DE LA LIMITE 90000' : ' ✅ dans la limite'));
       }
-      return { text: fullText.trim(), items: allItems };
+      return { text: fullText.trim(), items: allItems, pageLog: pageLog };
     }
 
     function setDropZoneLoading(side, name, size) {
@@ -3248,10 +3253,24 @@
           if (hasAuditVal && vA === 'non_verifie') warnParts.push('Audit: valeur non retrouv\u00e9e dans le texte');
           if (hasVtVal    && vV === 'non_verifie') warnParts.push('VT: valeur non retrouv\u00e9e dans le texte');
           var verif_comment = warnParts.length > 0 ? '\u26a0\ufe0f ' + warnParts.join(' / ') : '';
+          // ---- Page source PDF pour les extraits IA ----
+          var _pgA = null, _pgV = null;
+          if (rv.extrait_audit && auditFull) {
+            var _nA = rv.extrait_audit.replace(/\s+/g,' ').substring(0,40).toLowerCase();
+            var _iA = auditFull.toLowerCase().indexOf(_nA);
+            if (_iA >= 0) _pgA = findPageForOffset(state.auditPageLog || [], _iA);
+          }
+          if (rv.extrait_vt && vtFull) {
+            var _nV = rv.extrait_vt.replace(/\s+/g,' ').substring(0,40).toLowerCase();
+            var _iV = vtFull.toLowerCase().indexOf(_nV);
+            if (_iV >= 0) _pgV = findPageForOffset(state.vtPageLog || [], _iV);
+          }
           return Object.assign({}, rv, {
             _verif_audit: vA,
             _verif_vt:    vV,
-            _verif_warn:  verif_comment
+            _verif_warn:  verif_comment,
+            _page_audit:  rv._page_audit || _pgA,
+            _page_vt:     rv._page_vt    || _pgV
           });
         });
         // Récupération des résultats manquants : si l'IA n'a pas retourné de résultat
@@ -3334,6 +3353,15 @@
       updateProgress(95, 'Compilation des résultats...', 'Extraction des contextes sources...');
       await sleep(200);
 
+      // ── Helper : offset dans fullText → numéro de page PDF ──────
+      function findPageForOffset(pageLog, charIndex) {
+        if (!pageLog || !pageLog.length || charIndex < 0) return null;
+        for (var i = pageLog.length - 1; i >= 0; i--) {
+          if (charIndex >= pageLog[i].offset) return pageLog[i].page;
+        }
+        return pageLog[0].page;
+      }
+
       // ── Enrichissement JS : contexte source pour les extraits manquants ──────
       // Pour chaque résultat sans extrait_audit/extrait_vt, cherche le passage
       // dans le texte source en croisant label du champ + valeur numérique.
@@ -3342,8 +3370,9 @@
           return (s||'').replace(/[^\w\d\s,.\-\/]/g,' ').replace(/\s+/g,' ').toLowerCase();
         }
         // Cherche label puis valeur à proximité, ou juste la valeur si non trouvé
+        // Retourne { snippet, offset } au lieu d'une simple string
         function findCtxJS(label, value, sourceText, halfLen) {
-          if (!value || value === 'MANQUANT' || !sourceText) return '';
+          if (!value || value === 'MANQUANT' || !sourceText) return { snippet: '', offset: -1 };
           var lower = norm(sourceText);
           var lbl   = norm(label).substring(0, 40);
           var val   = norm(value).replace(/m2|m²/g, 'm').replace(/[²2]$/,'').trim();
@@ -3365,15 +3394,19 @@
               idx = lower.indexOf(numStr.substring(0, Math.min(numStr.length, 8)));
             }
           }
-          if (idx < 0) return '';
+          if (idx < 0) return { snippet: '', offset: -1 };
           var s = Math.max(0, idx - halfLen);
           var e = Math.min(sourceText.length, idx + halfLen + label.length + 10);
           var snippet = sourceText.substring(s, e).replace(/[\r\n\t]+/g,' ').replace(/\s{2,}/g,' ').trim();
-          return (s > 0 ? '\u2026' : '') + snippet + (e < sourceText.length ? '\u2026' : '');
+          snippet = (s > 0 ? '\u2026' : '') + snippet + (e < sourceText.length ? '\u2026' : '');
+          return { snippet: snippet, offset: idx };
         }
 
         var audit = auditFull || '';
         var vt    = vtFull    || '';
+        var auditPL = state.auditPageLog || [];
+        var vtPL    = state.vtPageLog    || [];
+
         state.analysisResults.forEach(function(rv) {
           var label = getFieldNom(rv.id_champ) || rv.id_champ || '';
           // Termes VT alternatifs depuis le lexique du référentiel (colonnes F/G/H)
@@ -3387,13 +3420,19 @@
           }
 
           if (!rv.extrait_audit && rv.valeur_audit && rv.valeur_audit !== 'MANQUANT') {
-            rv._ctx_audit = findCtxJS(label, rv.valeur_audit, audit, 80);
+            var resA = findCtxJS(label, rv.valeur_audit, audit, 80);
+            rv._ctx_audit = resA.snippet;
+            if (resA.offset >= 0) rv._page_audit = findPageForOffset(auditPL, resA.offset);
           }
           if (!rv.extrait_vt && rv.valeur_vt && rv.valeur_vt !== 'MANQUANT') {
             // Essaie chaque terme VT (label + synonymes lexique) jusqu'au premier match
             for (var vi = 0; vi < vtAltLabels.length; vi++) {
-              rv._ctx_vt = findCtxJS(vtAltLabels[vi], rv.valeur_vt, vt, 80);
-              if (rv._ctx_vt) break;
+              var resV = findCtxJS(vtAltLabels[vi], rv.valeur_vt, vt, 80);
+              rv._ctx_vt = resV.snippet;
+              if (resV.snippet) {
+                if (resV.offset >= 0) rv._page_vt = findPageForOffset(vtPL, resV.offset);
+                break;
+              }
             }
           }
         });
@@ -4612,11 +4651,14 @@ ${vtShort}`;
         var ctxA = extA || (rv._ctx_audit  ? rv._ctx_audit.substring(0, 120)  : '');
         var ctxV = extV || (rv._ctx_vt     ? rv._ctx_vt.substring(0, 120)    : '');
 
-        if (extA) { lines.push((icon[iA]||'\u2014') + ' Audit : "' + extA + '"'); }
-        else if (ctxA) { lines.push('\ud83d\udd0d Audit : "' + ctxA + '"'); }
+        var pgA = rv._page_audit ? ' (p.' + rv._page_audit + ')' : '';
+        var pgV = rv._page_vt   ? ' (p.' + rv._page_vt   + ')' : '';
 
-        if (extV) { lines.push((icon[iV]||'\u2014') + ' VT : "' + extV + '"'); }
-        else if (ctxV) { lines.push('\ud83d\udd0d VT : "' + ctxV + '"'); }
+        if (extA) { lines.push((icon[iA]||'\u2014') + ' Audit' + pgA + ' : "' + extA + '"'); }
+        else if (ctxA) { lines.push('\ud83d\udd0d Audit' + pgA + ' : "' + ctxA + '"'); }
+
+        if (extV) { lines.push((icon[iV]||'\u2014') + ' VT' + pgV + ' : "' + extV + '"'); }
+        else if (ctxV) { lines.push('\ud83d\udd0d VT' + pgV + ' : "' + ctxV + '"'); }
 
         if (!extA && !ctxA && !extV && !ctxV) lines.push('\u2014 Non cit\u00e9 par l\'IA \u2014 valeur introuvable dans les sources');
 
@@ -5592,7 +5634,20 @@ ${vtShort}`;
       var fixcEl = document.getElementById('fixc-toggle');
       if (fixcEl) fixcEl.checked = !!state.config.fixCEnabled;
       var fixcModelEl = document.getElementById('fixc-model-select');
-      if (fixcModelEl && state.config.fixCModel) fixcModelEl.value = state.config.fixCModel;
+      var fixcCustomGroup = document.getElementById('fixc-custom-group');
+      if (fixcModelEl && state.config.fixCModel) {
+        // Vérifier si le modèle sauvegardé est dans le select
+        var optExists = Array.from(fixcModelEl.options).some(function(o) { return o.value === state.config.fixCModel; });
+        if (optExists) {
+          fixcModelEl.value = state.config.fixCModel;
+          if (fixcCustomGroup) fixcCustomGroup.style.display = 'none';
+        } else {
+          fixcModelEl.value = 'custom';
+          if (fixcCustomGroup) fixcCustomGroup.style.display = '';
+          var fixcInput = document.getElementById('fixc-custom-input');
+          if (fixcInput) fixcInput.value = state.config.fixCModel;
+        }
+      }
       var fixcGroup = document.getElementById('fixc-model-group');
       if (fixcGroup) fixcGroup.style.display = state.config.fixCEnabled ? '' : 'none';
 
@@ -5671,7 +5726,18 @@ ${vtShort}`;
     }
 
     function onFixCModelChange() {
-      state.config.fixCModel = document.getElementById('fixc-model-select').value || 'gpt-4o';
+      var val = document.getElementById('fixc-model-select').value;
+      var cg = document.getElementById('fixc-custom-group');
+      if (val === 'custom') {
+        if (cg) cg.style.display = '';
+        state.config.fixCModel = document.getElementById('fixc-custom-input').value || '';
+      } else {
+        if (cg) cg.style.display = 'none';
+        state.config.fixCModel = val || 'gpt-4o';
+      }
+    }
+    function onFixCCustomInput() {
+      state.config.fixCModel = document.getElementById('fixc-custom-input').value || '';
     }
 
     function onModelChange() {
@@ -5750,7 +5816,8 @@ ${vtShort}`;
       state.config.mayaEnabled = document.getElementById('maya-toggle').checked;
       state.config.mayaModel  = document.getElementById('maya-model-select').value || '';
       state.config.fixCEnabled = document.getElementById('fixc-toggle').checked;
-      state.config.fixCModel   = document.getElementById('fixc-model-select').value || 'gpt-4o';
+      var _fixcSel = document.getElementById('fixc-model-select').value;
+      state.config.fixCModel = _fixcSel === 'custom' ? (document.getElementById('fixc-custom-input').value || '') : (_fixcSel || 'gpt-4o');
       const modelSel = document.getElementById('model-select').value;
       if (modelSel === 'custom') {
         state.config.model = document.getElementById('model-custom-input').value.trim();
