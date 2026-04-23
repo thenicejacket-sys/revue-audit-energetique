@@ -6026,18 +6026,17 @@ Pour CHAQUE ligne critique, renvoie ton verdict en JSON strict :
       });
 
       // Bloc Légende des scores de confiance (Vague 2) — avant le bloc compteur
-      var legHdr=ws1.addRow(['Légende des scores de confiance Maya','','']); legHdr.height=26;
+      var legHdr=ws1.addRow(['Légende des scores de confiance Maya','','']); legHdr.height=18;
       ws1.mergeCells(legHdr.number,1,legHdr.number,3);
       sc(legHdr.getCell(1),'FF7B2D8E',C.WHT,{bold:true,align:'left',sz:11});
       [
-        ['🟢 Certain', 'Maya a pu comparer les deux valeurs et le verdict (conforme ou non) est fiable.', 'FFE7F6E8', 'FF1B5E20', 22],
-        ['🟡 À vérifier', 'Écart dans la tolérance ou valeur partielle ; un coup d\'œil humain est recommandé.', 'FFFFF4E0', 'FF9C5700', 22],
-        ['🔴 Incertain', 'Maya n\'a pas pu juger : donnée absente, illisible, ou corrigée avec doute. Ne signifie PAS « non-conforme ».', 'FFFFEBEE', 'FF8E0000', 32]
+        ['🟢 Certain — Maya a comparé les deux valeurs ; verdict fiable.', 'FFE7F6E8', 'FF1B5E20'],
+        ['🟡 À vérifier — Écart dans la tolérance ou valeur partielle ; relecture humaine conseillée.', 'FFFFF4E0', 'FF9C5700'],
+        ['🔴 Incertain — Maya n\'a pas pu juger (donnée absente ou douteuse). Ne signifie PAS « non-conforme ».', 'FFFFEBEE', 'FF8E0000']
       ].forEach(function(d){
-        var r=ws1.addRow([d[0], d[1], '']); r.height=d[4];
-        ws1.mergeCells(r.number, 2, r.number, 3);
-        sc(r.getCell(1), d[2], d[3], {bold:true, sz:12, align:'center'});
-        sc(r.getCell(2), d[2], d[3], {sz:11, wrap:true, align:'left'});
+        var r=ws1.addRow([d[0], '', '']); r.height=16;
+        ws1.mergeCells(r.number, 1, r.number, 3);
+        sc(r.getCell(1), d[1], d[2], {bold:true, sz:10, align:'left'});
       });
       ws1.addRow(['','','']).height=6;
 
@@ -6106,7 +6105,11 @@ Pour CHAQUE ligne critique, renvoie ton verdict en JSON strict :
           sc(dr.getCell(1),g.row,g.rtxt,{bold:true}); sc(dr.getCell(2),g.row,g.rtxt,{});
           sc(dr.getCell(3),g.row,g.rtxt,{}); sc(dr.getCell(4),g.badge,C.WHT,{bold:true,align:'center'});
           sc(dr.getCell(5),confCol.bg,confCol.fg,{bold:true,align:'center'});
-          if (conf.reason) { try { dr.getCell(5).note = conf.reason; } catch(e) {} }
+          if (conf.reason) {
+            try {
+              dr.getCell(5).dataValidation={type:'custom',allowBlank:true,showInputMessage:true,promptTitle:'Détail confiance',prompt:conf.reason,formulae:['TRUE']};
+            } catch(e) {}
+          }
           sc(dr.getCell(6),g.row,g.rtxt,{wrap:true});
           sc(dr.getCell(7),vfCell.bg,vfCell.fg,{sz:8,wrap:true,italic:true});
           var revuVal=rv.revu_doc||''; var revuFill=revuVal==='VT'?'FFDBEAFE':revuVal==='Audit'?'FFDCFCE7':g.row;
@@ -6132,7 +6135,11 @@ Pour CHAQUE ligne critique, renvoie ton verdict en JSON strict :
           sc(dr.getCell(1),g.row,g.rtxt,{bold:true}); sc(dr.getCell(2),g.row,g.rtxt,{});
           sc(dr.getCell(3),g.row,g.rtxt,{}); sc(dr.getCell(4),g.badge,C.WHT,{bold:true,align:'center'});
           sc(dr.getCell(5),confCol.bg,confCol.fg,{bold:true,align:'center'});
-          if (conf.reason) { try { dr.getCell(5).note = conf.reason; } catch(e) {} }
+          if (conf.reason) {
+            try {
+              dr.getCell(5).dataValidation={type:'custom',allowBlank:true,showInputMessage:true,promptTitle:'Détail confiance',prompt:conf.reason,formulae:['TRUE']};
+            } catch(e) {}
+          }
           sc(dr.getCell(6),g.row,g.rtxt,{wrap:true});
           sc(dr.getCell(7),vfCell.bg,vfCell.fg,{sz:8,wrap:true,italic:true});
           var revuVal=rv.revu_doc||''; var revuFill=revuVal==='VT'?'FFDBEAFE':revuVal==='Audit'?'FFDCFCE7':g.row;
