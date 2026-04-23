@@ -4930,14 +4930,24 @@ ${vtShort}`;
       }
 
       // Sections dans l'ordre du référentiel
+      var sectionIndex = 0;
       sectionOrder.forEach(function(sec) {
         const rows = bySection[sec];
         if (!rows || !rows.length) return;
+        if (sectionIndex > 0) {
+          for (var __sp = 0; __sp < 2; __sp++) {
+            var spacerRow = document.createElement('tr');
+            spacerRow.className = 'rapport-section-spacer';
+            spacerRow.innerHTML = '<td colspan="8" style="padding:0;border:none;background:transparent;height:14px">&nbsp;</td>';
+            tbody.appendChild(spacerRow);
+          }
+        }
         const secRow = document.createElement('tr');
         secRow.className = 'rapport-section-row';
         secRow.innerHTML = '<td colspan="8">&#9656; ' + escHtml(sec) + '<span class="rapport-section-count">(' + rows.length + ' champ' + (rows.length > 1 ? 's' : '') + ')</span></td>';
         tbody.appendChild(secRow);
         appendDataRows(rows);
+        sectionIndex++;
       });
 
       // Champs sans section (fallback)
