@@ -647,6 +647,166 @@
     .status-rouge   { background: #B71C1C; color: #ffffff; }
     .status-manquant{ background: #546E7A; color: #ffffff; }
 
+    /* ===== CONFIDENCE & MAYA FEEDBACK (Vague 1) ===== */
+    .confidence-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 9px;
+      border-radius: 20px;
+      font-weight: 700;
+      font-size: 10.5px;
+      white-space: nowrap;
+      border: 1px solid transparent;
+    }
+    .conf-high   { background: #E7F6E8; color: #1B5E20; border-color: #A5D6A7; }
+    .conf-medium { background: #FFF4E0; color: #9C5700; border-color: #FFCC80; }
+    .conf-low    { background: #FFEBEE; color: #8E0000; border-color: #EF9A9A; }
+
+    .feedback-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px; height: 26px;
+      border-radius: 50%;
+      border: 1px solid transparent;
+      background: transparent;
+      cursor: pointer;
+      margin-left: 6px;
+      font-size: 13px;
+      color: #7B2D8E;
+      transition: all 0.15s ease;
+      vertical-align: middle;
+    }
+    .feedback-btn:hover { background: #F3E5F5; border-color: #CE93D8; transform: scale(1.08); }
+    .feedback-btn.has-feedback { background: #7B2D8E; color: #FFFFFF; border-color: #6A1B9A; }
+    .feedback-btn.has-feedback::after {
+      content: attr(data-count);
+      position: relative;
+      font-size: 9px; font-weight: 700;
+      margin-left: 2px;
+    }
+
+    .confidence-strip {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin: 12px 0 4px;
+      padding: 10px 14px;
+      background: linear-gradient(135deg, rgba(123,45,142,0.05), rgba(27,63,139,0.04));
+      border: 1px solid rgba(123,45,142,0.15);
+      border-radius: 10px;
+      align-items: center;
+    }
+    .confidence-strip-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: #7B2D8E;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+    }
+    .confidence-strip-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 18px;
+      font-size: 12px;
+      font-weight: 600;
+      background: #FFFFFF;
+      border: 1px solid var(--border);
+    }
+    .confidence-strip-item .num { font-weight: 800; font-size: 14px; }
+    .confidence-strip-item.high   { color: #1B5E20; border-color: #A5D6A7; }
+    .confidence-strip-item.medium { color: #9C5700; border-color: #FFCC80; }
+    .confidence-strip-item.low    { color: #8E0000; border-color: #EF9A9A; }
+
+    /* Modal Maya feedback */
+    .maya-modal-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(15, 23, 42, 0.55);
+      display: none;
+      align-items: center; justify-content: center;
+      z-index: 9999;
+      backdrop-filter: blur(3px);
+    }
+    .maya-modal-overlay.visible { display: flex; }
+    .maya-modal {
+      background: #FFFFFF;
+      border-radius: 14px;
+      width: 520px; max-width: 92vw;
+      max-height: 88vh; overflow-y: auto;
+      box-shadow: 0 18px 60px rgba(0,0,0,0.25);
+      border: 1px solid rgba(123,45,142,0.25);
+      display: flex; flex-direction: column;
+    }
+    .maya-modal-header {
+      padding: 14px 18px;
+      background: linear-gradient(135deg, #7B2D8E, #5E1B6E);
+      color: #FFFFFF;
+      border-radius: 14px 14px 0 0;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .maya-modal-header-title { font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+    .maya-modal-close {
+      background: rgba(255,255,255,0.15);
+      border: none; color: #FFFFFF;
+      width: 28px; height: 28px;
+      border-radius: 50%; cursor: pointer;
+      font-size: 14px;
+    }
+    .maya-modal-close:hover { background: rgba(255,255,255,0.3); }
+    .maya-modal-body { padding: 16px 18px; }
+    .maya-modal-context {
+      background: #F8F6FA;
+      border: 1px solid #E1D4EB;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 14px;
+      font-size: 12px;
+    }
+    .maya-modal-context-row { display: flex; gap: 8px; margin-bottom: 4px; }
+    .maya-modal-context-row:last-child { margin-bottom: 0; }
+    .maya-modal-context-label { font-weight: 700; color: #7B2D8E; min-width: 72px; }
+    .maya-modal-context-value { color: #444; flex: 1; }
+    .maya-modal-field-label { font-size: 12px; font-weight: 700; color: #333; display: block; margin-bottom: 6px; }
+    .maya-modal-textarea {
+      width: 100%;
+      min-height: 110px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 13px;
+      resize: vertical;
+      box-sizing: border-box;
+    }
+    .maya-modal-textarea:focus { outline: none; border-color: #7B2D8E; box-shadow: 0 0 0 3px rgba(123,45,142,0.12); }
+    .maya-modal-existing {
+      margin-top: 14px;
+      padding: 10px 12px;
+      background: #FAFAFA;
+      border-radius: 8px;
+      border: 1px solid #EEE;
+      font-size: 11.5px;
+    }
+    .maya-modal-existing-title { font-weight: 700; color: #555; margin-bottom: 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; }
+    .maya-modal-existing-item {
+      padding: 6px 8px;
+      background: #FFFFFF;
+      border-left: 3px solid #7B2D8E;
+      border-radius: 3px;
+      margin-bottom: 5px;
+      color: #444;
+    }
+    .maya-modal-existing-date { font-size: 10px; color: #999; display: block; margin-bottom: 2px; }
+    .maya-modal-footer {
+      padding: 12px 18px;
+      border-top: 1px solid #EEE;
+      display: flex; gap: 8px; justify-content: flex-end;
+    }
+
     /* ===== MISSING FIELDS SECTION ===== */
     .missing-section {
       margin-top: 28px;
@@ -1458,6 +1618,14 @@
           </div>
         </div>
 
+        <!-- Confidence strip (Maya Vague 1) -->
+        <div class="confidence-strip" id="confidence-strip">
+          <span class="confidence-strip-label">✨ Confiance Maya</span>
+          <span class="confidence-strip-item high">🟢 Certain <span class="num" id="kpi-conf-high">—</span></span>
+          <span class="confidence-strip-item medium">🟡 À vérifier <span class="num" id="kpi-conf-medium">—</span></span>
+          <span class="confidence-strip-item low">🔴 Incertain <span class="num" id="kpi-conf-low">—</span></span>
+        </div>
+
         <!-- Conformity Bar -->
         <div class="conformity-section">
           <div class="conformity-header">
@@ -1528,6 +1696,7 @@
                 <th>Valeur Audit</th>
                 <th>Valeur VT</th>
                 <th>Statut</th>
+                <th title="Niveau de confiance de Maya + feedback">Confiance</th>
                 <th>Commentaire IA</th>
                 <th>Revue Analyse</th>
               </tr>
@@ -4483,6 +4652,21 @@ ${vtShort}`;
       document.getElementById('kpi-nonconf').textContent = nonconf;
       document.getElementById('kpi-manquants').textContent = manquants;
 
+      // Confidence KPIs (Vague 1)
+      var confHigh = 0, confMed = 0, confLow = 0;
+      results.forEach(function(r){
+        var c = computeConfidence(r);
+        if (c.level === 'high') confHigh++;
+        else if (c.level === 'medium') confMed++;
+        else confLow++;
+      });
+      var elH = document.getElementById('kpi-conf-high');
+      var elM = document.getElementById('kpi-conf-medium');
+      var elL = document.getElementById('kpi-conf-low');
+      if (elH) elH.textContent = confHigh;
+      if (elM) elM.textContent = confMed;
+      if (elL) elL.textContent = confLow;
+
       const pct = total > 0 ? Math.round(((conformes + approx) / total) * 100) : 0;
       document.getElementById('conformity-pct').textContent = pct + '%';
 
@@ -4619,7 +4803,7 @@ ${vtShort}`;
       }
 
       if (filtered.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:28px;color:var(--text-muted);font-style:italic;">Aucun résultat pour ce filtre.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:28px;color:var(--text-muted);font-style:italic;">Aucun résultat pour ce filtre.</td></tr>';
         return;
       }
 
@@ -4650,7 +4834,7 @@ ${vtShort}`;
           const currInst = r.instance_label || null;
           if (lastInstance !== undefined && currInst !== lastInstance) {
             const spacer = document.createElement('tr');
-            spacer.innerHTML = '<td colspan="7" style="padding:0;background:transparent;border:none;height:10px"></td>';
+            spacer.innerHTML = '<td colspan="8" style="padding:0;background:transparent;border:none;height:10px"></td>';
             tbody.appendChild(spacer);
           }
           lastInstance = currInst;
@@ -4660,12 +4844,26 @@ ${vtShort}`;
           const instanceTag = r.instance_label
             ? '<br><span style="display:inline-block;margin-top:3px;padding:1px 7px;background:rgba(27,63,139,0.08);border-radius:10px;font-size:10px;color:var(--primary);font-weight:600">' + escHtml(r.instance_label) + '</span>'
             : '';
+          const conf = computeConfidence(r);
+          const fbKey = feedbackKey(r.id_champ, r.instance_label);
+          const fbList = (mayaFeedbacks[fbKey] || []);
+          const fbCount = fbList.length;
+          const fbClass = fbCount > 0 ? 'feedback-btn has-feedback' : 'feedback-btn';
+          const fbTitle = fbCount > 0 ? (fbCount + ' feedback(s) envoy\u00e9(s) \u00e0 Maya') : 'Signaler un probl\u00e8me \u00e0 Maya';
+          const fbAttr = fbCount > 0 ? (' data-count="' + fbCount + '"') : '';
+          const safeKey = fbKey.replace(/'/g, "\\'");
+          const confCell =
+            '<td style="white-space:nowrap">' +
+              '<span class="confidence-chip conf-' + conf.level + '" title="' + escHtml(conf.reason) + '">' + conf.icon + ' ' + conf.label + '</span>' +
+              '<button type="button" class="' + fbClass + '" title="' + fbTitle + '"' + fbAttr + ' onclick="openMayaFeedback(\'' + safeKey + '\')">\ud83d\udcac</button>' +
+            '</td>';
           row.innerHTML =
             '<td>' + rowNum + '</td>' +
             '<td><strong>' + escHtml(r.id_champ || '') + '</strong><br><span style="font-size:11px;color:var(--text-muted)">' + escHtml(getFieldNom(r.id_champ)) + '</span>' + instanceTag + '</td>' +
             '<td style="max-width:180px;font-size:12px">' + escHtml(r.valeur_audit || '\u2014') + '</td>' +
             '<td style="max-width:180px;font-size:12px">' + escHtml(r.valeur_vt || '\u2014') + '</td>' +
             '<td>' + statusChip(r.statut) + '</td>' +
+            confCell +
             '<td style="max-width:200px;font-size:12px;color:var(--text-muted)">' + escHtml(r.commentaire || '\u2014') + (r._maya_corrected ? ' <span style="display:inline-block;margin-top:3px;padding:1px 7px;background:#7B2D8E;color:white;border-radius:10px;font-size:9px;font-weight:700">&#10022; Maya</span>' : '') + '</td>' +
             '<td>' + revuSelectHtml(r.id_champ, r.instance_label, r.revu_doc) + '</td>';
           tbody.appendChild(row);
@@ -4678,7 +4876,7 @@ ${vtShort}`;
         if (!rows || !rows.length) return;
         const secRow = document.createElement('tr');
         secRow.className = 'rapport-section-row';
-        secRow.innerHTML = '<td colspan="7">&#9656; ' + escHtml(sec) + '<span class="rapport-section-count">(' + rows.length + ' champ' + (rows.length > 1 ? 's' : '') + ')</span></td>';
+        secRow.innerHTML = '<td colspan="8">&#9656; ' + escHtml(sec) + '<span class="rapport-section-count">(' + rows.length + ' champ' + (rows.length > 1 ? 's' : '') + ')</span></td>';
         tbody.appendChild(secRow);
         appendDataRows(rows);
       });
@@ -4765,6 +4963,144 @@ ${vtShort}`;
       const [cls, icon, label] = map[statut] || ['status-manquant', '🔲', statut];
       return `<span class="status-chip ${cls}">${icon} ${label}</span>`;
     }
+
+    // =====================================================================
+    // CONFIDENCE SCORE + MAYA FEEDBACK (Vague 1)
+    // =====================================================================
+    function _confIsAbsent(v) {
+      if (!v) return true;
+      const s = String(v).trim().toLowerCase();
+      return !s || s === '-' || s === '—' || s === '–' || s === 'manquant' || s === 'n/a' || s === 'na' || s === 'nd';
+    }
+
+    function computeConfidence(r) {
+      // Règles v1 — score de confiance par résultat
+      // high (🟢)   : VERT + 2 valeurs présentes (hors correction Maya)
+      // medium (🟡) : ORANGE, VERT partiel, ou correction Maya appliquée
+      // low (🔴)   : ROUGE, MANQUANT, ou erreur Maya
+      const st = r.statut;
+      const aPres = !_confIsAbsent(r.valeur_audit);
+      const vPres = !_confIsAbsent(r.valeur_vt);
+
+      if (st === 'MANQUANT') {
+        return { level:'low', icon:'🔴', label:'Incertain', reason:'Champ manquant — donnée non trouvée dans VT' };
+      }
+      if (st === 'ROUGE') {
+        return { level:'low', icon:'🔴', label:'Incertain', reason:'Non conforme — écart critique audit vs VT' };
+      }
+      if (r._maya_corrected) {
+        return { level:'medium', icon:'🟡', label:'À vérifier', reason:'Correction Maya appliquée — valeur revue automatiquement' };
+      }
+      if (st === 'ORANGE') {
+        return { level:'medium', icon:'🟡', label:'À vérifier', reason:'Approximatif — valeurs proches mais non strictement identiques' };
+      }
+      if (st === 'VERT') {
+        if (aPres && vPres) {
+          return { level:'high', icon:'🟢', label:'Certain', reason:'Conforme — valeurs trouvées et concordantes des deux côtés' };
+        }
+        return { level:'medium', icon:'🟡', label:'À vérifier', reason:'Conforme mais une valeur est absente d\'un des documents' };
+      }
+      return { level:'medium', icon:'🟡', label:'À vérifier', reason:'Statut indéterminé' };
+    }
+
+    // ---- Feedback Maya (localStorage) ----
+    const MAYA_FB_KEY = 'maya_feedbacks_v1';
+    let mayaFeedbacks = {};
+    let currentFeedbackKey = null;
+
+    function feedbackKey(id_champ, instance_label) {
+      return (id_champ || '') + (instance_label ? '|' + instance_label : '');
+    }
+
+    function loadMayaFeedbacks() {
+      try {
+        const raw = localStorage.getItem(MAYA_FB_KEY);
+        mayaFeedbacks = raw ? JSON.parse(raw) : {};
+      } catch(e) { mayaFeedbacks = {}; }
+    }
+
+    function persistMayaFeedbacks() {
+      try { localStorage.setItem(MAYA_FB_KEY, JSON.stringify(mayaFeedbacks)); } catch(e) {}
+    }
+
+    function findResultByFbKey(key) {
+      const parts = key.split('|');
+      const id_champ = parts[0];
+      const instance_label = parts.length > 1 ? parts.slice(1).join('|') : null;
+      return state.analysisResults.find(function(r){
+        return r.id_champ === id_champ && (r.instance_label || null) === (instance_label || null);
+      });
+    }
+
+    function openMayaFeedback(key) {
+      currentFeedbackKey = key;
+      const r = findResultByFbKey(key);
+      if (!r) return;
+      const nom = getFieldNom(r.id_champ) || r.id_champ;
+      const instanceTxt = r.instance_label ? (' — ' + r.instance_label) : '';
+      document.getElementById('maya-fb-field').textContent = nom + instanceTxt;
+      document.getElementById('maya-fb-audit').textContent = r.valeur_audit || '—';
+      document.getElementById('maya-fb-vt').textContent = r.valeur_vt || '—';
+      document.getElementById('maya-fb-status').textContent = r.statut || '—';
+      const conf = computeConfidence(r);
+      document.getElementById('maya-fb-confidence').textContent = conf.icon + ' ' + conf.label;
+      document.getElementById('maya-fb-textarea').value = '';
+
+      // Existing feedbacks history
+      const list = mayaFeedbacks[key] || [];
+      const existingBlock = document.getElementById('maya-fb-existing');
+      if (list.length === 0) {
+        existingBlock.style.display = 'none';
+        existingBlock.innerHTML = '';
+      } else {
+        existingBlock.style.display = 'block';
+        let html = '<div class="maya-modal-existing-title">Feedbacks déjà envoyés (' + list.length + ')</div>';
+        list.slice().reverse().forEach(function(fb){
+          const d = new Date(fb.timestamp);
+          const dateStr = d.toLocaleDateString('fr-FR') + ' ' + d.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
+          html += '<div class="maya-modal-existing-item"><span class="maya-modal-existing-date">' + dateStr + '</span>' + escHtml(fb.text) + '</div>';
+        });
+        existingBlock.innerHTML = html;
+      }
+      document.getElementById('maya-fb-overlay').classList.add('visible');
+      setTimeout(function(){ document.getElementById('maya-fb-textarea').focus(); }, 60);
+    }
+
+    function closeMayaFeedback() {
+      document.getElementById('maya-fb-overlay').classList.remove('visible');
+      currentFeedbackKey = null;
+    }
+
+    function submitMayaFeedback() {
+      if (!currentFeedbackKey) return;
+      const txt = document.getElementById('maya-fb-textarea').value.trim();
+      if (!txt) {
+        showAlert('alerts-area', 'warning', 'Merci de saisir un feedback avant d\'envoyer.');
+        return;
+      }
+      const r = findResultByFbKey(currentFeedbackKey);
+      const snapshot = r ? {
+        id_champ: r.id_champ,
+        instance_label: r.instance_label || null,
+        valeur_audit: r.valeur_audit || null,
+        valeur_vt: r.valeur_vt || null,
+        statut: r.statut || null,
+        commentaire: r.commentaire || null
+      } : {};
+      if (!mayaFeedbacks[currentFeedbackKey]) mayaFeedbacks[currentFeedbackKey] = [];
+      mayaFeedbacks[currentFeedbackKey].push({
+        timestamp: new Date().toISOString(),
+        text: txt,
+        snapshot: snapshot
+      });
+      persistMayaFeedbacks();
+      closeMayaFeedback();
+      showAlert('alerts-area', 'success', '✨ Feedback envoyé à Maya — merci ! Il sera pris en compte lors de la prochaine vérification.');
+      renderTable(currentFilter);
+    }
+
+    // Init au chargement
+    loadMayaFeedbacks();
 
     function getFieldNom(id) {
       const f = state.referentiel.find(r => r.id === id);
@@ -4965,12 +5301,39 @@ ${vtShort}`;
       sc(mRow.getCell(2),'FFF3E5F5',mayaColor,{bold:true,sz:11,wrap:true});
       sc(mRow.getCell(3),'FFF3E5F5','FF7B2D8E',{});
 
+      // Score de confiance Maya (Vague 1)
+      ws1.addRow(['','','']).height=6;
+      var confH=0, confM=0, confL=0;
+      state.analysisResults.forEach(function(rv){
+        var cc=computeConfidence(rv);
+        if (cc.level==='high') confH++;
+        else if (cc.level==='medium') confM++;
+        else confL++;
+      });
+      var confHdr=ws1.addRow(['Score de confiance Maya','Nombre','% du total']); confHdr.height=22;
+      sr(confHdr,'FF7B2D8E',C.WHT,{bold:true,align:'center'},3);
+      [['🟢 Certain', confH, total?Math.round(confH/total*100)+'%':'-','FFE7F6E8','FF1B5E20','FF2E7D32'],
+       ['🟡 À vérifier', confM, total?Math.round(confM/total*100)+'%':'-','FFFFF4E0','FF9C5700','FFE65100'],
+       ['🔴 Incertain', confL, total?Math.round(confL/total*100)+'%':'-','FFFFEBEE','FF8E0000','FFB71C1C']
+      ].forEach(function(d){
+        var r=ws1.addRow([d[0],d[1],d[2]]); r.height=20;
+        sc(r.getCell(1),d[3],d[4],{bold:true,sz:11});
+        sc(r.getCell(2),d[5],C.WHT,{bold:true,align:'center',sz:12});
+        sc(r.getCell(3),d[3],d[4],{align:'center',sz:11});
+      });
+
 
       // ── ONGLET 2 ──────────────────────────────────────────────────────────
       var ws2=wb.addWorksheet('Rapport conformite');
-      ws2.columns=[{width:36},{width:22},{width:22},{width:15},{width:55},{width:58,hidden:true},{width:14}];
+      ws2.columns=[{width:36},{width:22},{width:22},{width:15},{width:18},{width:55},{width:58,hidden:true},{width:14}];
       ws2.views=[{state:'frozen',xSplit:0,ySplit:7}];
-      const N1=7;
+      const N1=8;
+      // Couleurs score de confiance (Vague 1)
+      var CONF_COL = {
+        high:   { bg:'FFE7F6E8', fg:'FF1B5E20', badge:'FF2E7D32' },
+        medium: { bg:'FFFFF4E0', fg:'FF9C5700', badge:'FFE65100' },
+        low:    { bg:'FFFFEBEE', fg:'FF8E0000', badge:'FFB71C1C' }
+      };
 
       mrow(ws2,['OT \u00c9NERGIE','','','',''],N1,C.BLU_DARK,C.WHT,{bold:true,sz:14},26);
       mrow(ws2,['Rapport de Conformit\u00e9  \u2014  Revue Audit \u00c9nerg\u00e9tique','','','',''],N1,C.BLU_MED,C.WHT,{sz:11,italic:true},20);
@@ -4988,7 +5351,7 @@ ${vtShort}`;
         top:{style:'medium',color:{argb:SCORE_BD}},bottom:{style:'medium',color:{argb:SCORE_BD}},
         left:{style:'thin',color:{argb:C.GRY_LINE}},right:{style:'thin',color:{argb:C.GRY_LINE}}};}
 
-      var hdrRow=ws2.addRow(['Libell\u00e9','Valeur Audit','Valeur VT','Statut','Commentaire IA','Source & V\u00e9rification','Revue Analyse']);
+      var hdrRow=ws2.addRow(['Libell\u00e9','Valeur Audit','Valeur VT','Statut','Confiance','Commentaire IA','Source & V\u00e9rification','Revue Analyse']);
       hdrRow.height=18; sr(hdrRow,C.BLU_DARK,C.WHT,{bold:true,align:'center'},N1);
       ws2.autoFilter={from:{row:hdrRow.number,column:1},to:{row:hdrRow.number,column:N1}};
 
@@ -4997,40 +5360,50 @@ ${vtShort}`;
       sectionOrder.forEach(function(sec){
         var secR=state.analysisResults.filter(function(rv){return getFieldSection(rv.id_champ)===sec;});
         if(!secR.length)return;
-        mrow(ws2,['   \u203a  '+sec,'','','','',''],N1,SECT_BG2,SECT_TXT2,{bold:true,sz:10,italic:true},16);
+        mrow(ws2,['   \u203a  '+sec,'','','','','','',''],N1,SECT_BG2,SECT_TXT2,{bold:true,sz:10,italic:true},16);
         secR.forEach(function(rv){
           var g=GRP[rv.statut]||GRP.MANQUANT;
           var lib=rv.instance_label?getFieldNom(rv.id_champ)+' \u2014 '+rv.instance_label:getFieldNom(rv.id_champ);
           var vfCell=buildVerifCell(rv);
           var commentXls = (rv.commentaire||'') + (rv._maya_corrected ? ' \u2726 Maya' : '');
-          var dr=ws2.addRow([lib,rv.valeur_audit||'-',rv.valeur_vt||'-',rv.statut,commentXls,vfCell.txt,rv.revu_doc||'']); dr.height=calcRowH(rv,vfCell);
+          var conf = computeConfidence(rv);
+          var confXls = conf.icon + ' ' + conf.label;
+          var confCol = CONF_COL[conf.level];
+          var dr=ws2.addRow([lib,rv.valeur_audit||'-',rv.valeur_vt||'-',rv.statut,confXls,commentXls,vfCell.txt,rv.revu_doc||'']); dr.height=calcRowH(rv,vfCell);
           sc(dr.getCell(1),g.row,g.rtxt,{bold:true}); sc(dr.getCell(2),g.row,g.rtxt,{});
           sc(dr.getCell(3),g.row,g.rtxt,{}); sc(dr.getCell(4),g.badge,C.WHT,{bold:true,align:'center'});
-          sc(dr.getCell(5),g.row,g.rtxt,{wrap:true});
-          sc(dr.getCell(6),vfCell.bg,vfCell.fg,{sz:8,wrap:true,italic:true});
+          sc(dr.getCell(5),confCol.bg,confCol.fg,{bold:true,align:'center'});
+          if (conf.reason) { try { dr.getCell(5).note = conf.reason; } catch(e) {} }
+          sc(dr.getCell(6),g.row,g.rtxt,{wrap:true});
+          sc(dr.getCell(7),vfCell.bg,vfCell.fg,{sz:8,wrap:true,italic:true});
           var revuVal=rv.revu_doc||''; var revuFill=revuVal==='VT'?'FFDBEAFE':revuVal==='Audit'?'FFDCFCE7':g.row;
           var revuTxt=revuVal==='VT'?'FF1E40AF':revuVal==='Audit'?'FF166534':g.rtxt;
-          sc(dr.getCell(7),revuFill,revuTxt,{bold:!!revuVal,align:'center'});
-          dr.getCell(7).dataValidation={type:'list',allowBlank:true,formulae:['"Audit,VT"'],showDropDown:false};
+          sc(dr.getCell(8),revuFill,revuTxt,{bold:!!revuVal,align:'center'});
+          dr.getCell(8).dataValidation={type:'list',allowBlank:true,formulae:['"Audit,VT"'],showDropDown:false};
         });
       });
       var noSec2=state.analysisResults.filter(function(rv){return !getFieldSection(rv.id_champ);});
       if(noSec2.length){
-        mrow(ws2,['   \u203a  Autres','','','','',''],N1,SECT_BG2,SECT_TXT2,{bold:true,sz:10,italic:true},16);
+        mrow(ws2,['   \u203a  Autres','','','','','','',''],N1,SECT_BG2,SECT_TXT2,{bold:true,sz:10,italic:true},16);
         noSec2.forEach(function(rv){
           var g=GRP[rv.statut]||GRP.MANQUANT;
           var lib=rv.instance_label?getFieldNom(rv.id_champ)+' \u2014 '+rv.instance_label:getFieldNom(rv.id_champ);
           var vfCell=buildVerifCell(rv);
           var commentXls = (rv.commentaire||'') + (rv._maya_corrected ? ' \u2726 Maya' : '');
-          var dr=ws2.addRow([lib,rv.valeur_audit||'-',rv.valeur_vt||'-',rv.statut,commentXls,vfCell.txt,rv.revu_doc||'']); dr.height=calcRowH(rv,vfCell);
+          var conf = computeConfidence(rv);
+          var confXls = conf.icon + ' ' + conf.label;
+          var confCol = CONF_COL[conf.level];
+          var dr=ws2.addRow([lib,rv.valeur_audit||'-',rv.valeur_vt||'-',rv.statut,confXls,commentXls,vfCell.txt,rv.revu_doc||'']); dr.height=calcRowH(rv,vfCell);
           sc(dr.getCell(1),g.row,g.rtxt,{bold:true}); sc(dr.getCell(2),g.row,g.rtxt,{});
           sc(dr.getCell(3),g.row,g.rtxt,{}); sc(dr.getCell(4),g.badge,C.WHT,{bold:true,align:'center'});
-          sc(dr.getCell(5),g.row,g.rtxt,{wrap:true});
-          sc(dr.getCell(6),vfCell.bg,vfCell.fg,{sz:8,wrap:true,italic:true});
+          sc(dr.getCell(5),confCol.bg,confCol.fg,{bold:true,align:'center'});
+          if (conf.reason) { try { dr.getCell(5).note = conf.reason; } catch(e) {} }
+          sc(dr.getCell(6),g.row,g.rtxt,{wrap:true});
+          sc(dr.getCell(7),vfCell.bg,vfCell.fg,{sz:8,wrap:true,italic:true});
           var revuVal=rv.revu_doc||''; var revuFill=revuVal==='VT'?'FFDBEAFE':revuVal==='Audit'?'FFDCFCE7':g.row;
           var revuTxt=revuVal==='VT'?'FF1E40AF':revuVal==='Audit'?'FF166534':g.rtxt;
-          sc(dr.getCell(7),revuFill,revuTxt,{bold:!!revuVal,align:'center'});
-          dr.getCell(7).dataValidation={type:'list',allowBlank:true,formulae:['"Audit,VT"'],showDropDown:false};
+          sc(dr.getCell(8),revuFill,revuTxt,{bold:!!revuVal,align:'center'});
+          dr.getCell(8).dataValidation={type:'list',allowBlank:true,formulae:['"Audit,VT"'],showDropDown:false};
         });
       }
 
@@ -6235,5 +6608,32 @@ ${vtShort}`;
       modal.addEventListener('click', function(e){ if(e.target===modal) modal.remove(); });
     }
   </script>
+
+  <!-- ================ MAYA FEEDBACK MODAL (Vague 1) ================ -->
+  <div class="maya-modal-overlay" id="maya-fb-overlay" onclick="if(event.target===this) closeMayaFeedback()">
+    <div class="maya-modal" role="dialog" aria-labelledby="maya-fb-title">
+      <div class="maya-modal-header">
+        <div class="maya-modal-header-title" id="maya-fb-title">✨ Feedback à Maya</div>
+        <button type="button" class="maya-modal-close" onclick="closeMayaFeedback()" aria-label="Fermer">✕</button>
+      </div>
+      <div class="maya-modal-body">
+        <div class="maya-modal-context">
+          <div class="maya-modal-context-row"><span class="maya-modal-context-label">Champ :</span><span class="maya-modal-context-value" id="maya-fb-field">—</span></div>
+          <div class="maya-modal-context-row"><span class="maya-modal-context-label">Audit :</span><span class="maya-modal-context-value" id="maya-fb-audit">—</span></div>
+          <div class="maya-modal-context-row"><span class="maya-modal-context-label">VT :</span><span class="maya-modal-context-value" id="maya-fb-vt">—</span></div>
+          <div class="maya-modal-context-row"><span class="maya-modal-context-label">Statut :</span><span class="maya-modal-context-value" id="maya-fb-status">—</span></div>
+          <div class="maya-modal-context-row"><span class="maya-modal-context-label">Confiance :</span><span class="maya-modal-context-value" id="maya-fb-confidence">—</span></div>
+        </div>
+        <label class="maya-modal-field-label" for="maya-fb-textarea">Qu'est-ce qui ne va pas dans le résultat de Maya ?</label>
+        <textarea id="maya-fb-textarea" class="maya-modal-textarea" placeholder="Ex : La valeur VT est fausse — le vrai résultat est « 0,25 W/m².K ». Maya a mal lu la page 4 du rapport."></textarea>
+        <div id="maya-fb-existing" class="maya-modal-existing" style="display:none"></div>
+      </div>
+      <div class="maya-modal-footer">
+        <button type="button" class="btn btn-outline" onclick="closeMayaFeedback()">Annuler</button>
+        <button type="button" class="btn btn-primary" onclick="submitMayaFeedback()" style="background:#7B2D8E;border-color:#7B2D8E">Envoyer à Maya</button>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>
