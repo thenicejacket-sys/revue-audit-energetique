@@ -970,29 +970,6 @@
       font-size: 13px; font-style: italic;
     }
 
-    /* Toggle double vérification */
-    .maya-dv-toggle {
-      margin-top: 8px; margin-left: 26px;
-      padding: 8px 10px;
-      background: linear-gradient(135deg, #FFF6E0, #FFE7B0);
-      border: 1px solid #F0CC6B;
-      border-radius: 6px;
-      font-size: 12px;
-      display: flex; align-items: center; gap: 8px;
-    }
-    .maya-dv-toggle input { accent-color: #E65100; width: 15px; height: 15px; }
-    .maya-dv-toggle label { font-weight: 700; color: #7A4000; cursor: pointer; flex: 1; }
-    .maya-dv-toggle .hint { font-size: 10.5px; color: #8A5500; font-weight: 500; }
-
-    /* Badge divergence dans résultats */
-    .maya-divergence-tag {
-      display: inline-block;
-      background: #FFCDD2; color: #B71C1C;
-      padding: 1px 7px; border-radius: 10px;
-      font-size: 10px; font-weight: 700;
-      margin-left: 6px;
-    }
-
     /* ===== MISSING FIELDS SECTION ===== */
     .missing-section {
       margin-top: 28px;
@@ -1956,12 +1933,8 @@
                 <span style="white-space:nowrap">&#10022; Maya — Validation post-extraction</span>
               </label>
               <p style="font-size:11px;color:var(--text-muted);margin-top:4px;margin-left:26px">
-                Re-vérifie automatiquement les résultats suspects (+1 appel API).
+                Re-vérifie automatiquement les résultats suspects. Maya effectue une contre-vérification interne sur chaque champ à faible certitude dans le même appel API (coût identique à une seule passe).
               </p>
-              <div class="maya-dv-toggle">
-                <input type="checkbox" id="maya-double-verif-toggle" onchange="onMayaDoubleVerifToggle()" />
-                <label for="maya-double-verif-toggle">⚖️ Double vérification sur résultats critiques<br><span class="hint">2e passe Maya sur ROUGE + 🔴 Incertain avec prompt inversé (coût API doublé sur ces lignes — OFF par défaut)</span></label>
-              </div>
               <div id="maya-model-group" style="margin-top:8px;margin-left:26px;">
                 <label class="form-label" style="font-size:12px;">Modèle Maya</label>
                 <select class="form-select" id="maya-model-select" onchange="onMayaModelChange()" style="max-width:320px;">
@@ -3745,17 +3718,8 @@
           } else if (ms && !ms.ran) {
             showAlert('alerts-area', 'warning', '\u2726 Maya — Erreur lors de la validation : ' + (ms.error || 'inconnue') + '. Les r\u00e9sultats sont affich\u00e9s sans validation Maya.');
           }
-          if (ms && ms.doubleVerif) {
-            var dv = ms.doubleVerif;
-            if (dv.ran) {
-              if (dv.divergences > 0) {
-                showAlert('alerts-area', 'warning', '⚖️ Double vérification : ' + dv.critical + ' ligne(s) critique(s) relues — ' + dv.divergences + ' divergence(s) signalée(s) (dont ' + dv.annulations + ' statut(s) corrigé(s)). Marquées [⚖️ Maya-V2] dans les résultats.');
-              } else {
-                showAlert('alerts-area', 'info', '⚖️ Double vérification : ' + dv.critical + ' ligne(s) critique(s) relues — ' + dv.confirmations + ' confirmée(s), aucune divergence.');
-              }
-            } else if (dv.error) {
-              showAlert('alerts-area', 'warning', '⚖️ Double vérification non aboutie : ' + dv.error + '. Les résultats de la 1ère passe sont conservés.');
-            }
+          if (ms && ms.ran && typeof ms.lowConfidenceCount === 'number' && ms.lowConfidenceCount > 0) {
+            showAlert('alerts-area', 'info', '✦ Maya a flaggé ' + ms.lowConfidenceCount + ' résultat(s) à faible certitude — visibles en 🟡 dans le score de confiance.');
           }
         }
       }
@@ -4648,8 +4612,21 @@ CONTRÔLES À EFFECTUER SUR CHAQUE RÉSULTAT :
    - "Référence paroi" = type d'adjacence (Extérieur, Terre-Plein, Locaux non chauffés, etc.)
 6. MANQUANT RÉCUPÉRABLES : la valeur existe-t-elle dans la VT sous un synonyme ou libellé différent ?
 
-IMPORTANT : ne retourne une correction QUE si tu es sûr(e) à au moins 85%. En cas de doute, ne corrige pas.
-Ne retourne PAS de correction pour les résultats déjà corrects.
+⚠️ CONTRE-VÉRIFICATION OBLIGATOIRE (silencieuse, dans ce même appel) :
+Avant de retourner chaque correction, fais-toi mentalement l'avocat du diable — en silence, dans le même raisonnement :
+  a) Relis l'extrait source cité et compare strictement valeur + unité + contexte (même paroi, même zone, même page).
+  b) Pose-toi la question inverse : "Et si je me trompais ? Une autre lecture est-elle possible ?"
+  c) Vérifie la cohérence dimensionnelle (m² vs m, %, W/m².K, etc.) et les équivalences sémantiques.
+Ce processus n'ajoute AUCUN appel API — tu le fais en interne avant de produire ton JSON final.
+
+Règle d'économie : un seul JSON final, jamais deux passes successives. Toute la rigueur tient dans cette unique réponse.
+
+RÈGLES DE CERTITUDE — applique-les strictement :
+- Si ta certitude < 85 % après contre-vérification → ne retourne PAS de correction ET flag low_confidence: true dans un bloc dédié (voir format ci-dessous). L'utilisateur le verra en 🟡 À vérifier.
+- Si tu corriges une valeur ROUGE (non-conformité) → tu DOIS citer EXACTEMENT la chaîne source dans source_excerpt_vt et/ou source_excerpt_audit. Pas de citation vérifiable = pas de correction = low_confidence: true.
+- En cas de doute persistant après contre-vérification, préfère flagger low_confidence plutôt que trancher à tort.
+
+Ne retourne PAS de correction pour les résultats déjà corrects et certains.
 
 Réponds UNIQUEMENT en JSON strict :
 {
@@ -4662,12 +4639,22 @@ Réponds UNIQUEMENT en JSON strict :
       "valeur_vt_corrigee": "... ou null si pas de correction de valeur",
       "raison": "explication courte (max 100 chars)",
       "source_excerpt_audit": "extrait brut de 80 à 200 caractères autour de la valeur dans l'Audit (copié-collé du texte source) — null si indisponible",
-      "source_excerpt_vt": "extrait brut de 80 à 200 caractères autour de la valeur dans la VT (copié-collé du texte source) — null si indisponible"
+      "source_excerpt_vt": "extrait brut de 80 à 200 caractères autour de la valeur dans la VT (copié-collé du texte source) — null si indisponible",
+      "low_confidence": false
+    }
+  ],
+  "low_confidence_flags": [
+    {
+      "id_champ": "...",
+      "instance_label": "... ou null",
+      "raison": "pourquoi ta certitude est < 85% après contre-vérification (max 120 chars)"
     }
   ]
 }
-IMPORTANT : pour CHAQUE correction, fournis source_excerpt_audit et/ou source_excerpt_vt — un court extrait BRUT du texte source (copié tel quel, pas reformulé) qui permet de vérifier ta décision. Max 200 caractères chacun. Si la valeur est absente du document, mets null.
-Si tous les résultats sont corrects, retourne {"corrections": []}` + (learningsBlock ? '\n' + learningsBlock : '');
+IMPORTANT :
+- Pour CHAQUE correction, fournis source_excerpt_audit et/ou source_excerpt_vt — un court extrait BRUT du texte source (copié tel quel, pas reformulé) qui permet de vérifier ta décision. Max 200 caractères chacun. Si la valeur est absente du document, mets null.
+- low_confidence: true UNIQUEMENT si tu appliques quand même une correction MAIS avec doute résiduel (rare). Pour les cas où tu préfères ne pas corriger à cause du doute, utilise le bloc "low_confidence_flags".
+Si tout est correct ET certain, retourne {"corrections": [], "low_confidence_flags": []}` + (learningsBlock ? '\n' + learningsBlock : '');
 
       var suspectsCompact = suspects.map(function(r) {
         var o = {
@@ -4867,139 +4854,24 @@ ${vtShort}`;
           console.log('[MAYA] Correction : ' + corr.id_champ + (corr.instance_label ? ' (' + corr.instance_label + ')' : '') + ' \u2192 ' + corr.nouveau_statut + ' \u2014 ' + corr.raison);
         });
 
-        console.log('[MAYA] ' + corrCount + ' correction(s) appliquée(s).');
-        results._mayaStatus = { ran: true, corrections: corrCount, suspects: suspects.length, error: null };
-
-        // ── VAGUE 3c : Double vérification sur résultats critiques ──
-        if (state.config.mayaDoubleVerif) {
-          try {
-            var critical = results.filter(function(r){
-              if (r.commentaire && /Erreur API|API HTTP/i.test(r.commentaire)) return false;
-              // ROUGE + lignes dont la confiance calculée vaut "low" (🔴 Incertain)
-              if (r.statut === 'ROUGE') return true;
-              var c = (typeof computeConfidence === 'function') ? computeConfidence(r) : null;
-              return !!(c && c.level === 'low');
+        // ── Application des flags "low_confidence" retournés par Maya (auto-contre-vérification) ──
+        var lowConfCount = 0;
+        if (mayaResult && Array.isArray(mayaResult.low_confidence_flags)) {
+          mayaResult.low_confidence_flags.forEach(function(flag) {
+            if (!flag || !flag.id_champ) return;
+            var target = results.find(function(r){
+              return r.id_champ === flag.id_champ && (r.instance_label || null) === (flag.instance_label || null);
             });
-            if (critical.length === 0) {
-              console.log('[MAYA-V2] Aucune ligne critique à re-vérifier.');
-            } else {
-              console.log('[MAYA-V2] Double vérification : ' + critical.length + ' ligne(s) critique(s) (ROUGE + 🔴 Incertain)');
-              var v2Prompt = `⚠️ RÈGLE ABSOLUE — FORMAT DE SORTIE ⚠️
-Ta réponse DOIT être UNIQUEMENT du JSON valide, commençant par { et se terminant par }.
-AUCUN texte avant, AUCUN après, AUCUN raisonnement, AUCUN markdown.
-
-Tu es Maya en mode DOUBLE VÉRIFICATION. Tu dois RELIRE les résultats critiques ci-dessous avec un ANGLE INVERSE :
-- Pour chaque ligne, pose-toi la question : "Es-tu VRAIMENT sûre que l'écart (ROUGE) ou l'incertitude est réel ? Ou bien as-tu pu te tromper ?"
-- Cherche des preuves dans les extraits AUDIT et VT — cite la source précise (texte brut, extrait court).
-- Ne conserve une conclusion que si tu la justifies par une citation explicite.
-- Si tu trouves que l'écart n'est PAS réel (valeurs équivalentes, formulations différentes mais sens identique, erreur de lecture de la 1ère passe) → propose la correction.
-
-Pour CHAQUE ligne critique, renvoie ton verdict en JSON strict :
-{
-  "verifications": [
-    {
-      "id_champ": "...",
-      "instance_label": "... ou null",
-      "verdict": "confirme | annule | incertain",
-      "raison": "justification courte (max 120 chars)",
-      "citation": "extrait brut du texte source qui justifie (60-180 chars) — null si introuvable",
-      "nouveau_statut": "VERT|ORANGE|ROUGE|MANQUANT (seulement si verdict = annule)"
-    }
-  ]
-}
-- verdict "confirme" : la 1ère passe avait raison, l'écart/incertitude est réel.
-- verdict "annule" : la 1ère passe s'est trompée, proposer un nouveau_statut + raison.
-- verdict "incertain" : pas assez d'information pour trancher → divergence à flagger.`;
-
-              var v2Payload = critical.map(function(r){
-                return {
-                  id_champ: r.id_champ,
-                  instance_label: r.instance_label || null,
-                  statut_1re_passe: r.statut,
-                  valeur_audit: r.valeur_audit,
-                  valeur_vt: r.valeur_vt,
-                  commentaire: r.commentaire,
-                  page_audit: r._page_audit || null,
-                  page_vt: r._page_vt || null
-                };
-              });
-              var v2Content = 'Ta réponse DOIT commencer par { et ne contenir que du JSON valide.\n\nRÉSULTATS CRITIQUES À RELIRE :\n' + JSON.stringify(v2Payload, null, 2) + '\n\n---\nEXTRAIT AUDIT :\n' + auditShort + '\n\n---\nEXTRAIT VT :\n' + vtShort;
-
-              var v2Body = {
-                model: mayaModel,
-                messages: [
-                  { role: 'system', content: v2Prompt },
-                  { role: 'user',   content: v2Content }
-                ],
-                temperature: 0.05,
-                max_tokens: 3000
-              };
-              if (supportsJsonMode) v2Body.response_format = { type: 'json_object' };
-
-              var v2Resp = await fetch(endpoint, { method:'POST', headers: headers, body: JSON.stringify(v2Body) });
-              if (v2Resp.ok) {
-                var v2Data = await v2Resp.json();
-                var v2Raw = (v2Data.choices[0].message.content || '').trim();
-                console.log('[MAYA-V2] Réponse brute : ' + v2Raw.length + ' chars');
-                var v2Parsed = null;
-                try { v2Parsed = extractJSON(v2Raw); } catch(eParse) { console.warn('[MAYA-V2] JSON invalide, passe 2 ignorée.'); }
-                if (v2Parsed && Array.isArray(v2Parsed.verifications)) {
-                  var divergences = 0, confirmations = 0, annulations = 0;
-                  v2Parsed.verifications.forEach(function(v){
-                    var target = results.find(function(r){
-                      return r.id_champ === v.id_champ && (r.instance_label || null) === (v.instance_label || null);
-                    });
-                    if (!target) return;
-                    target._maya_v2 = {
-                      verdict: v.verdict,
-                      raison: v.raison,
-                      citation: v.citation || null,
-                      at: new Date().toISOString()
-                    };
-                    if (v.verdict === 'annule' && v.nouveau_statut) {
-                      // 2e passe annule la 1ère : on applique le nouveau statut + marque divergence
-                      if (!target._maya_original) {
-                        target._maya_original = {
-                          statut: target.statut,
-                          valeur_vt: target.valeur_vt,
-                          valeur_audit: target.valeur_audit,
-                          commentaire: target.commentaire
-                        };
-                      }
-                      target._maya_divergence = true;
-                      target.statut = v.nouveau_statut;
-                      target.commentaire = (target.commentaire ? target.commentaire + ' ' : '') + '[⚖️ Maya-V2 : ' + (v.raison || 'annule la 1ère passe') + ']';
-                      divergences++; annulations++;
-                    } else if (v.verdict === 'incertain') {
-                      target._maya_divergence = true;
-                      target.commentaire = (target.commentaire ? target.commentaire + ' ' : '') + '[⚖️ Maya-V2 incertain : ' + (v.raison || 'divergence non tranchée') + ']';
-                      divergences++;
-                    } else if (v.verdict === 'confirme') {
-                      confirmations++;
-                    }
-                  });
-                  console.log('[MAYA-V2] Passe 2 terminée : ' + confirmations + ' confirmation(s), ' + annulations + ' annulation(s), ' + divergences + ' divergence(s) signalée(s).');
-                  results._mayaStatus.doubleVerif = {
-                    ran: true,
-                    critical: critical.length,
-                    confirmations: confirmations,
-                    annulations: annulations,
-                    divergences: divergences
-                  };
-                } else {
-                  console.warn('[MAYA-V2] Payload inexploitable — passe 2 ignorée.');
-                  results._mayaStatus.doubleVerif = { ran: false, critical: critical.length, error: 'payload invalide' };
-                }
-              } else {
-                console.warn('[MAYA-V2] HTTP ' + v2Resp.status + ' — passe 2 ignorée.');
-                results._mayaStatus.doubleVerif = { ran: false, critical: critical.length, error: 'HTTP ' + v2Resp.status };
-              }
-            }
-          } catch (v2Err) {
-            console.warn('[MAYA-V2] Erreur passe 2 : ' + v2Err.message);
-            results._mayaStatus.doubleVerif = { ran: false, error: v2Err.message };
-          }
+            if (!target) return;
+            target._maya_low_confidence = true;
+            target._maya_low_confidence_reason = flag.raison || 'Certitude < 85% après contre-vérification';
+            target.commentaire = (target.commentaire ? target.commentaire + ' ' : '') + '[✦ Maya low-confidence : ' + (flag.raison || 'certitude < 85%') + ']';
+            lowConfCount++;
+          });
+          console.log('[MAYA] ' + lowConfCount + ' flag(s) low_confidence appliqué(s) par Maya.');
         }
+        console.log('[MAYA] ' + corrCount + ' correction(s) appliquée(s).');
+        results._mayaStatus = { ran: true, corrections: corrCount, suspects: suspects.length, lowConfidenceCount: lowConfCount, error: null };
 
         // ── Auto-apprentissage : sauvegarder les corrections comme learnings ──
         try {
@@ -5387,13 +5259,18 @@ Pour CHAQUE ligne critique, renvoie ton verdict en JSON strict :
     }
 
     function computeConfidence(r) {
-      // Règles v1 — score de confiance par résultat
-      // high (🟢)   : VERT + 2 valeurs présentes (hors correction Maya)
-      // medium (🟡) : ORANGE, VERT partiel, ou correction Maya appliquée
-      // low (🔴)   : ROUGE, MANQUANT, ou erreur Maya
+      // Règles — score de confiance par résultat
+      // high (🟢)   : VERT + 2 valeurs présentes (hors correction Maya et hors flag low_confidence)
+      // medium (🟡) : ORANGE, VERT partiel, correction Maya, ou Maya a flaggé low_confidence (contre-vérification)
+      // low (🔴)   : ROUGE, MANQUANT
       const st = r.statut;
       const aPres = !_confIsAbsent(r.valeur_audit);
       const vPres = !_confIsAbsent(r.valeur_vt);
+
+      // Flag explicite de Maya : contre-vérification a conclu à un doute résiduel → toujours 🟡
+      if (r._maya_low_confidence) {
+        return { level:'medium', icon:'🟡', label:'À vérifier', reason:'Maya a flaggé un doute après contre-vérification — ' + (r._maya_low_confidence_reason || 'certitude < 85%') };
+      }
 
       if (st === 'MANQUANT') {
         return { level:'low', icon:'🔴', label:'Incertain', reason:'Champ manquant — donnée non trouvée dans VT' };
@@ -5791,28 +5668,9 @@ Pour CHAQUE ligne critique, renvoie ton verdict en JSON strict :
       setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
     }
 
-    // ---- Double vérification : hook UI ----
-    function onMayaDoubleVerifToggle() {
-      var v = document.getElementById('maya-double-verif-toggle');
-      state.config.mayaDoubleVerif = !!(v && v.checked);
-      saveConfigMaybe();
-      console.log('[MAYA-V2] Double vérification ' + (state.config.mayaDoubleVerif ? 'ACTIVÉE' : 'désactivée'));
-    }
-    function saveConfigMaybe() {
-      try { if (typeof persistConfig === 'function') persistConfig(); } catch(e){}
-      try { localStorage.setItem('maya_config_flags', JSON.stringify({ doubleVerif: !!state.config.mayaDoubleVerif })); } catch(e){}
-    }
-
-    // Init au chargement final
+    // Init au chargement final — nettoie aussi l'ancien flag doubleVerif s'il traîne en localStorage
     setTimeout(function(){
-      try {
-        var flags = JSON.parse(localStorage.getItem('maya_config_flags') || '{}');
-        if (flags && flags.doubleVerif) {
-          state.config.mayaDoubleVerif = true;
-          var t = document.getElementById('maya-double-verif-toggle');
-          if (t) t.checked = true;
-        }
-      } catch(e){}
+      try { localStorage.removeItem('maya_config_flags'); } catch(e){}
       updateMayaFabBadges();
     }, 200);
 
