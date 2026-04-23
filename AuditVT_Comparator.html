@@ -5396,9 +5396,9 @@ ${vtShort}`;
       ws1.mergeCells(legHdr.number,1,legHdr.number,3);
       sc(legHdr.getCell(1),'FF7B2D8E',C.WHT,{bold:true,align:'left',sz:11});
       [
-        ['🟢 Certain', 'Maya a pu comparer les deux valeurs et le verdict (conforme ou non) est fiable.', 'FFE7F6E8', 'FF1B5E20', 42],
-        ['🟡 À vérifier', 'Écart dans la tolérance ou valeur partielle ; un coup d\'œil humain est recommandé.', 'FFFFF4E0', 'FF9C5700', 42],
-        ['🔴 Incertain', 'Maya n\'a pas pu juger : donnée absente, illisible, ou corrigée avec doute. Ne signifie PAS « non-conforme ».', 'FFFFEBEE', 'FF8E0000', 58]
+        ['🟢 Certain', 'Maya a pu comparer les deux valeurs et le verdict (conforme ou non) est fiable.', 'FFE7F6E8', 'FF1B5E20', 28],
+        ['🟡 À vérifier', 'Écart dans la tolérance ou valeur partielle ; un coup d\'œil humain est recommandé.', 'FFFFF4E0', 'FF9C5700', 28],
+        ['🔴 Incertain', 'Maya n\'a pas pu juger : donnée absente, illisible, ou corrigée avec doute. Ne signifie PAS « non-conforme ».', 'FFFFEBEE', 'FF8E0000', 34]
       ].forEach(function(d){
         var r=ws1.addRow([d[0], d[1], '']); r.height=d[4];
         ws1.mergeCells(r.number, 2, r.number, 3);
