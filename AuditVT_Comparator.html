@@ -5329,7 +5329,7 @@ ${vtShort}`;
 
       // ── ONGLET 1 ──────────────────────────────────────────────────────────
       var ws1=wb.addWorksheet('Synthese');
-      ws1.columns=[{width:44},{width:28},{width:16}];
+      ws1.columns=[{width:44},{width:42},{width:22}];
       var approx=state.analysisResults.filter(function(rv){return rv.statut==='ORANGE';}).length;
       var nonconf=state.analysisResults.filter(function(rv){return rv.statut==='ROUGE';}).length;
       var manqTotal=state.analysisResults.filter(function(rv){return rv.statut==='MANQUANT';}).length;
@@ -5457,6 +5457,8 @@ ${vtShort}`;
       sectionOrder.forEach(function(sec){
         var secR=state.analysisResults.filter(function(rv){return getFieldSection(rv.id_champ)===sec;});
         if(!secR.length)return;
+        ws2.addRow(['','','','','','','','']).height=6;
+        ws2.addRow(['','','','','','','','']).height=6;
         mrow(ws2,['   \u203a  '+sec,'','','','','','',''],N1,SECT_BG2,SECT_TXT2,{bold:true,sz:10,italic:true},16);
         secR.forEach(function(rv){
           var g=GRP[rv.statut]||GRP.MANQUANT;
@@ -5481,6 +5483,8 @@ ${vtShort}`;
       });
       var noSec2=state.analysisResults.filter(function(rv){return !getFieldSection(rv.id_champ);});
       if(noSec2.length){
+        ws2.addRow(['','','','','','','','']).height=6;
+        ws2.addRow(['','','','','','','','']).height=6;
         mrow(ws2,['   \u203a  Autres','','','','','','',''],N1,SECT_BG2,SECT_TXT2,{bold:true,sz:10,italic:true},16);
         noSec2.forEach(function(rv){
           var g=GRP[rv.statut]||GRP.MANQUANT;
