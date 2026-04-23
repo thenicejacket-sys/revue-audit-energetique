@@ -6236,11 +6236,15 @@ ${vtShort}`;
 
       // Ordre d'apparition : boucle par section du référentiel, tous statuts mélangés, couleur par statut
       var SECT_BG2='FFE8EEFA', SECT_TXT2='FF1B3F8B';
+      var firstSect2=true;
       sectionOrder.forEach(function(sec){
         var secR=state.analysisResults.filter(function(rv){return getFieldSection(rv.id_champ)===sec;});
         if(!secR.length)return;
-        ws2.addRow(['','','','','','','','']).height=18;
-        ws2.addRow(['','','','','','','','']).height=18;
+        if(!firstSect2){
+          ws2.addRow(['','','','','','','','']).height=18;
+          ws2.addRow(['','','','','','','','']).height=18;
+        }
+        firstSect2=false;
         mrow(ws2,['   \u203a  '+sec,'','','','','','',''],N1,SECT_BG2,SECT_TXT2,{bold:true,sz:10,italic:true},16);
         secR.forEach(function(rv){
           var g=GRP[rv.statut]||GRP.MANQUANT;
@@ -6269,8 +6273,11 @@ ${vtShort}`;
       });
       var noSec2=state.analysisResults.filter(function(rv){return !getFieldSection(rv.id_champ);});
       if(noSec2.length){
-        ws2.addRow(['','','','','','','','']).height=18;
-        ws2.addRow(['','','','','','','','']).height=18;
+        if(!firstSect2){
+          ws2.addRow(['','','','','','','','']).height=18;
+          ws2.addRow(['','','','','','','','']).height=18;
+        }
+        firstSect2=false;
         mrow(ws2,['   \u203a  Autres','','','','','','',''],N1,SECT_BG2,SECT_TXT2,{bold:true,sz:10,italic:true},16);
         noSec2.forEach(function(rv){
           var g=GRP[rv.statut]||GRP.MANQUANT;
