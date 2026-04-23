@@ -4409,7 +4409,13 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
         if (learningsBlock) console.log('[MAYA-KB] ' + (learningsBlock.match(/^- /gm) || []).length + ' learning(s) injecté(s) dans le prompt.');
       } catch (e) { console.warn('[MAYA-KB] Injection learnings échouée:', e.message); }
 
-      var mayaSystemPrompt = `Tu es Maya, experte en audit énergétique et contrôle qualité des données.
+      var mayaSystemPrompt = `⚠️ RÈGLE ABSOLUE — FORMAT DE SORTIE ⚠️
+Ta réponse DOIT être UNIQUEMENT du JSON valide, commençant par { et se terminant par }.
+AUCUN texte avant le {, AUCUN texte après le }, AUCUN raisonnement à voix haute, AUCUN markdown (pas de \`\`\`json).
+Si tu veux réfléchir, fais-le en silence. Ne retourne QUE le JSON final, rien d'autre.
+Toute réponse qui ne commence pas par { sera rejetée.
+
+Tu es Maya, experte en audit énergétique et contrôle qualité des données.
 Tu reçois TOUS les résultats d'analyse Audit vs VT (VERT, ROUGE, ORANGE, MANQUANT).
 
 TON RÔLE : VÉRIFIER SYSTÉMATIQUEMENT que chaque valeur existe RÉELLEMENT dans le document source correspondant.
@@ -4523,32 +4529,85 @@ ${vtShort}`;
         headers['X-Title'] = 'AuditVT Comparator - Maya Validation';
       }
 
-      try {
+      // Fix 1 — forcer le JSON côté serveur quand supporté (OpenAI toujours, OpenRouter sur modèles GPT/Gemini connus)
+      var supportsJsonMode = false;
+      if (state.config.provider === 'openai') {
+        supportsJsonMode = true;
+      } else if (state.config.provider === 'openrouter' && mayaModel) {
+        var m = String(mayaModel).toLowerCase();
+        // Modèles connus pour supporter response_format sur OpenRouter
+        if (m.indexOf('gpt-') !== -1 || m.indexOf('openai/') !== -1 || m.indexOf('gemini') !== -1 || m.indexOf('google/') !== -1 || m.indexOf('mistral') !== -1) {
+          supportsJsonMode = true;
+        }
+      }
+
+      // Fix 2b — préfixer le message user pour forcer le JSON en sortie
+      var mayaUserContent = 'Ta réponse DOIT commencer par { et ne contenir que du JSON valide. Aucun texte autour.\n\n' + mayaContent;
+
+      function buildMayaBody(userContent, forceJson) {
+        var body = {
+          model: mayaModel,
+          messages: [
+            { role: 'system', content: mayaSystemPrompt },
+            { role: 'user', content: userContent }
+          ],
+          temperature: 0.05,
+          max_tokens: 4000
+        };
+        if (forceJson && supportsJsonMode) {
+          body.response_format = { type: 'json_object' };
+        }
+        return body;
+      }
+
+      // Fix 3 — helper avec retry automatique si extractJSON échoue
+      async function callMayaAndExtract(userContent, isRetry) {
         var resp = await fetch(endpoint, {
           method: 'POST',
           headers: headers,
-          body: JSON.stringify({
-            model: mayaModel,
-            messages: [
-              { role: 'system', content: mayaSystemPrompt },
-              { role: 'user', content: mayaContent }
-            ],
-            temperature: 0.05,
-            max_tokens: 4000
-          })
+          body: JSON.stringify(buildMayaBody(userContent, true))
         });
-
-        if (!resp.ok) {
-          console.warn('[MAYA] API HTTP ' + resp.status + ' — validation ignorée.');
-          results._mayaStatus = { ran: false, corrections: 0, suspects: suspects.length, error: 'API HTTP ' + resp.status };
-          return results;
+        // Si response_format rejeté par le modèle (400), retenter sans
+        if (!resp.ok && resp.status === 400 && supportsJsonMode) {
+          console.warn('[MAYA] response_format rejeté — retry sans json_object.');
+          resp = await fetch(endpoint, {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(buildMayaBody(userContent, false))
+          });
         }
-
+        if (!resp.ok) {
+          throw new Error('API HTTP ' + resp.status);
+        }
         var data = await resp.json();
-        var raw = data.choices[0].message.content.trim();
-        console.log('[MAYA] Réponse brute : ' + raw.length + ' chars, finish_reason: ' + (data.choices[0].finish_reason || '?'));
+        var raw = (data.choices[0].message.content || '').trim();
+        console.log('[MAYA' + (isRetry ? '-RETRY' : '') + '] Réponse brute : ' + raw.length + ' chars, finish_reason: ' + (data.choices[0].finish_reason || '?'));
+        return { parsed: extractJSON(raw), raw: raw };
+      }
 
-        var mayaResult = extractJSON(raw);
+      try {
+        var mayaResult;
+        try {
+          mayaResult = (await callMayaAndExtract(mayaUserContent, false)).parsed;
+        } catch (extractErr) {
+          if (String(extractErr.message || '').indexOf('API HTTP') === 0) {
+            // Erreur réseau/API → comportement inchangé, on skip proprement
+            console.warn('[MAYA] ' + extractErr.message + ' — validation ignorée.');
+            results._mayaStatus = { ran: false, corrections: 0, suspects: suspects.length, error: extractErr.message };
+            return results;
+          }
+          // Fix 3 — JSON invalide au 1er tour : retry avec consigne de reformulation
+          console.warn('[MAYA] Extraction JSON échouée au 1er tour, retry avec reformulation : ' + extractErr.message);
+          var retryContent = 'Ta précédente réponse contenait du texte en langage naturel. RÈGLE ABSOLUE : ta réponse DOIT commencer par { et ne contenir QUE du JSON valide, sans aucune phrase avant ou après.\n\n' + mayaContent;
+          try {
+            mayaResult = (await callMayaAndExtract(retryContent, true)).parsed;
+            console.log('[MAYA] Retry JSON réussi.');
+          } catch (retryErr) {
+            console.warn('[MAYA] Retry JSON échoué — validation ignorée : ' + retryErr.message);
+            results._mayaStatus = { ran: false, corrections: 0, suspects: suspects.length, error: 'JSON invalide après retry : ' + retryErr.message };
+            return results;
+          }
+        }
 
         if (!mayaResult.corrections || mayaResult.corrections.length === 0) {
           console.log('[MAYA] Aucune correction — résultats confirmés.');
