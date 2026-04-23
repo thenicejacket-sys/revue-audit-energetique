@@ -807,67 +807,6 @@
       display: flex; gap: 8px; justify-content: flex-end;
     }
 
-    /* ===== SOURCE CHIPS & SOURCE MODAL (Vague 2) ===== */
-    .source-chip {
-      display: inline-block;
-      margin-top: 4px;
-      padding: 2px 7px;
-      background: rgba(123,45,142,0.08);
-      color: #7B2D8E;
-      border: 1px solid rgba(123,45,142,0.22);
-      border-radius: 10px;
-      font-size: 10px;
-      font-weight: 600;
-      cursor: pointer;
-      text-decoration: underline;
-      text-decoration-style: dotted;
-      text-underline-offset: 2px;
-      transition: background 0.15s;
-    }
-    .source-chip:hover { background: rgba(123,45,142,0.18); }
-    .source-chip::before { content: "\1F4C4  "; margin-right: 2px; }
-    .source-modal-excerpt {
-      background: #F8F6FB;
-      border: 1px solid #E0D4EA;
-      border-left: 4px solid #7B2D8E;
-      padding: 12px 14px;
-      margin: 8px 0 12px;
-      border-radius: 6px;
-      font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
-      font-size: 12px;
-      color: #333;
-      line-height: 1.55;
-      white-space: pre-wrap;
-      word-break: break-word;
-      max-height: 260px;
-      overflow-y: auto;
-    }
-    .source-modal-meta {
-      font-size: 11px;
-      color: #666;
-      margin-bottom: 6px;
-      font-style: italic;
-    }
-    .source-modal-nothing {
-      background: #FFF7E8;
-      border: 1px dashed #E0B770;
-      color: #8A5A1A;
-      padding: 12px 14px;
-      border-radius: 6px;
-      font-size: 12px;
-      font-style: italic;
-    }
-    .source-copy-feedback {
-      display: inline-block;
-      margin-left: 10px;
-      font-size: 11px;
-      color: #2E7D32;
-      font-weight: 600;
-      opacity: 0;
-      transition: opacity 0.2s;
-    }
-    .source-copy-feedback.visible { opacity: 1; }
-
     /* ===== MISSING FIELDS SECTION ===== */
     .missing-section {
       margin-top: 28px;
@@ -4988,20 +4927,11 @@ ${vtShort}`;
               '<span class="confidence-chip conf-' + conf.level + '" title="' + escHtml(conf.reason) + '">' + conf.icon + ' ' + conf.label + '</span>' +
               '<button type="button" class="' + fbClass + '" title="' + fbTitle + '"' + fbAttr + ' onclick="openMayaFeedback(\'' + safeKey + '\')">\ud83d\udcac</button>' +
             '</td>';
-          // Vague 2 \u2014 chips source cliquables si on a page, extrait ou contexte
-          var hasSrcA = !!(r._maya_source_audit || r.extrait_audit || r._ctx_audit || r._page_audit);
-          var hasSrcV = !!(r._maya_source_vt    || r.extrait_vt    || r._ctx_vt    || r._page_vt);
-          var srcChipA = hasSrcA
-            ? '<br><span class="source-chip" title="Voir l\'extrait du document Audit" onclick="openSourceModal(\'' + safeKey + '\', \'audit\')">Source' + (r._page_audit ? ' p.' + r._page_audit : '') + '</span>'
-            : '';
-          var srcChipV = hasSrcV
-            ? '<br><span class="source-chip" title="Voir l\'extrait du document VT" onclick="openSourceModal(\'' + safeKey + '\', \'vt\')">Source' + (r._page_vt ? ' p.' + r._page_vt : '') + '</span>'
-            : '';
           row.innerHTML =
             '<td>' + rowNum + '</td>' +
             '<td><strong>' + escHtml(r.id_champ || '') + '</strong><br><span style="font-size:11px;color:var(--text-muted)">' + escHtml(getFieldNom(r.id_champ)) + '</span>' + instanceTag + '</td>' +
-            '<td style="max-width:180px;font-size:12px">' + escHtml(r.valeur_audit || '\u2014') + srcChipA + '</td>' +
-            '<td style="max-width:180px;font-size:12px">' + escHtml(r.valeur_vt || '\u2014') + srcChipV + '</td>' +
+            '<td style="max-width:180px;font-size:12px">' + escHtml(r.valeur_audit || '\u2014') + '</td>' +
+            '<td style="max-width:180px;font-size:12px">' + escHtml(r.valeur_vt || '\u2014') + '</td>' +
             '<td>' + statusChip(r.statut) + '</td>' +
             confCell +
             '<td style="max-width:200px;font-size:12px;color:var(--text-muted)">' + escHtml(r.commentaire || '\u2014') + (r._maya_corrected ? ' <span style="display:inline-block;margin-top:3px;padding:1px 7px;background:#7B2D8E;color:white;border-radius:10px;font-size:9px;font-weight:700">&#10022; Maya</span>' : '') + '</td>' +
@@ -5219,86 +5149,6 @@ ${vtShort}`;
     function closeMayaFeedback() {
       document.getElementById('maya-fb-overlay').classList.remove('visible');
       currentFeedbackKey = null;
-    }
-
-    // ================ SOURCE MODAL (Vague 2) ================
-    function openSourceModal(fbKey, which) {
-      var r = findResultByFbKey(fbKey);
-      if (!r) return;
-      var isAudit = which === 'audit';
-      var docLabel = isAudit ? 'Audit' : 'VT';
-      var fileName = (isAudit ? (state.auditFileName || 'Document Audit') : (state.vtFileName || 'Document VT'));
-      var page = isAudit ? r._page_audit : r._page_vt;
-      var mayaSrc = isAudit ? r._maya_source_audit : r._maya_source_vt;
-      var extract = isAudit ? r.extrait_audit : r.extrait_vt;
-      var ctx = isAudit ? r._ctx_audit : r._ctx_vt;
-      var verif = isAudit ? r._verif_audit : r._verif_vt;
-
-      // Priorité : extrait Maya (Vague 2) > extrait IA initial > contexte JS calculé
-      var excerpt = null;
-      var excerptOrigin = '';
-      if (mayaSrc) { excerpt = mayaSrc; excerptOrigin = '✦ Extrait fourni par Maya lors de la vérification'; }
-      else if (extract) { excerpt = extract; excerptOrigin = 'Extrait IA cité lors de l\'analyse initiale'; }
-      else if (ctx) { excerpt = ctx; excerptOrigin = 'Contexte trouvé automatiquement autour de la valeur'; }
-
-      var nom = getFieldNom(r.id_champ) || r.id_champ;
-      var instanceTxt = r.instance_label ? (' — ' + r.instance_label) : '';
-      document.getElementById('source-modal-title').textContent = '📄 Source ' + docLabel + ' — ' + nom + instanceTxt;
-      document.getElementById('source-modal-file').textContent = fileName;
-      document.getElementById('source-modal-page').textContent = page ? ('Page ' + page) : 'Page non identifiée';
-      document.getElementById('source-modal-value').textContent = (isAudit ? r.valeur_audit : r.valeur_vt) || '—';
-
-      var verifLabel = { verifie: '✅ Citation vérifiée dans le texte source', non_verifie: '⚠️ Citation NON retrouvée dans le texte source', partiel: '~ Citation partiellement retrouvée', non_cite: '— Aucune citation fournie par l\'IA', court: '? Valeur trop courte pour vérification automatique' }[verif] || '';
-      document.getElementById('source-modal-verif').textContent = verifLabel;
-
-      var body = document.getElementById('source-modal-excerpt-body');
-      var originEl = document.getElementById('source-modal-origin');
-      var copyBtn = document.getElementById('source-modal-copy');
-      if (excerpt) {
-        body.className = 'source-modal-excerpt';
-        body.textContent = excerpt;
-        originEl.textContent = excerptOrigin;
-        originEl.style.display = '';
-        copyBtn.style.display = '';
-        copyBtn.dataset.excerpt = excerpt;
-      } else {
-        body.className = 'source-modal-nothing';
-        body.textContent = 'Extrait non disponible pour cette source. Ce peut être le cas pour les audits analysés avant l\'arrivée de cette fonctionnalité, ou lorsque Maya n\'a pas pu retrouver la valeur dans le texte.';
-        originEl.style.display = 'none';
-        copyBtn.style.display = 'none';
-      }
-      document.getElementById('source-copy-feedback').classList.remove('visible');
-      document.getElementById('source-modal-overlay').classList.add('visible');
-    }
-
-    function closeSourceModal() {
-      document.getElementById('source-modal-overlay').classList.remove('visible');
-    }
-
-    function copySourceExcerpt() {
-      var btn = document.getElementById('source-modal-copy');
-      var txt = btn && btn.dataset ? btn.dataset.excerpt : '';
-      if (!txt) return;
-      var done = function(){
-        var fb = document.getElementById('source-copy-feedback');
-        fb.textContent = '✓ Copié';
-        fb.classList.add('visible');
-        setTimeout(function(){ fb.classList.remove('visible'); }, 1800);
-      };
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(txt).then(done).catch(function(){
-          // Fallback textarea
-          var ta = document.createElement('textarea');
-          ta.value = txt; document.body.appendChild(ta); ta.select();
-          try { document.execCommand('copy'); done(); } catch(e) {}
-          document.body.removeChild(ta);
-        });
-      } else {
-        var ta = document.createElement('textarea');
-        ta.value = txt; document.body.appendChild(ta); ta.select();
-        try { document.execCommand('copy'); done(); } catch(e) {}
-        document.body.removeChild(ta);
-      }
     }
 
     function submitMayaFeedback() {
@@ -5542,20 +5392,20 @@ ${vtShort}`;
       });
 
       // Bloc Légende des scores de confiance (Vague 2) — avant le bloc compteur
-      var legHdr=ws1.addRow(['Légende des scores de confiance Maya','','']); legHdr.height=22;
+      var legHdr=ws1.addRow(['Légende des scores de confiance Maya','','']); legHdr.height=26;
       ws1.mergeCells(legHdr.number,1,legHdr.number,3);
       sc(legHdr.getCell(1),'FF7B2D8E',C.WHT,{bold:true,align:'left',sz:11});
       [
-        ['🟢 Certain', 'Maya a pu comparer les deux valeurs et le verdict (conforme ou non) est fiable.', 'FFE7F6E8', 'FF1B5E20'],
-        ['🟡 À vérifier', 'Écart dans la tolérance ou valeur partielle ; un coup d\'œil humain est recommandé.', 'FFFFF4E0', 'FF9C5700'],
-        ['🔴 Incertain', 'Maya n\'a pas pu juger : donnée absente, illisible, ou corrigée avec doute. Ne signifie PAS « non-conforme ».', 'FFFFEBEE', 'FF8E0000']
+        ['🟢 Certain', 'Maya a pu comparer les deux valeurs et le verdict (conforme ou non) est fiable.', 'FFE7F6E8', 'FF1B5E20', 42],
+        ['🟡 À vérifier', 'Écart dans la tolérance ou valeur partielle ; un coup d\'œil humain est recommandé.', 'FFFFF4E0', 'FF9C5700', 42],
+        ['🔴 Incertain', 'Maya n\'a pas pu juger : donnée absente, illisible, ou corrigée avec doute. Ne signifie PAS « non-conforme ».', 'FFFFEBEE', 'FF8E0000', 58]
       ].forEach(function(d){
-        var r=ws1.addRow([d[0], d[1], '']); r.height=28;
+        var r=ws1.addRow([d[0], d[1], '']); r.height=d[4];
         ws1.mergeCells(r.number, 2, r.number, 3);
-        sc(r.getCell(1), d[2], d[3], {bold:true, sz:11, align:'center'});
-        sc(r.getCell(2), d[2], d[3], {sz:10, wrap:true, align:'left'});
+        sc(r.getCell(1), d[2], d[3], {bold:true, sz:12, align:'center'});
+        sc(r.getCell(2), d[2], d[3], {sz:11, wrap:true, align:'left'});
       });
-      ws1.addRow(['','','']).height=4;
+      ws1.addRow(['','','']).height=6;
 
       var confHdr=ws1.addRow(['Score de confiance Maya','Nombre','% du total']); confHdr.height=22;
       sr(confHdr,'FF7B2D8E',C.WHT,{bold:true,align:'center'},3);
@@ -6878,32 +6728,6 @@ ${vtShort}`;
       <div class="maya-modal-footer">
         <button type="button" class="btn btn-outline" onclick="closeMayaFeedback()">Annuler</button>
         <button type="button" class="btn btn-primary" onclick="submitMayaFeedback()" style="background:#7B2D8E;border-color:#7B2D8E">Envoyer à Maya</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ================ SOURCE MODAL (Vague 2) ================ -->
-  <div class="maya-modal-overlay" id="source-modal-overlay" onclick="if(event.target===this) closeSourceModal()">
-    <div class="maya-modal" role="dialog" aria-labelledby="source-modal-title">
-      <div class="maya-modal-header">
-        <div class="maya-modal-header-title" id="source-modal-title">📄 Source</div>
-        <button type="button" class="maya-modal-close" onclick="closeSourceModal()" aria-label="Fermer">✕</button>
-      </div>
-      <div class="maya-modal-body">
-        <div class="maya-modal-context">
-          <div class="maya-modal-context-row"><span class="maya-modal-context-label">Fichier :</span><span class="maya-modal-context-value" id="source-modal-file">—</span></div>
-          <div class="maya-modal-context-row"><span class="maya-modal-context-label">Page :</span><span class="maya-modal-context-value" id="source-modal-page">—</span></div>
-          <div class="maya-modal-context-row"><span class="maya-modal-context-label">Valeur :</span><span class="maya-modal-context-value" id="source-modal-value">—</span></div>
-          <div class="maya-modal-context-row"><span class="maya-modal-context-label">Vérif. :</span><span class="maya-modal-context-value" id="source-modal-verif">—</span></div>
-        </div>
-        <label class="maya-modal-field-label">Extrait du document source</label>
-        <div class="source-modal-meta" id="source-modal-origin"></div>
-        <div class="source-modal-excerpt" id="source-modal-excerpt-body">—</div>
-      </div>
-      <div class="maya-modal-footer">
-        <span class="source-copy-feedback" id="source-copy-feedback">✓ Copié</span>
-        <button type="button" class="btn btn-outline" id="source-modal-copy" onclick="copySourceExcerpt()">📋 Copier l'extrait</button>
-        <button type="button" class="btn btn-primary" onclick="closeSourceModal()" style="background:#7B2D8E;border-color:#7B2D8E">Fermer</button>
       </div>
     </div>
   </div>
