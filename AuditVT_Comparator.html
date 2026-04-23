@@ -5329,7 +5329,7 @@ ${vtShort}`;
 
       // ── ONGLET 1 ──────────────────────────────────────────────────────────
       var ws1=wb.addWorksheet('Synthese');
-      ws1.columns=[{width:44},{width:42},{width:22}];
+      ws1.columns=[{width:44},{width:56},{width:22}];
       var approx=state.analysisResults.filter(function(rv){return rv.statut==='ORANGE';}).length;
       var nonconf=state.analysisResults.filter(function(rv){return rv.statut==='ROUGE';}).length;
       var manqTotal=state.analysisResults.filter(function(rv){return rv.statut==='MANQUANT';}).length;
@@ -5396,9 +5396,9 @@ ${vtShort}`;
       ws1.mergeCells(legHdr.number,1,legHdr.number,3);
       sc(legHdr.getCell(1),'FF7B2D8E',C.WHT,{bold:true,align:'left',sz:11});
       [
-        ['🟢 Certain', 'Maya a pu comparer les deux valeurs et le verdict (conforme ou non) est fiable.', 'FFE7F6E8', 'FF1B5E20', 28],
-        ['🟡 À vérifier', 'Écart dans la tolérance ou valeur partielle ; un coup d\'œil humain est recommandé.', 'FFFFF4E0', 'FF9C5700', 28],
-        ['🔴 Incertain', 'Maya n\'a pas pu juger : donnée absente, illisible, ou corrigée avec doute. Ne signifie PAS « non-conforme ».', 'FFFFEBEE', 'FF8E0000', 34]
+        ['🟢 Certain', 'Maya a pu comparer les deux valeurs et le verdict (conforme ou non) est fiable.', 'FFE7F6E8', 'FF1B5E20', 22],
+        ['🟡 À vérifier', 'Écart dans la tolérance ou valeur partielle ; un coup d\'œil humain est recommandé.', 'FFFFF4E0', 'FF9C5700', 22],
+        ['🔴 Incertain', 'Maya n\'a pas pu juger : donnée absente, illisible, ou corrigée avec doute. Ne signifie PAS « non-conforme ».', 'FFFFEBEE', 'FF8E0000', 32]
       ].forEach(function(d){
         var r=ws1.addRow([d[0], d[1], '']); r.height=d[4];
         ws1.mergeCells(r.number, 2, r.number, 3);
@@ -5457,8 +5457,8 @@ ${vtShort}`;
       sectionOrder.forEach(function(sec){
         var secR=state.analysisResults.filter(function(rv){return getFieldSection(rv.id_champ)===sec;});
         if(!secR.length)return;
-        ws2.addRow(['','','','','','','','']).height=6;
-        ws2.addRow(['','','','','','','','']).height=6;
+        ws2.addRow(['','','','','','','','']).height=18;
+        ws2.addRow(['','','','','','','','']).height=18;
         mrow(ws2,['   \u203a  '+sec,'','','','','','',''],N1,SECT_BG2,SECT_TXT2,{bold:true,sz:10,italic:true},16);
         secR.forEach(function(rv){
           var g=GRP[rv.statut]||GRP.MANQUANT;
@@ -5483,8 +5483,8 @@ ${vtShort}`;
       });
       var noSec2=state.analysisResults.filter(function(rv){return !getFieldSection(rv.id_champ);});
       if(noSec2.length){
-        ws2.addRow(['','','','','','','','']).height=6;
-        ws2.addRow(['','','','','','','','']).height=6;
+        ws2.addRow(['','','','','','','','']).height=18;
+        ws2.addRow(['','','','','','','','']).height=18;
         mrow(ws2,['   \u203a  Autres','','','','','','',''],N1,SECT_BG2,SECT_TXT2,{bold:true,sz:10,italic:true},16);
         noSec2.forEach(function(rv){
           var g=GRP[rv.statut]||GRP.MANQUANT;
