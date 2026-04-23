@@ -927,6 +927,7 @@
     }
     .maya-drawer-item.archived { opacity: 0.55; border-left-color: #999; }
     .maya-drawer-item.applied { border-left-color: #2E7D32; background: #F6FBF6; }
+    .maya-drawer-item.permanent { border-left-color: #7B2D8E; background: #F5EFF8; border: 1px solid #C4A3D0; border-left-width: 4px; }
     .maya-drawer-item.scope-global { border-left-color: #E65100; background: #FFF9F1; }
     .maya-drawer-item-head {
       display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
@@ -947,6 +948,7 @@
     .maya-drawer-item-badge.pending { background: #FFE0B2; color: #7F3D00; }
     .maya-drawer-item-badge.applied { background: #C8E6C9; color: #1B5E20; }
     .maya-drawer-item-badge.archived { background: #CFD8DC; color: #37474F; }
+    .maya-drawer-item-badge.permanent { background: #E1BEE7; color: #4A148C; }
     .maya-drawer-item-badge.global { background: #FFCC80; color: #7F3D00; }
     .maya-drawer-item-text {
       color: #444; margin: 6px 0;
@@ -4568,12 +4570,19 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
 
       console.log('[MAYA] Validation complète : ' + suspects.length + ' résultat(s) à vérifier dans les documents sources.');
 
-      // ── Auto-apprentissage : injection des learnings précédents ──
+      // ── Auto-apprentissage : injection des learnings précédents (KB serveur) ──
       var learningsBlock = '';
       try {
         learningsBlock = await kbGetLearnings('maya');
         if (learningsBlock) console.log('[MAYA-KB] ' + (learningsBlock.match(/^- /gm) || []).length + ' learning(s) injecté(s) dans le prompt.');
       } catch (e) { console.warn('[MAYA-KB] Injection learnings échouée:', e.message); }
+
+      // ── Injection des feedbacks utilisateur du drawer (pending + permanent) ──
+      var drawerInjection = { block: '', injectedIds: [] };
+      try {
+        drawerInjection = buildDrawerFeedbackInjection();
+        if (drawerInjection.block) console.log('[MAYA-DRAWER] ' + drawerInjection.injectedIds.length + ' règle(s) apprise(s) injectée(s) dans le prompt Maya (pending + permanent).');
+      } catch (e) { console.warn('[MAYA-DRAWER] Injection feedbacks échouée:', e.message); }
 
       var mayaSystemPrompt = `⚠️ RÈGLE ABSOLUE — FORMAT DE SORTIE ⚠️
 Ta réponse DOIT être UNIQUEMENT du JSON valide, commençant par { et se terminant par }.
@@ -4654,7 +4663,7 @@ Réponds UNIQUEMENT en JSON strict :
 IMPORTANT :
 - Pour CHAQUE correction, fournis source_excerpt_audit et/ou source_excerpt_vt — un court extrait BRUT du texte source (copié tel quel, pas reformulé) qui permet de vérifier ta décision. Max 200 caractères chacun. Si la valeur est absente du document, mets null.
 - low_confidence: true UNIQUEMENT si tu appliques quand même une correction MAIS avec doute résiduel (rare). Pour les cas où tu préfères ne pas corriger à cause du doute, utilise le bloc "low_confidence_flags".
-Si tout est correct ET certain, retourne {"corrections": [], "low_confidence_flags": []}` + (learningsBlock ? '\n' + learningsBlock : '');
+Si tout est correct ET certain, retourne {"corrections": [], "low_confidence_flags": []}` + (learningsBlock ? '\n' + learningsBlock : '') + (drawerInjection.block || '');
 
       var suspectsCompact = suspects.map(function(r) {
         var o = {
@@ -4872,6 +4881,18 @@ ${vtShort}`;
         }
         console.log('[MAYA] ' + corrCount + ' correction(s) appliquée(s).');
         results._mayaStatus = { ran: true, corrections: corrCount, suspects: suspects.length, lowConfidenceCount: lowConfCount, error: null };
+
+        // ── Marquage auto pending → applied des feedbacks drawer injectés ──
+        try {
+          var flippedCount = markDrawerFeedbacksApplied(drawerInjection.injectedIds || []);
+          if (flippedCount > 0) {
+            console.log('[MAYA-DRAWER] ' + flippedCount + ' feedback(s) pending passé(s) en applied (règles permanentes inchangées).');
+            if (document.getElementById('maya-drawer') && document.getElementById('maya-drawer').classList.contains('visible')) {
+              renderMayaDrawer();
+            }
+            updateMayaFabBadges();
+          }
+        } catch (e) { console.warn('[MAYA-DRAWER] Marquage applied échoué:', e.message); }
 
         // ── Auto-apprentissage : sauvegarder les corrections comme learnings ──
         try {
@@ -5474,6 +5495,92 @@ ${vtShort}`;
       return items;
     }
 
+    // ---- Promotion automatique des feedbacks récurrents en règle permanente ----
+    function promoteRecurringToPermanent() {
+      var all = collectAllFeedbacks();
+      var byKey = {};  // line scope
+      var byCat = {};  // global scope
+      all.forEach(function(i){
+        if (i.meta && i.meta.status === 'archived') return;
+        if (i.scope === 'line' && i.key) {
+          byKey[i.key] = byKey[i.key] || [];
+          byKey[i.key].push(i);
+        } else if (i.scope === 'global' && i.category) {
+          byCat[i.category] = byCat[i.category] || [];
+          byCat[i.category].push(i);
+        }
+      });
+      var changed = 0;
+      Object.keys(byKey).forEach(function(k){
+        if (byKey[k].length >= 3) byKey[k].forEach(function(it){
+          var cur = (mayaFeedbackMeta[it.id] || {}).status || 'pending';
+          if (cur !== 'permanent' && cur !== 'archived') {
+            mayaFeedbackMeta[it.id] = { status: 'permanent', at: new Date().toISOString(), autoPromoted: true };
+            changed++;
+          }
+        });
+      });
+      Object.keys(byCat).forEach(function(c){
+        if (byCat[c].length >= 3) byCat[c].forEach(function(it){
+          var cur = (mayaFeedbackMeta[it.id] || {}).status || 'pending';
+          if (cur !== 'permanent' && cur !== 'archived') {
+            mayaFeedbackMeta[it.id] = { status: 'permanent', at: new Date().toISOString(), autoPromoted: true };
+            changed++;
+          }
+        });
+      });
+      if (changed > 0) persistMayaFeedbackMeta();
+      return changed;
+    }
+
+    // ---- Construction du bloc RÈGLES APPRISES injecté dans le prompt Maya ----
+    function buildDrawerFeedbackInjection() {
+      promoteRecurringToPermanent();
+      var all = collectAllFeedbacks();
+      var toInject = all.filter(function(i){
+        var s = (i.meta && i.meta.status) || 'pending';
+        return s === 'pending' || s === 'permanent';
+      });
+      if (toInject.length === 0) return { block: '', injectedIds: [] };
+
+      var catLbl = { pattern: 'Pattern récurrent', rule: 'Règle manquante', prompt: 'Ajustement prompt', other: 'Remarque transverse' };
+      var lines = toInject.map(function(it){
+        var label = '';
+        if (it.scope === 'line' && it.key) {
+          var r = findResultByFbKey(it.key);
+          label = r ? ((getFieldNom(r.id_champ) || r.id_champ) + (r.instance_label ? ' — ' + r.instance_label : '')) : it.key;
+        } else {
+          label = '🌐 Global — ' + (catLbl[it.category] || 'Remarque');
+        }
+        var isPerm = (it.meta && it.meta.status === 'permanent');
+        var permTag = isPerm ? ' [🧠 RÈGLE PERMANENTE]' : '';
+        var txt = (it.text || '').replace(/\s+/g, ' ').trim();
+        return '- [' + label + ']' + permTag + ' : ' + txt;
+      });
+
+      var block = '\n\n=== RÈGLES APPRISES DE L\'UTILISATEUR (à appliquer obligatoirement) ===\n'
+                + 'L\'utilisateur t\'a déjà donné les retours suivants lors de précédentes analyses. Tu DOIS les appliquer strictement lors de cette nouvelle passe. Les [🧠 RÈGLE PERMANENTE] sont des patterns récurrents (≥3 retours) à respecter systématiquement :\n'
+                + lines.join('\n') + '\n'
+                + '==================================================================\n';
+      return { block: block, injectedIds: toInject.map(function(i){ return i.id; }) };
+    }
+
+    // ---- Marquage auto pending → applied après injection réussie ----
+    function markDrawerFeedbacksApplied(injectedIds) {
+      if (!injectedIds || !injectedIds.length) return 0;
+      var flipped = 0;
+      injectedIds.forEach(function(id){
+        var cur = (mayaFeedbackMeta[id] || {}).status || 'pending';
+        if (cur === 'pending') {
+          mayaFeedbackMeta[id] = { status: 'applied', at: new Date().toISOString(), autoApplied: true };
+          flipped++;
+        }
+        // permanent reste permanent (toujours ré-injecté)
+      });
+      if (flipped > 0) persistMayaFeedbackMeta();
+      return flipped;
+    }
+
     function updateMayaFabBadges() {
       var all = collectAllFeedbacks();
       var pendingAll    = all.filter(function(i){ return i.meta.status === 'pending'; }).length;
@@ -5539,6 +5646,8 @@ ${vtShort}`;
     }
 
     function renderMayaDrawer() {
+      // Promotion automatique avant render (pour refléter les règles récurrentes)
+      try { promoteRecurringToPermanent(); } catch(e) {}
       var items = collectAllFeedbacks();
       var learnings = detectMayaRecurringLearnings(items);
 
@@ -5581,12 +5690,14 @@ ${vtShort}`;
           var classes = ['maya-drawer-item'];
           if (it.meta.status === 'archived') classes.push('archived');
           if (it.meta.status === 'applied') classes.push('applied');
+          if (it.meta.status === 'permanent') classes.push('permanent');
           if (it.scope === 'global') classes.push('scope-global');
 
           var statusBadge = '';
           if (it.meta.status === 'pending') statusBadge = '<span class="maya-drawer-item-badge pending">En attente</span>';
           else if (it.meta.status === 'applied') statusBadge = '<span class="maya-drawer-item-badge applied">Appliqué</span>';
           else if (it.meta.status === 'archived') statusBadge = '<span class="maya-drawer-item-badge archived">Archivé</span>';
+          else if (it.meta.status === 'permanent') statusBadge = '<span class="maya-drawer-item-badge permanent">🧠 Règle permanente</span>';
 
           var scopeBadge = (it.scope === 'global') ? '<span class="maya-drawer-item-badge global">Global</span>' : '';
 
@@ -5598,9 +5709,10 @@ ${vtShort}`;
                +   '<div class="maya-drawer-item-badges">' + statusBadge + scopeBadge + '</div>'
                +   '<div class="maya-drawer-item-text">' + escHtml(it.text || '') + '</div>'
                +   '<div class="maya-drawer-item-actions">';
-          if (it.meta.status !== 'applied') html += '<button type="button" class="maya-drawer-item-action" onclick="mayaMarkApplied(\'' + it.id + '\')">✓ Marquer appliqué</button>';
+          if (it.meta.status !== 'applied' && it.meta.status !== 'permanent') html += '<button type="button" class="maya-drawer-item-action" onclick="mayaMarkApplied(\'' + it.id + '\')">✓ Marquer appliqué</button>';
+          if (it.meta.status !== 'permanent') html += '<button type="button" class="maya-drawer-item-action" onclick="mayaMarkPermanent(\'' + it.id + '\')">🧠 Règle permanente</button>';
           if (it.meta.status !== 'archived') html += '<button type="button" class="maya-drawer-item-action" onclick="mayaArchive(\'' + it.id + '\')">🗄 Archiver</button>';
-          if (it.meta.status !== 'pending') html += '<button type="button" class="maya-drawer-item-action" onclick="mayaRestore(\'' + it.id + '\')">↺ Restaurer</button>';
+          if (it.meta.status !== 'pending') html += '<button type="button" class="maya-drawer-item-action" onclick="mayaRestore(\'' + it.id + '\')">↺ Restaurer (en attente)</button>';
           html +=     '<button type="button" class="maya-drawer-item-action danger" onclick="mayaDeleteFeedback(\'' + it.id + '\')">🗑 Supprimer</button>'
                +   '</div>'
                + '</div>';
@@ -5612,6 +5724,11 @@ ${vtShort}`;
 
     function mayaMarkApplied(id) {
       mayaFeedbackMeta[id] = { status: 'applied', at: new Date().toISOString() };
+      persistMayaFeedbackMeta();
+      renderMayaDrawer(); updateMayaFabBadges();
+    }
+    function mayaMarkPermanent(id) {
+      mayaFeedbackMeta[id] = { status: 'permanent', at: new Date().toISOString() };
       persistMayaFeedbackMeta();
       renderMayaDrawer(); updateMayaFabBadges();
     }
@@ -5651,21 +5768,195 @@ ${vtShort}`;
       renderMayaDrawer(); updateMayaFabBadges();
     }
 
-    // ---- Export JSON (backup) ----
-    function exportMayaFeedbacksJSON() {
-      var payload = {
-        exported_at: new Date().toISOString(),
-        feedbacks_by_line: mayaFeedbacks || {},
-        feedbacks_global: mayaGlobalFeedbacks || [],
-        meta: mayaFeedbackMeta || {}
-      };
-      var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    // ---- Export Excel (ExcelJS) ----
+    async function exportMayaFeedbacksExcel() {
+      try { promoteRecurringToPermanent(); } catch(e) {}
+      var ExcelJS = window.ExcelJS;
+      if (!ExcelJS) { showAlert('alerts-area', 'error', 'ExcelJS non chargé — vérifie la connexion.'); return; }
+
+      var items = collectAllFeedbacks();
+      if (items.length === 0) {
+        showAlert('alerts-area', 'warning', 'Aucun feedback à exporter.');
+        return;
+      }
+
+      var STATUS_LBL = { pending: 'En attente', applied: 'Appliqué', archived: 'Archivé', permanent: 'Règle permanente' };
+      var STATUS_BG  = { pending: 'FFFFF3E0', applied: 'FFE8F5E9', archived: 'FFECEFF1', permanent: 'FFF3E5F5' };
+      var STATUS_FG  = { pending: 'FF7F3D00', applied: 'FF1B5E20', archived: 'FF37474F', permanent: 'FF4A148C' };
+      var CAT_LBL    = { pattern: 'Pattern récurrent', rule: 'Règle manquante', prompt: 'Ajustement prompt', other: 'Remarque transverse' };
+
+      function xlFill(a){ return { type:'pattern', pattern:'solid', fgColor:{argb:a} }; }
+      function xlFont(color, bold, sz){ return { name:'Calibri', size: sz||10, bold: !!bold, color:{argb: color||'FF333333'} }; }
+      function xlBorder(){ var s={style:'thin', color:{argb:'FFCCCCCC'}}; return {top:s, bottom:s, left:s, right:s}; }
+      function xlAlign(h, w){ return { vertical:'middle', horizontal: h||'left', wrapText: !!w }; }
+      function setH(ws, rowNum, cells, bg, fg, opts) {
+        cells.forEach(function(_, idx){
+          var cell = ws.getRow(rowNum).getCell(idx + 1);
+          cell.fill = xlFill(bg);
+          cell.font = xlFont(fg, opts.bold, opts.sz);
+          cell.alignment = xlAlign(opts.align, opts.wrap);
+          cell.border = xlBorder();
+        });
+      }
+
+      var wb = new ExcelJS.Workbook();
+      wb.creator = 'OT Énergie — Drawer Maya';
+      var today = new Date().toLocaleDateString('fr-FR');
+
+      // ── Onglet 1 : Feedbacks par ligne ──
+      var ws1 = wb.addWorksheet('Feedbacks par ligne');
+      ws1.columns = [
+        {width: 20}, {width: 38}, {width: 22}, {width: 22}, {width: 14}, {width: 14}, {width: 60}, {width: 22}
+      ];
+      var headerRow = ws1.addRow(['Date', 'Champ audité', 'Valeur Audit', 'Valeur VT', 'Statut conformité', 'Confiance', 'Feedback utilisateur', 'Statut']);
+      headerRow.height = 24;
+      setH(ws1, headerRow.number, headerRow.values.slice(1), 'FF1B3F8B', 'FFFFFFFF', {bold:true, align:'center', wrap:true});
+
+      var lineItems = items.filter(function(i){ return i.scope === 'line'; });
+      lineItems.forEach(function(it){
+        var d = new Date(it.timestamp);
+        var dateStr = isNaN(d.getTime()) ? '' : (d.toLocaleDateString('fr-FR') + ' ' + d.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'}));
+        var snap = it.snapshot || {};
+        var fieldLabel = '';
+        if (it.key) {
+          var r = findResultByFbKey(it.key);
+          if (r) fieldLabel = (getFieldNom(r.id_champ) || r.id_champ) + (r.instance_label ? ' — ' + r.instance_label : '');
+          else fieldLabel = it.key;
+        }
+        var conf = '';
+        try {
+          var r2 = it.key ? findResultByFbKey(it.key) : null;
+          if (r2) { var cc = computeConfidence(r2); conf = cc.icon + ' ' + cc.label; }
+        } catch(e) {}
+        var statusKey = (it.meta && it.meta.status) || 'pending';
+        var row = ws1.addRow([
+          dateStr,
+          fieldLabel,
+          snap.valeur_audit || '',
+          snap.valeur_vt || '',
+          snap.statut || '',
+          conf,
+          it.text || '',
+          STATUS_LBL[statusKey] || statusKey
+        ]);
+        row.height = Math.min(60, Math.max(18, Math.ceil((it.text || '').length / 60) * 14));
+        row.eachCell(function(cell, colNum){
+          cell.font = xlFont('FF333333', false, 10);
+          cell.alignment = xlAlign(colNum === 1 || colNum === 3 || colNum === 4 || colNum === 5 ? 'center' : 'left', true);
+          cell.border = xlBorder();
+          if (colNum === 8) {
+            cell.fill = xlFill(STATUS_BG[statusKey] || 'FFFFFFFF');
+            cell.font = xlFont(STATUS_FG[statusKey] || 'FF333333', true, 10);
+            cell.alignment = xlAlign('center', true);
+          }
+        });
+      });
+      if (lineItems.length === 0) {
+        var empty1 = ws1.addRow(['', '(aucun feedback par ligne)', '', '', '', '', '', '']);
+        empty1.getCell(2).font = xlFont('FF888888', false, 10);
+      }
+      ws1.autoFilter = { from: {row:1, column:1}, to: {row:1, column:8} };
+      ws1.views = [{ state:'frozen', ySplit:1 }];
+
+      // ── Onglet 2 : Feedbacks globaux ──
+      var ws2 = wb.addWorksheet('Feedbacks globaux');
+      ws2.columns = [{width: 20}, {width: 26}, {width: 70}, {width: 22}];
+      var hr2 = ws2.addRow(['Date', 'Catégorie', 'Feedback utilisateur', 'Statut']);
+      hr2.height = 24;
+      setH(ws2, hr2.number, hr2.values.slice(1), 'FF7B2D8E', 'FFFFFFFF', {bold:true, align:'center', wrap:true});
+
+      var globalItems = items.filter(function(i){ return i.scope === 'global'; });
+      globalItems.forEach(function(it){
+        var d = new Date(it.timestamp);
+        var dateStr = isNaN(d.getTime()) ? '' : (d.toLocaleDateString('fr-FR') + ' ' + d.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'}));
+        var statusKey = (it.meta && it.meta.status) || 'pending';
+        var row = ws2.addRow([
+          dateStr,
+          CAT_LBL[it.category] || (it.category || 'Remarque'),
+          it.text || '',
+          STATUS_LBL[statusKey] || statusKey
+        ]);
+        row.height = Math.min(60, Math.max(18, Math.ceil((it.text || '').length / 70) * 14));
+        row.eachCell(function(cell, colNum){
+          cell.font = xlFont('FF333333', false, 10);
+          cell.alignment = xlAlign(colNum === 1 || colNum === 4 ? 'center' : 'left', true);
+          cell.border = xlBorder();
+          if (colNum === 4) {
+            cell.fill = xlFill(STATUS_BG[statusKey] || 'FFFFFFFF');
+            cell.font = xlFont(STATUS_FG[statusKey] || 'FF333333', true, 10);
+            cell.alignment = xlAlign('center', true);
+          }
+        });
+      });
+      if (globalItems.length === 0) {
+        var empty2 = ws2.addRow(['', '(aucun feedback global)', '', '']);
+        empty2.getCell(2).font = xlFont('FF888888', false, 10);
+      }
+      ws2.autoFilter = { from: {row:1, column:1}, to: {row:1, column:4} };
+      ws2.views = [{ state:'frozen', ySplit:1 }];
+
+      // ── Onglet 3 : Règles permanentes ──
+      var ws3 = wb.addWorksheet('Règles permanentes');
+      ws3.columns = [{width: 42}, {width: 70}, {width: 22}, {width: 22}];
+      var hr3 = ws3.addRow(['Champ concerné / Catégorie', 'Règle apprise', 'Nb feedbacks source', 'Date de promotion']);
+      hr3.height = 24;
+      setH(ws3, hr3.number, hr3.values.slice(1), 'FF4A148C', 'FFFFFFFF', {bold:true, align:'center', wrap:true});
+
+      // Regrouper permanentes par clé (ligne) ou catégorie (global)
+      var permsByGroup = {};
+      items.forEach(function(it){
+        if ((it.meta && it.meta.status) !== 'permanent') return;
+        var groupKey, groupLabel;
+        if (it.scope === 'line' && it.key) {
+          groupKey = 'line:' + it.key;
+          var r = findResultByFbKey(it.key);
+          groupLabel = r ? (getFieldNom(r.id_champ) || r.id_champ) + (r.instance_label ? ' — ' + r.instance_label : '') : it.key;
+        } else if (it.scope === 'global' && it.category) {
+          groupKey = 'cat:' + it.category;
+          groupLabel = '🌐 Global — ' + (CAT_LBL[it.category] || it.category);
+        } else {
+          groupKey = 'other:' + it.id;
+          groupLabel = '(divers)';
+        }
+        if (!permsByGroup[groupKey]) permsByGroup[groupKey] = { label: groupLabel, texts: [], dates: [] };
+        permsByGroup[groupKey].texts.push((it.text || '').replace(/\s+/g, ' ').trim());
+        if (it.meta && it.meta.at) permsByGroup[groupKey].dates.push(it.meta.at);
+      });
+
+      var permKeys = Object.keys(permsByGroup);
+      permKeys.forEach(function(k){
+        var g = permsByGroup[k];
+        var latestDate = g.dates.sort().slice(-1)[0] || '';
+        var dateStr = '';
+        if (latestDate) { var dd = new Date(latestDate); if (!isNaN(dd.getTime())) dateStr = dd.toLocaleDateString('fr-FR'); }
+        var combined = g.texts.map(function(t, i){ return '(' + (i+1) + ') ' + t; }).join('\n');
+        var row = ws3.addRow([g.label, combined, g.texts.length, dateStr]);
+        row.height = Math.min(100, Math.max(22, g.texts.length * 16));
+        row.eachCell(function(cell, colNum){
+          cell.font = xlFont('FF333333', false, 10);
+          cell.alignment = xlAlign(colNum === 3 || colNum === 4 ? 'center' : 'left', true);
+          cell.border = xlBorder();
+          cell.fill = xlFill('FFF3E5F5');
+        });
+      });
+      if (permKeys.length === 0) {
+        var empty3 = ws3.addRow(['', '(aucune règle permanente — elles apparaissent automatiquement après 3 feedbacks sur le même champ ou la même catégorie)', '', '']);
+        empty3.getCell(2).font = xlFont('FF888888', false, 10, true);
+        empty3.getCell(2).alignment = xlAlign('left', true);
+      }
+      ws3.autoFilter = { from: {row:1, column:1}, to: {row:1, column:4} };
+      ws3.views = [{ state:'frozen', ySplit:1 }];
+
+      // Télécharger
+      var buf = await wb.xlsx.writeBuffer();
+      var blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       var url = URL.createObjectURL(blob);
       var a = document.createElement('a');
       a.href = url;
-      a.download = 'maya_feedbacks_' + new Date().toISOString().slice(0,10) + '.json';
+      a.download = 'maya_feedbacks_' + new Date().toISOString().slice(0,10) + '.xlsx';
       document.body.appendChild(a); a.click();
       setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
+      showAlert('alerts-area', 'success', '📥 Export Excel téléchargé (' + today + ').');
     }
 
     // Init au chargement final — nettoie aussi l'ancien flag doubleVerif s'il traîne en localStorage
@@ -7288,8 +7579,9 @@ ${vtShort}`;
       <button type="button" class="maya-drawer-filter-btn active" data-filter="all" onclick="setMayaDrawerFilter('all')">Tous</button>
       <button type="button" class="maya-drawer-filter-btn" data-filter="pending" onclick="setMayaDrawerFilter('pending')">En attente</button>
       <button type="button" class="maya-drawer-filter-btn" data-filter="applied" onclick="setMayaDrawerFilter('applied')">Appliqués</button>
+      <button type="button" class="maya-drawer-filter-btn" data-filter="permanent" onclick="setMayaDrawerFilter('permanent')">🧠 Permanentes</button>
       <button type="button" class="maya-drawer-filter-btn" data-filter="archived" onclick="setMayaDrawerFilter('archived')">Archivés</button>
-      <button type="button" class="maya-drawer-export" onclick="exportMayaFeedbacksJSON()">📥 Exporter JSON</button>
+      <button type="button" class="maya-drawer-export" onclick="exportMayaFeedbacksExcel()">📥 Exporter Excel</button>
     </div>
     <div class="maya-drawer-body" id="maya-drawer-body"></div>
   </aside>
