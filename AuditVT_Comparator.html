@@ -807,6 +807,192 @@
       display: flex; gap: 8px; justify-content: flex-end;
     }
 
+    /* ===== MAYA VAGUE 3 — Floating buttons + Drawer + Global feedback ===== */
+    .maya-fab-stack {
+      position: fixed; right: 18px; bottom: 18px;
+      display: flex; flex-direction: column; gap: 10px;
+      z-index: 9000;
+    }
+    .maya-fab {
+      width: 52px; height: 52px;
+      border-radius: 50%;
+      border: none; cursor: pointer;
+      font-size: 22px; color: #FFFFFF;
+      background: linear-gradient(135deg, #7B2D8E, #5E1B6E);
+      box-shadow: 0 8px 24px rgba(123,45,142,0.35);
+      display: flex; align-items: center; justify-content: center;
+      position: relative;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .maya-fab:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(123,45,142,0.45); }
+    .maya-fab.history { background: linear-gradient(135deg, #5E1B6E, #3E1149); }
+    .maya-fab-badge {
+      position: absolute; top: -4px; right: -4px;
+      min-width: 20px; height: 20px; padding: 0 5px;
+      border-radius: 10px;
+      background: #B71C1C; color: #FFFFFF;
+      font-size: 10px; font-weight: 800;
+      display: none; align-items: center; justify-content: center;
+      border: 2px solid #FFFFFF;
+    }
+    .maya-fab-badge.visible { display: flex; }
+    .maya-fab-tooltip {
+      position: absolute; right: 62px; top: 50%; transform: translateY(-50%);
+      background: #1F2937; color: #FFFFFF;
+      padding: 5px 10px; border-radius: 6px;
+      font-size: 11px; white-space: nowrap;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.12s ease;
+    }
+    .maya-fab:hover .maya-fab-tooltip { opacity: 1; }
+
+    /* Drawer historique */
+    .maya-drawer-overlay {
+      position: fixed; inset: 0;
+      background: rgba(15,23,42,0.35);
+      display: none; z-index: 9500;
+    }
+    .maya-drawer-overlay.visible { display: block; }
+    .maya-drawer {
+      position: fixed; top: 0; right: 0; bottom: 0;
+      width: 460px; max-width: 94vw;
+      background: #FFFFFF;
+      box-shadow: -14px 0 40px rgba(0,0,0,0.18);
+      z-index: 9600;
+      display: flex; flex-direction: column;
+      transform: translateX(100%);
+      transition: transform 0.22s ease;
+    }
+    .maya-drawer.visible { transform: translateX(0); }
+    .maya-drawer-header {
+      padding: 16px 18px;
+      background: linear-gradient(135deg, #7B2D8E, #5E1B6E);
+      color: #FFFFFF;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .maya-drawer-title { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+    .maya-drawer-close {
+      background: rgba(255,255,255,0.15); border: none; color: #FFFFFF;
+      width: 28px; height: 28px; border-radius: 50%;
+      cursor: pointer; font-size: 14px;
+    }
+    .maya-drawer-filters {
+      padding: 10px 16px;
+      border-bottom: 1px solid #EEE;
+      background: #F8F6FA;
+      display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+    }
+    .maya-drawer-filter-btn {
+      background: #FFFFFF; border: 1px solid #D7C5DE;
+      border-radius: 16px; padding: 4px 12px;
+      font-size: 11px; font-weight: 600; color: #5E1B6E;
+      cursor: pointer;
+    }
+    .maya-drawer-filter-btn.active {
+      background: #7B2D8E; color: #FFFFFF; border-color: #7B2D8E;
+    }
+    .maya-drawer-export {
+      margin-left: auto;
+      background: #FFFFFF; border: 1px solid #C0CBE0;
+      border-radius: 6px; padding: 4px 10px;
+      font-size: 11px; font-weight: 600; color: #2D5096;
+      cursor: pointer;
+    }
+    .maya-drawer-body {
+      flex: 1; overflow-y: auto;
+      padding: 14px 16px;
+    }
+    .maya-drawer-learnings {
+      background: linear-gradient(135deg, #FFF9E8, #FFEFC4);
+      border: 1px solid #F5D98A;
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 14px;
+      font-size: 12px;
+    }
+    .maya-drawer-learnings-title {
+      font-weight: 800; color: #7A5500;
+      margin-bottom: 8px; display: flex; align-items: center; gap: 6px;
+    }
+    .maya-drawer-learnings ul { margin: 4px 0 0 0; padding-left: 18px; color: #4D3700; }
+    .maya-drawer-learnings li { margin-bottom: 3px; }
+    .maya-drawer-item {
+      background: #FFFFFF;
+      border: 1px solid #E5DAEC;
+      border-left: 4px solid #7B2D8E;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+      font-size: 12px;
+    }
+    .maya-drawer-item.archived { opacity: 0.55; border-left-color: #999; }
+    .maya-drawer-item.applied { border-left-color: #2E7D32; background: #F6FBF6; }
+    .maya-drawer-item.scope-global { border-left-color: #E65100; background: #FFF9F1; }
+    .maya-drawer-item-head {
+      display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+      margin-bottom: 5px;
+    }
+    .maya-drawer-item-field { font-weight: 700; color: #333; font-size: 12px; }
+    .maya-drawer-item-date { font-size: 10px; color: #888; flex-shrink: 0; }
+    .maya-drawer-item-badges {
+      display: flex; gap: 4px; flex-wrap: wrap;
+      margin-top: 5px;
+    }
+    .maya-drawer-item-badge {
+      display: inline-block;
+      font-size: 9.5px; font-weight: 700;
+      padding: 2px 7px; border-radius: 10px;
+      background: #EDE1F2; color: #5E1B6E;
+    }
+    .maya-drawer-item-badge.pending { background: #FFE0B2; color: #7F3D00; }
+    .maya-drawer-item-badge.applied { background: #C8E6C9; color: #1B5E20; }
+    .maya-drawer-item-badge.archived { background: #CFD8DC; color: #37474F; }
+    .maya-drawer-item-badge.global { background: #FFCC80; color: #7F3D00; }
+    .maya-drawer-item-text {
+      color: #444; margin: 6px 0;
+      line-height: 1.45;
+    }
+    .maya-drawer-item-actions {
+      display: flex; gap: 6px; margin-top: 8px;
+      border-top: 1px dashed #EEE; padding-top: 8px;
+    }
+    .maya-drawer-item-action {
+      background: transparent; border: 1px solid #D7C5DE;
+      border-radius: 4px; padding: 3px 8px;
+      font-size: 10.5px; font-weight: 600; color: #5E1B6E;
+      cursor: pointer;
+    }
+    .maya-drawer-item-action:hover { background: #F3E9F7; }
+    .maya-drawer-item-action.danger { border-color: #EF9A9A; color: #B71C1C; }
+    .maya-drawer-item-action.danger:hover { background: #FFEBEE; }
+    .maya-drawer-empty {
+      text-align: center; color: #888; padding: 40px 20px;
+      font-size: 13px; font-style: italic;
+    }
+
+    /* Toggle double vérification */
+    .maya-dv-toggle {
+      margin-top: 8px; margin-left: 26px;
+      padding: 8px 10px;
+      background: linear-gradient(135deg, #FFF6E0, #FFE7B0);
+      border: 1px solid #F0CC6B;
+      border-radius: 6px;
+      font-size: 12px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .maya-dv-toggle input { accent-color: #E65100; width: 15px; height: 15px; }
+    .maya-dv-toggle label { font-weight: 700; color: #7A4000; cursor: pointer; flex: 1; }
+    .maya-dv-toggle .hint { font-size: 10.5px; color: #8A5500; font-weight: 500; }
+
+    /* Badge divergence dans résultats */
+    .maya-divergence-tag {
+      display: inline-block;
+      background: #FFCDD2; color: #B71C1C;
+      padding: 1px 7px; border-radius: 10px;
+      font-size: 10px; font-weight: 700;
+      margin-left: 6px;
+    }
+
     /* ===== MISSING FIELDS SECTION ===== */
     .missing-section {
       margin-top: 28px;
@@ -1772,6 +1958,10 @@
               <p style="font-size:11px;color:var(--text-muted);margin-top:4px;margin-left:26px">
                 Re-vérifie automatiquement les résultats suspects (+1 appel API).
               </p>
+              <div class="maya-dv-toggle">
+                <input type="checkbox" id="maya-double-verif-toggle" onchange="onMayaDoubleVerifToggle()" />
+                <label for="maya-double-verif-toggle">⚖️ Double vérification sur résultats critiques<br><span class="hint">2e passe Maya sur ROUGE + 🔴 Incertain avec prompt inversé (coût API doublé sur ces lignes — OFF par défaut)</span></label>
+              </div>
               <div id="maya-model-group" style="margin-top:8px;margin-left:26px;">
                 <label class="form-label" style="font-size:12px;">Modèle Maya</label>
                 <select class="form-select" id="maya-model-select" onchange="onMayaModelChange()" style="max-width:320px;">
@@ -3555,6 +3745,18 @@
           } else if (ms && !ms.ran) {
             showAlert('alerts-area', 'warning', '\u2726 Maya — Erreur lors de la validation : ' + (ms.error || 'inconnue') + '. Les r\u00e9sultats sont affich\u00e9s sans validation Maya.');
           }
+          if (ms && ms.doubleVerif) {
+            var dv = ms.doubleVerif;
+            if (dv.ran) {
+              if (dv.divergences > 0) {
+                showAlert('alerts-area', 'warning', '⚖️ Double vérification : ' + dv.critical + ' ligne(s) critique(s) relues — ' + dv.divergences + ' divergence(s) signalée(s) (dont ' + dv.annulations + ' statut(s) corrigé(s)). Marquées [⚖️ Maya-V2] dans les résultats.');
+              } else {
+                showAlert('alerts-area', 'info', '⚖️ Double vérification : ' + dv.critical + ' ligne(s) critique(s) relues — ' + dv.confirmations + ' confirmée(s), aucune divergence.');
+              }
+            } else if (dv.error) {
+              showAlert('alerts-area', 'warning', '⚖️ Double vérification non aboutie : ' + dv.error + '. Les résultats de la 1ère passe sont conservés.');
+            }
+          }
         }
       }
 
@@ -4668,6 +4870,137 @@ ${vtShort}`;
         console.log('[MAYA] ' + corrCount + ' correction(s) appliquée(s).');
         results._mayaStatus = { ran: true, corrections: corrCount, suspects: suspects.length, error: null };
 
+        // ── VAGUE 3c : Double vérification sur résultats critiques ──
+        if (state.config.mayaDoubleVerif) {
+          try {
+            var critical = results.filter(function(r){
+              if (r.commentaire && /Erreur API|API HTTP/i.test(r.commentaire)) return false;
+              // ROUGE + lignes dont la confiance calculée vaut "low" (🔴 Incertain)
+              if (r.statut === 'ROUGE') return true;
+              var c = (typeof computeConfidence === 'function') ? computeConfidence(r) : null;
+              return !!(c && c.level === 'low');
+            });
+            if (critical.length === 0) {
+              console.log('[MAYA-V2] Aucune ligne critique à re-vérifier.');
+            } else {
+              console.log('[MAYA-V2] Double vérification : ' + critical.length + ' ligne(s) critique(s) (ROUGE + 🔴 Incertain)');
+              var v2Prompt = `⚠️ RÈGLE ABSOLUE — FORMAT DE SORTIE ⚠️
+Ta réponse DOIT être UNIQUEMENT du JSON valide, commençant par { et se terminant par }.
+AUCUN texte avant, AUCUN après, AUCUN raisonnement, AUCUN markdown.
+
+Tu es Maya en mode DOUBLE VÉRIFICATION. Tu dois RELIRE les résultats critiques ci-dessous avec un ANGLE INVERSE :
+- Pour chaque ligne, pose-toi la question : "Es-tu VRAIMENT sûre que l'écart (ROUGE) ou l'incertitude est réel ? Ou bien as-tu pu te tromper ?"
+- Cherche des preuves dans les extraits AUDIT et VT — cite la source précise (texte brut, extrait court).
+- Ne conserve une conclusion que si tu la justifies par une citation explicite.
+- Si tu trouves que l'écart n'est PAS réel (valeurs équivalentes, formulations différentes mais sens identique, erreur de lecture de la 1ère passe) → propose la correction.
+
+Pour CHAQUE ligne critique, renvoie ton verdict en JSON strict :
+{
+  "verifications": [
+    {
+      "id_champ": "...",
+      "instance_label": "... ou null",
+      "verdict": "confirme | annule | incertain",
+      "raison": "justification courte (max 120 chars)",
+      "citation": "extrait brut du texte source qui justifie (60-180 chars) — null si introuvable",
+      "nouveau_statut": "VERT|ORANGE|ROUGE|MANQUANT (seulement si verdict = annule)"
+    }
+  ]
+}
+- verdict "confirme" : la 1ère passe avait raison, l'écart/incertitude est réel.
+- verdict "annule" : la 1ère passe s'est trompée, proposer un nouveau_statut + raison.
+- verdict "incertain" : pas assez d'information pour trancher → divergence à flagger.`;
+
+              var v2Payload = critical.map(function(r){
+                return {
+                  id_champ: r.id_champ,
+                  instance_label: r.instance_label || null,
+                  statut_1re_passe: r.statut,
+                  valeur_audit: r.valeur_audit,
+                  valeur_vt: r.valeur_vt,
+                  commentaire: r.commentaire,
+                  page_audit: r._page_audit || null,
+                  page_vt: r._page_vt || null
+                };
+              });
+              var v2Content = 'Ta réponse DOIT commencer par { et ne contenir que du JSON valide.\n\nRÉSULTATS CRITIQUES À RELIRE :\n' + JSON.stringify(v2Payload, null, 2) + '\n\n---\nEXTRAIT AUDIT :\n' + auditShort + '\n\n---\nEXTRAIT VT :\n' + vtShort;
+
+              var v2Body = {
+                model: mayaModel,
+                messages: [
+                  { role: 'system', content: v2Prompt },
+                  { role: 'user',   content: v2Content }
+                ],
+                temperature: 0.05,
+                max_tokens: 3000
+              };
+              if (supportsJsonMode) v2Body.response_format = { type: 'json_object' };
+
+              var v2Resp = await fetch(endpoint, { method:'POST', headers: headers, body: JSON.stringify(v2Body) });
+              if (v2Resp.ok) {
+                var v2Data = await v2Resp.json();
+                var v2Raw = (v2Data.choices[0].message.content || '').trim();
+                console.log('[MAYA-V2] Réponse brute : ' + v2Raw.length + ' chars');
+                var v2Parsed = null;
+                try { v2Parsed = extractJSON(v2Raw); } catch(eParse) { console.warn('[MAYA-V2] JSON invalide, passe 2 ignorée.'); }
+                if (v2Parsed && Array.isArray(v2Parsed.verifications)) {
+                  var divergences = 0, confirmations = 0, annulations = 0;
+                  v2Parsed.verifications.forEach(function(v){
+                    var target = results.find(function(r){
+                      return r.id_champ === v.id_champ && (r.instance_label || null) === (v.instance_label || null);
+                    });
+                    if (!target) return;
+                    target._maya_v2 = {
+                      verdict: v.verdict,
+                      raison: v.raison,
+                      citation: v.citation || null,
+                      at: new Date().toISOString()
+                    };
+                    if (v.verdict === 'annule' && v.nouveau_statut) {
+                      // 2e passe annule la 1ère : on applique le nouveau statut + marque divergence
+                      if (!target._maya_original) {
+                        target._maya_original = {
+                          statut: target.statut,
+                          valeur_vt: target.valeur_vt,
+                          valeur_audit: target.valeur_audit,
+                          commentaire: target.commentaire
+                        };
+                      }
+                      target._maya_divergence = true;
+                      target.statut = v.nouveau_statut;
+                      target.commentaire = (target.commentaire ? target.commentaire + ' ' : '') + '[⚖️ Maya-V2 : ' + (v.raison || 'annule la 1ère passe') + ']';
+                      divergences++; annulations++;
+                    } else if (v.verdict === 'incertain') {
+                      target._maya_divergence = true;
+                      target.commentaire = (target.commentaire ? target.commentaire + ' ' : '') + '[⚖️ Maya-V2 incertain : ' + (v.raison || 'divergence non tranchée') + ']';
+                      divergences++;
+                    } else if (v.verdict === 'confirme') {
+                      confirmations++;
+                    }
+                  });
+                  console.log('[MAYA-V2] Passe 2 terminée : ' + confirmations + ' confirmation(s), ' + annulations + ' annulation(s), ' + divergences + ' divergence(s) signalée(s).');
+                  results._mayaStatus.doubleVerif = {
+                    ran: true,
+                    critical: critical.length,
+                    confirmations: confirmations,
+                    annulations: annulations,
+                    divergences: divergences
+                  };
+                } else {
+                  console.warn('[MAYA-V2] Payload inexploitable — passe 2 ignorée.');
+                  results._mayaStatus.doubleVerif = { ran: false, critical: critical.length, error: 'payload invalide' };
+                }
+              } else {
+                console.warn('[MAYA-V2] HTTP ' + v2Resp.status + ' — passe 2 ignorée.');
+                results._mayaStatus.doubleVerif = { ran: false, critical: critical.length, error: 'HTTP ' + v2Resp.status };
+              }
+            }
+          } catch (v2Err) {
+            console.warn('[MAYA-V2] Erreur passe 2 : ' + v2Err.message);
+            results._mayaStatus.doubleVerif = { ran: false, error: v2Err.message };
+          }
+        }
+
         // ── Auto-apprentissage : sauvegarder les corrections comme learnings ──
         try {
           var mayaLearnings = extractMayaLearnings(mayaResult.corrections);
@@ -5181,6 +5514,307 @@ ${vtShort}`;
 
     // Init au chargement
     loadMayaFeedbacks();
+
+    // ============================================================
+    // MAYA VAGUE 3 — Global feedback, drawer historique, export
+    // ============================================================
+    const MAYA_GFB_KEY  = 'maya_feedbacks_global_v1';
+    const MAYA_META_KEY = 'maya_feedbacks_meta_v1'; // {status: applied|archived, by feedbackId}
+    let mayaGlobalFeedbacks = [];
+    let mayaFeedbackMeta    = {};
+    let mayaDrawerFilter    = 'all';
+
+    function loadMayaGlobalFeedbacks() {
+      try { mayaGlobalFeedbacks = JSON.parse(localStorage.getItem(MAYA_GFB_KEY) || '[]') || []; }
+      catch(e) { mayaGlobalFeedbacks = []; }
+      try { mayaFeedbackMeta = JSON.parse(localStorage.getItem(MAYA_META_KEY) || '{}') || {}; }
+      catch(e) { mayaFeedbackMeta = {}; }
+    }
+    function persistMayaGlobalFeedbacks() {
+      try { localStorage.setItem(MAYA_GFB_KEY, JSON.stringify(mayaGlobalFeedbacks)); } catch(e) {}
+    }
+    function persistMayaFeedbackMeta() {
+      try { localStorage.setItem(MAYA_META_KEY, JSON.stringify(mayaFeedbackMeta)); } catch(e) {}
+    }
+    loadMayaGlobalFeedbacks();
+
+    // ---- Bouton flottant 💬 global ----
+    function openGlobalFeedback() {
+      document.getElementById('maya-gfb-textarea').value = '';
+      document.getElementById('maya-gfb-category').value = 'pattern';
+      document.getElementById('maya-gfb-overlay').classList.add('visible');
+      setTimeout(function(){ document.getElementById('maya-gfb-textarea').focus(); }, 60);
+    }
+    function closeGlobalFeedback() {
+      document.getElementById('maya-gfb-overlay').classList.remove('visible');
+    }
+    function submitGlobalFeedback() {
+      var txt = document.getElementById('maya-gfb-textarea').value.trim();
+      var cat = document.getElementById('maya-gfb-category').value || 'other';
+      if (!txt) {
+        showAlert('alerts-area', 'warning', 'Merci de saisir un feedback avant d\'envoyer.');
+        return;
+      }
+      mayaGlobalFeedbacks.push({
+        id: 'gfb_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
+        timestamp: new Date().toISOString(),
+        category: cat,
+        text: txt
+      });
+      persistMayaGlobalFeedbacks();
+      closeGlobalFeedback();
+      showAlert('alerts-area', 'success', '💬 Feedback global enregistré — Maya en tiendra compte aux prochaines vérifications.');
+      updateMayaFabBadges();
+      if (document.getElementById('maya-drawer').classList.contains('visible')) renderMayaDrawer();
+    }
+
+    // ---- Mise à jour des badges des FAB ----
+    function collectAllFeedbacks() {
+      var items = [];
+      Object.keys(mayaFeedbacks || {}).forEach(function(k){
+        (mayaFeedbacks[k] || []).forEach(function(fb, idx){
+          var fid = 'line:' + k + ':' + (fb.timestamp || idx);
+          items.push({
+            id: fid, scope: 'line', key: k,
+            timestamp: fb.timestamp, text: fb.text,
+            snapshot: fb.snapshot || {},
+            category: null,
+            meta: mayaFeedbackMeta[fid] || { status: 'pending' }
+          });
+        });
+      });
+      (mayaGlobalFeedbacks || []).forEach(function(fb){
+        var fid = 'global:' + fb.id;
+        items.push({
+          id: fid, scope: 'global', key: null,
+          timestamp: fb.timestamp, text: fb.text,
+          category: fb.category || 'other',
+          snapshot: {},
+          meta: mayaFeedbackMeta[fid] || { status: 'pending' }
+        });
+      });
+      items.sort(function(a,b){ return String(b.timestamp||'').localeCompare(String(a.timestamp||'')); });
+      return items;
+    }
+
+    function updateMayaFabBadges() {
+      var all = collectAllFeedbacks();
+      var pendingAll    = all.filter(function(i){ return i.meta.status === 'pending'; }).length;
+      var pendingGlobal = all.filter(function(i){ return i.meta.status === 'pending' && i.scope === 'global'; }).length;
+
+      var histBadge = document.getElementById('maya-fab-history-badge');
+      var globBadge = document.getElementById('maya-fab-global-badge');
+      if (histBadge) {
+        if (pendingAll > 0) { histBadge.textContent = String(pendingAll); histBadge.classList.add('visible'); }
+        else histBadge.classList.remove('visible');
+      }
+      if (globBadge) {
+        if (pendingGlobal > 0) { globBadge.textContent = String(pendingGlobal); globBadge.classList.add('visible'); }
+        else globBadge.classList.remove('visible');
+      }
+    }
+
+    // ---- Drawer historique ----
+    function openMayaDrawer() {
+      renderMayaDrawer();
+      document.getElementById('maya-drawer-overlay').classList.add('visible');
+      document.getElementById('maya-drawer').classList.add('visible');
+    }
+    function closeMayaDrawer() {
+      document.getElementById('maya-drawer-overlay').classList.remove('visible');
+      document.getElementById('maya-drawer').classList.remove('visible');
+    }
+    function setMayaDrawerFilter(f) {
+      mayaDrawerFilter = f;
+      document.querySelectorAll('.maya-drawer-filter-btn').forEach(function(b){
+        b.classList.toggle('active', b.getAttribute('data-filter') === f);
+      });
+      renderMayaDrawer();
+    }
+
+    function detectMayaRecurringLearnings(items) {
+      // Patterns = 3+ feedbacks (line) sur le même id_champ/key OU 3+ feedbacks globaux d'une même catégorie
+      var out = [];
+      var byKey = {};
+      items.forEach(function(i){
+        if (i.scope !== 'line' || !i.key) return;
+        byKey[i.key] = (byKey[i.key] || 0) + 1;
+      });
+      Object.keys(byKey).forEach(function(k){
+        if (byKey[k] >= 3) {
+          var r = findResultByFbKey(k);
+          var label = r ? (getFieldNom(r.id_champ) || r.id_champ) + (r.instance_label ? ' — ' + r.instance_label : '') : k;
+          out.push(byKey[k] + ' feedbacks sur « ' + label + ' » → règle à ajouter au prompt Maya');
+        }
+      });
+      var byCat = {};
+      items.forEach(function(i){
+        if (i.scope !== 'global' || !i.category) return;
+        byCat[i.category] = (byCat[i.category] || 0) + 1;
+      });
+      var catLabels = { pattern: 'patterns récurrents', rule: 'règles manquantes', prompt: 'ajustements du prompt', other: 'remarques transverses' };
+      Object.keys(byCat).forEach(function(c){
+        if (byCat[c] >= 3) {
+          out.push(byCat[c] + ' remarques globales catégorisées « ' + (catLabels[c] || c) + ' » → à consolider en règle');
+        }
+      });
+      return out;
+    }
+
+    function renderMayaDrawer() {
+      var items = collectAllFeedbacks();
+      var learnings = detectMayaRecurringLearnings(items);
+
+      // Filtre
+      var filtered = items.filter(function(i){
+        if (mayaDrawerFilter === 'all') return true;
+        return i.meta.status === mayaDrawerFilter;
+      });
+
+      var body = document.getElementById('maya-drawer-body');
+      if (!body) return;
+
+      var html = '';
+      if (learnings.length > 0) {
+        html += '<div class="maya-drawer-learnings">'
+             +   '<div class="maya-drawer-learnings-title">🧠 Apprentissages récurrents détectés</div>'
+             +   '<ul>' + learnings.map(function(l){ return '<li>' + escHtml(l) + '</li>'; }).join('') + '</ul>'
+             + '</div>';
+      }
+
+      if (filtered.length === 0) {
+        html += '<div class="maya-drawer-empty">Aucun feedback ' + (mayaDrawerFilter === 'all' ? '' : mayaDrawerFilter) + '.</div>';
+      } else {
+        filtered.forEach(function(it){
+          var d = new Date(it.timestamp);
+          var dateStr = isNaN(d.getTime()) ? '—' : (d.toLocaleDateString('fr-FR') + ' ' + d.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'}));
+          var fieldLabel = '';
+          if (it.scope === 'line' && it.key) {
+            var r = findResultByFbKey(it.key);
+            if (r) {
+              fieldLabel = (getFieldNom(r.id_champ) || r.id_champ) + (r.instance_label ? ' — ' + r.instance_label : '');
+            } else {
+              fieldLabel = it.key;
+            }
+          } else {
+            var catLabels2 = { pattern: 'Pattern récurrent', rule: 'Règle manquante', prompt: 'Ajustement prompt', other: 'Remarque transverse' };
+            fieldLabel = '🌐 Global — ' + (catLabels2[it.category] || 'Remarque');
+          }
+
+          var classes = ['maya-drawer-item'];
+          if (it.meta.status === 'archived') classes.push('archived');
+          if (it.meta.status === 'applied') classes.push('applied');
+          if (it.scope === 'global') classes.push('scope-global');
+
+          var statusBadge = '';
+          if (it.meta.status === 'pending') statusBadge = '<span class="maya-drawer-item-badge pending">En attente</span>';
+          else if (it.meta.status === 'applied') statusBadge = '<span class="maya-drawer-item-badge applied">Appliqué</span>';
+          else if (it.meta.status === 'archived') statusBadge = '<span class="maya-drawer-item-badge archived">Archivé</span>';
+
+          var scopeBadge = (it.scope === 'global') ? '<span class="maya-drawer-item-badge global">Global</span>' : '';
+
+          html += '<div class="' + classes.join(' ') + '">'
+               +   '<div class="maya-drawer-item-head">'
+               +     '<span class="maya-drawer-item-field">' + escHtml(fieldLabel) + '</span>'
+               +     '<span class="maya-drawer-item-date">' + escHtml(dateStr) + '</span>'
+               +   '</div>'
+               +   '<div class="maya-drawer-item-badges">' + statusBadge + scopeBadge + '</div>'
+               +   '<div class="maya-drawer-item-text">' + escHtml(it.text || '') + '</div>'
+               +   '<div class="maya-drawer-item-actions">';
+          if (it.meta.status !== 'applied') html += '<button type="button" class="maya-drawer-item-action" onclick="mayaMarkApplied(\'' + it.id + '\')">✓ Marquer appliqué</button>';
+          if (it.meta.status !== 'archived') html += '<button type="button" class="maya-drawer-item-action" onclick="mayaArchive(\'' + it.id + '\')">🗄 Archiver</button>';
+          if (it.meta.status !== 'pending') html += '<button type="button" class="maya-drawer-item-action" onclick="mayaRestore(\'' + it.id + '\')">↺ Restaurer</button>';
+          html +=     '<button type="button" class="maya-drawer-item-action danger" onclick="mayaDeleteFeedback(\'' + it.id + '\')">🗑 Supprimer</button>'
+               +   '</div>'
+               + '</div>';
+        });
+      }
+
+      body.innerHTML = html;
+    }
+
+    function mayaMarkApplied(id) {
+      mayaFeedbackMeta[id] = { status: 'applied', at: new Date().toISOString() };
+      persistMayaFeedbackMeta();
+      renderMayaDrawer(); updateMayaFabBadges();
+    }
+    function mayaArchive(id) {
+      mayaFeedbackMeta[id] = { status: 'archived', at: new Date().toISOString() };
+      persistMayaFeedbackMeta();
+      renderMayaDrawer(); updateMayaFabBadges();
+    }
+    function mayaRestore(id) {
+      mayaFeedbackMeta[id] = { status: 'pending', at: new Date().toISOString() };
+      persistMayaFeedbackMeta();
+      renderMayaDrawer(); updateMayaFabBadges();
+    }
+    function mayaDeleteFeedback(id) {
+      if (!confirm('Supprimer définitivement ce feedback ?')) return;
+      // Parse id (line:key:timestamp | global:gfbId)
+      if (id.indexOf('line:') === 0) {
+        var rest = id.substring(5);
+        var lastColon = rest.lastIndexOf(':');
+        var key = rest.substring(0, lastColon);
+        var ts  = rest.substring(lastColon + 1);
+        if (mayaFeedbacks[key]) {
+          mayaFeedbacks[key] = mayaFeedbacks[key].filter(function(fb, idx){
+            return (fb.timestamp || idx) + '' !== ts;
+          });
+          if (mayaFeedbacks[key].length === 0) delete mayaFeedbacks[key];
+          persistMayaFeedbacks();
+          if (typeof renderTable === 'function') { try { renderTable(currentFilter); } catch(e){} }
+        }
+      } else if (id.indexOf('global:') === 0) {
+        var gid = id.substring(7);
+        mayaGlobalFeedbacks = mayaGlobalFeedbacks.filter(function(g){ return g.id !== gid; });
+        persistMayaGlobalFeedbacks();
+      }
+      delete mayaFeedbackMeta[id];
+      persistMayaFeedbackMeta();
+      renderMayaDrawer(); updateMayaFabBadges();
+    }
+
+    // ---- Export JSON (backup) ----
+    function exportMayaFeedbacksJSON() {
+      var payload = {
+        exported_at: new Date().toISOString(),
+        feedbacks_by_line: mayaFeedbacks || {},
+        feedbacks_global: mayaGlobalFeedbacks || [],
+        meta: mayaFeedbackMeta || {}
+      };
+      var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'maya_feedbacks_' + new Date().toISOString().slice(0,10) + '.json';
+      document.body.appendChild(a); a.click();
+      setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
+    }
+
+    // ---- Double vérification : hook UI ----
+    function onMayaDoubleVerifToggle() {
+      var v = document.getElementById('maya-double-verif-toggle');
+      state.config.mayaDoubleVerif = !!(v && v.checked);
+      saveConfigMaybe();
+      console.log('[MAYA-V2] Double vérification ' + (state.config.mayaDoubleVerif ? 'ACTIVÉE' : 'désactivée'));
+    }
+    function saveConfigMaybe() {
+      try { if (typeof persistConfig === 'function') persistConfig(); } catch(e){}
+      try { localStorage.setItem('maya_config_flags', JSON.stringify({ doubleVerif: !!state.config.mayaDoubleVerif })); } catch(e){}
+    }
+
+    // Init au chargement final
+    setTimeout(function(){
+      try {
+        var flags = JSON.parse(localStorage.getItem('maya_config_flags') || '{}');
+        if (flags && flags.doubleVerif) {
+          state.config.mayaDoubleVerif = true;
+          var t = document.getElementById('maya-double-verif-toggle');
+          if (t) t.checked = true;
+        }
+      } catch(e){}
+      updateMayaFabBadges();
+    }, 200);
 
     function getFieldNom(id) {
       const f = state.referentiel.find(r => r.id === id);
@@ -6735,6 +7369,65 @@ ${vtShort}`;
       </div>
     </div>
   </div>
+
+  <!-- ================ MAYA VAGUE 3 — Floating action buttons ================ -->
+  <div class="maya-fab-stack">
+    <button type="button" class="maya-fab history" id="maya-fab-history" onclick="openMayaDrawer()" aria-label="Historique feedbacks Maya">
+      📋
+      <span class="maya-fab-badge" id="maya-fab-history-badge">0</span>
+      <span class="maya-fab-tooltip">Historique feedbacks Maya</span>
+    </button>
+    <button type="button" class="maya-fab" id="maya-fab-global" onclick="openGlobalFeedback()" aria-label="Feedback global Maya">
+      💬
+      <span class="maya-fab-badge" id="maya-fab-global-badge">0</span>
+      <span class="maya-fab-tooltip">Feedback global à Maya</span>
+    </button>
+  </div>
+
+  <!-- ================ MAYA VAGUE 3 — Global feedback modal ================ -->
+  <div class="maya-modal-overlay" id="maya-gfb-overlay" onclick="if(event.target===this) closeGlobalFeedback()">
+    <div class="maya-modal" role="dialog" aria-labelledby="maya-gfb-title">
+      <div class="maya-modal-header">
+        <div class="maya-modal-header-title" id="maya-gfb-title">💬 Feedback global à Maya</div>
+        <button type="button" class="maya-modal-close" onclick="closeGlobalFeedback()" aria-label="Fermer">✕</button>
+      </div>
+      <div class="maya-modal-body">
+        <div class="maya-modal-context">
+          <div class="maya-modal-context-row"><span class="maya-modal-context-label">Portée :</span><span class="maya-modal-context-value">Remarque transverse — pas attachée à une ligne précise (pour cibler une ligne, utilise l'icône 💬 dans le rapport).</span></div>
+        </div>
+        <label class="maya-modal-field-label" for="maya-gfb-category">Catégorie</label>
+        <select id="maya-gfb-category" class="form-select" style="margin-bottom:10px;width:100%;">
+          <option value="pattern">Pattern récurrent observé</option>
+          <option value="rule">Règle manquante dans le prompt</option>
+          <option value="prompt">Ajustement du prompt Maya</option>
+          <option value="other">Autre remarque</option>
+        </select>
+        <label class="maya-modal-field-label" for="maya-gfb-textarea">Ta remarque</label>
+        <textarea id="maya-gfb-textarea" class="maya-modal-textarea" placeholder="Ex : Maya surestime systématiquement les provisions. Pense à vérifier l'écart sur les charges sociales avant de conclure."></textarea>
+      </div>
+      <div class="maya-modal-footer">
+        <button type="button" class="btn btn-outline" onclick="closeGlobalFeedback()">Annuler</button>
+        <button type="button" class="btn btn-primary" onclick="submitGlobalFeedback()" style="background:#7B2D8E;border-color:#7B2D8E">Envoyer à Maya</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================ MAYA VAGUE 3 — History drawer ================ -->
+  <div class="maya-drawer-overlay" id="maya-drawer-overlay" onclick="closeMayaDrawer()"></div>
+  <aside class="maya-drawer" id="maya-drawer" role="complementary" aria-labelledby="maya-drawer-title">
+    <div class="maya-drawer-header">
+      <div class="maya-drawer-title" id="maya-drawer-title">📋 Historique des feedbacks Maya</div>
+      <button type="button" class="maya-drawer-close" onclick="closeMayaDrawer()" aria-label="Fermer">✕</button>
+    </div>
+    <div class="maya-drawer-filters">
+      <button type="button" class="maya-drawer-filter-btn active" data-filter="all" onclick="setMayaDrawerFilter('all')">Tous</button>
+      <button type="button" class="maya-drawer-filter-btn" data-filter="pending" onclick="setMayaDrawerFilter('pending')">En attente</button>
+      <button type="button" class="maya-drawer-filter-btn" data-filter="applied" onclick="setMayaDrawerFilter('applied')">Appliqués</button>
+      <button type="button" class="maya-drawer-filter-btn" data-filter="archived" onclick="setMayaDrawerFilter('archived')">Archivés</button>
+      <button type="button" class="maya-drawer-export" onclick="exportMayaFeedbacksJSON()">📥 Exporter JSON</button>
+    </div>
+    <div class="maya-drawer-body" id="maya-drawer-body"></div>
+  </aside>
 
 </body>
 </html>
