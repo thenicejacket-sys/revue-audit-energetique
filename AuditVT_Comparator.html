@@ -2203,6 +2203,82 @@
     const STORAGE_KEY_HISTORY = 'otenergie_history';
 
     // =====================================================================
+    // SUPABASE SYNC — partage feedbacks Maya + historique reports
+    // (fallback silencieux localStorage si API down)
+    // =====================================================================
+    const MayaSupabase = (function(){
+      var ENDPOINT = '/api/maya-sync';
+      // Identifiant "client" partagé — pour l'instant une seule tenant (mono-utilisateur partagé)
+      var CLIENT_ID = 'default';
+      var available = true; // devient false après 1er échec, on arrête les tentatives pour la session
+      var disabledReason = null;
+
+      function disable(reason) {
+        if (available) { available = false; disabledReason = reason; console.warn('[MAYA-SYNC] Désactivé:', reason); }
+      }
+
+      async function call(action, payload) {
+        if (!available) return null;
+        try {
+          var res = await fetch(ENDPOINT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(Object.assign({ action: action, client_id: CLIENT_ID }, payload || {}))
+          });
+          if (!res.ok) {
+            var txt = '';
+            try { txt = await res.text(); } catch(e) {}
+            // 500 = table absente ou env manquante -> on désactive pour la session
+            if (res.status === 500 || res.status === 404) disable('HTTP ' + res.status + ' ' + (txt.slice(0,120)));
+            return null;
+          }
+          return await res.json();
+        } catch (e) {
+          // Network error (offline) -> ne pas désactiver totalement, juste retour null
+          return null;
+        }
+      }
+
+      // FEEDBACKS
+      async function listFeedbacks() {
+        var r = await call('list_feedbacks');
+        return (r && r.ok && Array.isArray(r.items)) ? r.items : null;
+      }
+      function saveFeedback(fb) { return call('save_feedback', { feedback: fb }); } // fire-and-forget
+      function updateFeedback(id, patch) { return call('update_feedback', { id: id, patch: patch }); }
+      function deleteFeedback(id) { return call('delete_feedback', { id: id }); }
+
+      // REPORTS
+      async function listReports(limit) {
+        var r = await call('list_reports', { limit: limit || 100 });
+        return (r && r.ok && Array.isArray(r.items)) ? r.items : null;
+      }
+      async function getReport(id) {
+        var r = await call('get_report', { id: id });
+        return (r && r.ok) ? r.report : null;
+      }
+      function saveReport(rep) { return call('save_report', { report: rep }); }
+      function updateReportExport(id, exportFile) { return call('update_report_export', { id: id, export_file: exportFile }); }
+      function deleteReport(id) { return call('delete_report', { id: id }); }
+      function clearReports() { return call('clear_reports'); }
+
+      return {
+        isAvailable: function(){ return available; },
+        disabledReason: function(){ return disabledReason; },
+        listFeedbacks: listFeedbacks,
+        saveFeedback: saveFeedback,
+        updateFeedback: updateFeedback,
+        deleteFeedback: deleteFeedback,
+        listReports: listReports,
+        getReport: getReport,
+        saveReport: saveReport,
+        updateReportExport: updateReportExport,
+        deleteReport: deleteReport,
+        clearReports: clearReports
+      };
+    })();
+
+    // =====================================================================
     // INIT
     // =====================================================================
     document.addEventListener('DOMContentLoaded', () => {
@@ -2214,6 +2290,11 @@
       loadReferentielFromStorage();
       loadHistory();
       updatePrereqs();
+      // Sync Supabase en arrière-plan (n'interrompt pas le boot)
+      setTimeout(function(){
+        try { syncHistoryFromSupabase(); } catch(e) { console.warn('[MAYA-SYNC] history init skip:', e.message); }
+        try { syncFeedbacksFromSupabase(); } catch(e) { console.warn('[MAYA-SYNC] feedbacks init skip:', e.message); }
+      }, 100);
     });
 
     // =====================================================================
@@ -5398,13 +5479,32 @@ ${vtShort}`;
         statut: r.statut || null,
         commentaire: r.commentaire || null
       } : {};
+      var ts = new Date().toISOString();
       if (!mayaFeedbacks[currentFeedbackKey]) mayaFeedbacks[currentFeedbackKey] = [];
       mayaFeedbacks[currentFeedbackKey].push({
-        timestamp: new Date().toISOString(),
+        timestamp: ts,
         text: txt,
         snapshot: snapshot
       });
       persistMayaFeedbacks();
+      // Push Supabase (fire-and-forget)
+      try {
+        var fid = 'line:' + currentFeedbackKey + ':' + ts;
+        MayaSupabase.saveFeedback({
+          id: fid,
+          scope: 'line',
+          key_field: currentFeedbackKey,
+          audit_value: snapshot.valeur_audit || null,
+          vt_value: snapshot.valeur_vt || null,
+          conformity_status: snapshot.statut || null,
+          commentaire: snapshot.commentaire || null,
+          category: null,
+          feedback_text: txt,
+          status: 'pending',
+          snapshot: snapshot,
+          created_at: ts
+        });
+      } catch(e) { console.warn('[MAYA-SYNC] push line feedback:', e.message); }
       closeMayaFeedback();
       showAlert('alerts-area', 'success', '✨ Feedback envoyé à Maya — merci ! Il sera pris en compte lors de la prochaine vérification.');
       renderTable(currentFilter);
@@ -5453,13 +5553,27 @@ ${vtShort}`;
         showAlert('alerts-area', 'warning', 'Merci de saisir un feedback avant d\'envoyer.');
         return;
       }
+      var gfbId = 'gfb_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
+      var ts = new Date().toISOString();
       mayaGlobalFeedbacks.push({
-        id: 'gfb_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
-        timestamp: new Date().toISOString(),
+        id: gfbId,
+        timestamp: ts,
         category: cat,
         text: txt
       });
       persistMayaGlobalFeedbacks();
+      // Push Supabase (fire-and-forget)
+      try {
+        MayaSupabase.saveFeedback({
+          id: 'global:' + gfbId,
+          scope: 'global',
+          key_field: null,
+          category: cat,
+          feedback_text: txt,
+          status: 'pending',
+          created_at: ts
+        });
+      } catch(e) { console.warn('[MAYA-SYNC] push global feedback:', e.message); }
       closeGlobalFeedback();
       showAlert('alerts-area', 'success', '💬 Feedback global enregistré — Maya en tiendra compte aux prochaines vérifications.');
       updateMayaFabBadges();
@@ -5725,21 +5839,25 @@ ${vtShort}`;
     function mayaMarkApplied(id) {
       mayaFeedbackMeta[id] = { status: 'applied', at: new Date().toISOString() };
       persistMayaFeedbackMeta();
+      try { MayaSupabase.updateFeedback(id, { status: 'applied' }); } catch(e) {}
       renderMayaDrawer(); updateMayaFabBadges();
     }
     function mayaMarkPermanent(id) {
       mayaFeedbackMeta[id] = { status: 'permanent', at: new Date().toISOString() };
       persistMayaFeedbackMeta();
+      try { MayaSupabase.updateFeedback(id, { status: 'permanent' }); } catch(e) {}
       renderMayaDrawer(); updateMayaFabBadges();
     }
     function mayaArchive(id) {
       mayaFeedbackMeta[id] = { status: 'archived', at: new Date().toISOString() };
       persistMayaFeedbackMeta();
+      try { MayaSupabase.updateFeedback(id, { status: 'archived' }); } catch(e) {}
       renderMayaDrawer(); updateMayaFabBadges();
     }
     function mayaRestore(id) {
       mayaFeedbackMeta[id] = { status: 'pending', at: new Date().toISOString() };
       persistMayaFeedbackMeta();
+      try { MayaSupabase.updateFeedback(id, { status: 'pending' }); } catch(e) {}
       renderMayaDrawer(); updateMayaFabBadges();
     }
     function mayaDeleteFeedback(id) {
@@ -5765,7 +5883,61 @@ ${vtShort}`;
       }
       delete mayaFeedbackMeta[id];
       persistMayaFeedbackMeta();
+      try { MayaSupabase.deleteFeedback(id); } catch(e) {}
       renderMayaDrawer(); updateMayaFabBadges();
+    }
+
+    // ---- Sync initial des feedbacks depuis Supabase (au chargement) ----
+    async function syncFeedbacksFromSupabase() {
+      var remote;
+      try { remote = await MayaSupabase.listFeedbacks(); } catch(e) { remote = null; }
+      if (!remote) return; // indisponible → on reste en local uniquement
+      // Reconstruit les 3 structures locales depuis la source partagée
+      var rebuiltLine = {};
+      var rebuiltGlobal = [];
+      var rebuiltMeta = {};
+      remote.forEach(function(row){
+        var id = row.id || '';
+        if (!id) return;
+        rebuiltMeta[id] = { status: row.status || 'pending', at: row.updated_at || row.created_at };
+        if (row.scope === 'line') {
+          var key = row.key_field || (id.indexOf('line:') === 0 ? id.substring(5, id.lastIndexOf(':')) : '');
+          if (!key) return;
+          if (!rebuiltLine[key]) rebuiltLine[key] = [];
+          var ts = (id.indexOf('line:') === 0) ? id.substring(id.lastIndexOf(':') + 1) : (row.created_at || new Date().toISOString());
+          rebuiltLine[key].push({
+            timestamp: ts,
+            text: row.feedback_text || '',
+            snapshot: row.snapshot || {
+              valeur_audit: row.audit_value,
+              valeur_vt: row.vt_value,
+              statut: row.conformity_status,
+              commentaire: row.commentaire
+            }
+          });
+        } else if (row.scope === 'global') {
+          var gid = (id.indexOf('global:') === 0) ? id.substring(7) : id;
+          rebuiltGlobal.push({
+            id: gid,
+            timestamp: row.created_at || new Date().toISOString(),
+            category: row.category || 'other',
+            text: row.feedback_text || ''
+          });
+        }
+      });
+      // Merge avec le local : Supabase gagne, mais on préserve le local qui n'est pas encore pushé
+      // Pour éviter les conflits, on fait un simple overwrite complet (Supabase = source de vérité partagée)
+      mayaFeedbacks = rebuiltLine;
+      mayaGlobalFeedbacks = rebuiltGlobal;
+      mayaFeedbackMeta = rebuiltMeta;
+      persistMayaFeedbacks();
+      persistMayaGlobalFeedbacks();
+      persistMayaFeedbackMeta();
+      console.log('[MAYA-SYNC] Feedbacks chargés depuis Supabase: ' + remote.length);
+      // Rafraîchir UI
+      updateMayaFabBadges();
+      try { if (document.getElementById('maya-drawer') && document.getElementById('maya-drawer').classList.contains('visible')) renderMayaDrawer(); } catch(e) {}
+      try { if (typeof renderTable === 'function' && state.analysisResults && state.analysisResults.length) renderTable(currentFilter); } catch(e) {}
     }
 
     // ---- Export Excel (ExcelJS) ----
@@ -6684,13 +6856,48 @@ ${vtShort}`;
       historyData.unshift(entry); // plus récent en premier
       lastAnalysisHistoryId = entry.id;
       persistHistory();
+      // Push Supabase (fire-and-forget) — report partagé entre tous les utilisateurs
+      try {
+        MayaSupabase.saveReport({
+          id: String(entry.id),
+          title: entry.dossier,
+          audit_filename: entry.auditFile,
+          vt_filename: entry.vtFile,
+          score: entry.score,
+          total: entry.total,
+          conformes: entry.conformes,
+          oranges: entry.oranges,
+          rouges: entry.rouges,
+          manquants: entry.manquants,
+          export_file: entry.exportFile,
+          date_fr: entry.date,
+          time_fr: entry.time,
+          results_json: state.analysisResults, // JSON complet (pas la string)
+          metadata: { version: 'v1', source: 'web' },
+          created_at: now.toISOString()
+        });
+      } catch(e) { console.warn('[MAYA-SYNC] push report:', e.message); }
       renderHistory();
     }
 
-    function downloadHistoryEntry(id) {
-      const entry = historyData.find(function(e) { return e.id === id; });
-      if (!entry || !entry.results) {
-        showAlert('alerts-area', 'warning', 'Données non disponibles pour cette entrée (analyse trop ancienne).');
+    async function downloadHistoryEntry(id) {
+      var entry = historyData.find(function(e) { return e.id === id; });
+      if (!entry) {
+        showAlert('alerts-area', 'warning', 'Entrée introuvable.');
+        return;
+      }
+      // Si pas de results en local, tenter un fetch Supabase
+      if (!entry.results) {
+        try {
+          var remote = await MayaSupabase.getReport(String(id));
+          if (remote && remote.results_json) {
+            entry.results = (typeof remote.results_json === 'string') ? remote.results_json : JSON.stringify(remote.results_json);
+            persistHistory();
+          }
+        } catch(e) { /* ignore */ }
+      }
+      if (!entry.results) {
+        showAlert('alerts-area', 'warning', 'Données non disponibles pour cette entrée (analyse trop ancienne ou non synchronisée).');
         return;
       }
       const savedResults   = state.analysisResults;
@@ -6714,6 +6921,7 @@ ${vtShort}`;
       if (entry) {
         entry.exportFile = filename;
         persistHistory();
+        try { MayaSupabase.updateReportExport(String(entry.id), filename); } catch(e) {}
         renderHistory();
       }
     }
@@ -6729,13 +6937,57 @@ ${vtShort}`;
     function deleteHistoryEntry(id) {
       historyData = historyData.filter(function(e) { return e.id !== id; });
       persistHistory();
+      try { MayaSupabase.deleteReport(String(id)); } catch(e) {}
       renderHistory();
     }
 
     function clearHistory() {
-      if (!confirm('Effacer tout l\'historique des analyses ?')) return;
+      if (!confirm('Effacer tout l\'historique des analyses ? (action partagée pour tous les utilisateurs)')) return;
       historyData = [];
       localStorage.removeItem(STORAGE_KEY_HISTORY);
+      try { MayaSupabase.clearReports(); } catch(e) {}
+      renderHistory();
+    }
+
+    // ---- Sync initial de l'historique depuis Supabase ----
+    async function syncHistoryFromSupabase() {
+      var remote;
+      try { remote = await MayaSupabase.listReports(100); } catch(e) { remote = null; }
+      if (!remote) return; // indisponible → on reste en local
+      // Merge : Supabase = source de vérité (liste partagée), local = cache
+      // On reconstruit historyData à partir des reports distants (sans results_json pour rester léger),
+      // mais on conserve les entrées locales récentes qui n'ont pas encore été syncées (par id)
+      var remoteIds = new Set(remote.map(function(r){ return String(r.id); }));
+      var localOnly = historyData.filter(function(e){ return !remoteIds.has(String(e.id)); });
+
+      var merged = remote.map(function(r){
+        // Tenter de récupérer le results JSON depuis le local (économie de bande passante)
+        var localEntry = historyData.find(function(e){ return String(e.id) === String(r.id); });
+        return {
+          id:         Number(r.id) || r.id,
+          date:       r.date_fr || '',
+          time:       r.time_fr || '',
+          dossier:    r.title || '—',
+          auditFile:  r.audit_filename || '—',
+          vtFile:     r.vt_filename || '—',
+          score:      Number.isFinite(r.score) ? r.score : 0,
+          total:      Number.isFinite(r.total) ? r.total : 0,
+          conformes:  Number.isFinite(r.conformes) ? r.conformes : 0,
+          oranges:    Number.isFinite(r.oranges) ? r.oranges : 0,
+          rouges:     Number.isFinite(r.rouges) ? r.rouges : 0,
+          manquants:  Number.isFinite(r.manquants) ? r.manquants : 0,
+          exportFile: r.export_file || null,
+          // Les results JSON sont laissés vides (lazy-load via get_report au téléchargement)
+          results:    localEntry ? localEntry.results : null
+        };
+      });
+      // Ajoute les entrées locales pas encore syncées
+      merged = merged.concat(localOnly);
+      // Tri décroissant par id (timestamp)
+      merged.sort(function(a,b){ return (Number(b.id)||0) - (Number(a.id)||0); });
+      historyData = merged;
+      persistHistory();
+      console.log('[MAYA-SYNC] Historique chargé depuis Supabase: ' + remote.length + ' report(s) distants, ' + localOnly.length + ' local(aux) en attente.');
       renderHistory();
     }
 
