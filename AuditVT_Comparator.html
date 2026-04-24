@@ -6017,9 +6017,41 @@ ${vtShort}`;
       showAlert('alerts-area', 'success', '✅ Feedback modifié.');
     }
 
+    // ---- Tombstones : évite la résurrection via sync Supabase si le DELETE distant échoue
+    const MAYA_TOMBSTONES_KEY = 'maya_feedback_tombstones_v1';
+    let mayaTombstones = {};
+    (function loadMayaTombstones(){
+      try { mayaTombstones = JSON.parse(localStorage.getItem(MAYA_TOMBSTONES_KEY) || '{}') || {}; }
+      catch(e) { mayaTombstones = {}; }
+    })();
+    function persistMayaTombstones() {
+      try { localStorage.setItem(MAYA_TOMBSTONES_KEY, JSON.stringify(mayaTombstones)); } catch(e) {}
+    }
+
+    let _mayaPendingDeleteId = null;
     function mayaDeleteFeedback(id) {
-      if (!confirm('Supprimer définitivement ce feedback ?')) return;
-      // Parse id (line:key:timestamp | global:gfbId)
+      var all = collectAllFeedbacks();
+      var it = all.find(function(i){ return i.id === id; });
+      _mayaPendingDeleteId = id;
+      var preview = document.getElementById('maya-del-preview');
+      if (preview) preview.textContent = it ? (it.text || '').substring(0, 200) + ((it.text || '').length > 200 ? '…' : '') : '';
+      var ov = document.getElementById('maya-del-overlay');
+      if (ov) ov.classList.add('visible');
+    }
+    function mayaDeleteCancel() {
+      _mayaPendingDeleteId = null;
+      var ov = document.getElementById('maya-del-overlay');
+      if (ov) ov.classList.remove('visible');
+    }
+    async function mayaDeleteConfirm() {
+      var id = _mayaPendingDeleteId;
+      _mayaPendingDeleteId = null;
+      var ov = document.getElementById('maya-del-overlay');
+      if (ov) ov.classList.remove('visible');
+      if (!id) return;
+      // Tombstone AVANT tout — empêche la résurrection même si tout le reste échoue
+      mayaTombstones[id] = new Date().toISOString();
+      persistMayaTombstones();
       if (id.indexOf('line:') === 0) {
         var rest = id.substring(5);
         var lastColon = rest.lastIndexOf(':');
@@ -6040,8 +6072,10 @@ ${vtShort}`;
       }
       delete mayaFeedbackMeta[id];
       persistMayaFeedbackMeta();
-      try { MayaSupabase.deleteFeedback(id); } catch(e) {}
-      renderMayaDrawer(); updateMayaFabBadges();
+      try { await MayaSupabase.deleteFeedback(id); } catch(e) {}
+      renderMayaDrawer();
+      updateMayaFabBadges();
+      showAlert('alerts-area', 'success', '🗑 Feedback supprimé.');
     }
 
     // ---- Sync initial des feedbacks depuis Supabase (au chargement) ----
@@ -6056,6 +6090,11 @@ ${vtShort}`;
       remote.forEach(function(row){
         var id = row.id || '';
         if (!id) return;
+        if (mayaTombstones && mayaTombstones[id]) {
+          // Supprimé localement — tente une nouvelle suppression distante et ignore
+          try { MayaSupabase.deleteFeedback(id); } catch(e) {}
+          return;
+        }
         rebuiltMeta[id] = { status: row.status || 'pending', at: row.updated_at || row.created_at };
         if (row.scope === 'line') {
           var key = row.key_field || (id.indexOf('line:') === 0 ? id.substring(5, id.lastIndexOf(':')) : '');
@@ -6565,9 +6604,61 @@ ${vtShort}`;
 
       // Ordre d'apparition : boucle par section du référentiel, tous statuts mélangés, couleur par statut
       var SECT_BG2='FFE8EEFA', SECT_TXT2='FF1B3F8B';
+
+      // ── Reclassification sémantique ws2 : chaque paroi va dans sa "vraie" catégorie
+      //   selon instance_label (mur/plancher/toiture/menuiserie), pas selon la section du champ.
+      //   Évite qu'un "Paroi 1 — Mur…" apparaisse dans la section PLANCHERS.
+      var _WS2_RX_MENUIS   = /fen[eê]tre|porte|baie|vitrage|menuiserie|ouvrant/i;
+      var _WS2_RX_TOITURE  = /toiture|comble|plafond[\s-]*haut|plancher[\s-]*haut|rampant/i;
+      var _WS2_RX_PLANCHER = /plancher(?!\s*haut)|dalle(?!\s*(?:haut|haute|plafond|toiture))|vide[\s-]?san|terre[\s-]?plein/i;
+      var _WS2_RX_MUR      = /\bmur(?!\s*(?:porteur\s*mitoyen))|fa[çc]ade|paroi\s*opaque(?!\s*(?:bas|haut))/i;
+      function _ws2FindSection(kw) {
+        var lc=kw.toLowerCase();
+        for (var i=0;i<sectionOrder.length;i++){ if (sectionOrder[i].toLowerCase().indexOf(lc)>=0) return sectionOrder[i]; }
+        return null;
+      }
+      var _WS2_SEC = {
+        mur:         _ws2FindSection('mur'),
+        plancher:    _ws2FindSection('plancher'),
+        toiture:     _ws2FindSection('toiture'),
+        menuiserie:  _ws2FindSection('menuis')
+      };
+      // Crée une section synthétique si absente — préfixe "ENVELOPPE — " détecté sur une section paroi existante
+      var _WS2_PREFIX = '';
+      Object.keys(_WS2_SEC).forEach(function(k){
+        if (_WS2_SEC[k] && !_WS2_PREFIX) {
+          var m = _WS2_SEC[k].match(/^(.*?)(MURS|PLANCHERS|TOITURES|MENUISERIES)\b/i);
+          if (m) _WS2_PREFIX = m[1];
+        }
+      });
+      var _WS2_LABELS = { mur:'MURS', plancher:'PLANCHERS', toiture:'TOITURES', menuiserie:'MENUISERIES' };
+      Object.keys(_WS2_SEC).forEach(function(k){
+        if (!_WS2_SEC[k]) {
+          var pseudo = (_WS2_PREFIX || 'ENVELOPPE — ') + _WS2_LABELS[k];
+          _WS2_SEC[k] = pseudo;
+          if (sectionOrder.indexOf(pseudo)<0) sectionOrder.push(pseudo);
+        }
+      });
+      // Assigne effectiveSection par résultat
+      state.analysisResults.forEach(function(rv){
+        var origSec = getFieldSection(rv.id_champ) || '';
+        rv._effectiveSection = origSec;
+        var lbl = (rv.instance_label||'').toLowerCase();
+        if (!lbl) return;
+        var origLC = origSec.toLowerCase();
+        var origIsParoi = /mur|plancher|toiture|menuis|paroi|fen[eê]tre|fenetre|ouvrant|enveloppe/.test(origLC);
+        if (!origIsParoi) return;
+        var inferred = null;
+        if (_WS2_RX_MENUIS.test(lbl))        inferred = 'menuiserie';
+        else if (_WS2_RX_TOITURE.test(lbl))  inferred = 'toiture';
+        else if (_WS2_RX_PLANCHER.test(lbl)) inferred = 'plancher';
+        else if (_WS2_RX_MUR.test(lbl))      inferred = 'mur';
+        if (inferred && _WS2_SEC[inferred]) rv._effectiveSection = _WS2_SEC[inferred];
+      });
+
       var firstSect2=true;
       sectionOrder.forEach(function(sec){
-        var secR=state.analysisResults.filter(function(rv){return getFieldSection(rv.id_champ)===sec;});
+        var secR=state.analysisResults.filter(function(rv){return (rv._effectiveSection || getFieldSection(rv.id_champ))===sec;});
         if(!secR.length)return;
         if(!firstSect2){
           ws2.addRow(['','','','','','','','']).height=18;
@@ -7980,6 +8071,24 @@ ${vtShort}`;
       <div class="maya-modal-footer">
         <button type="button" class="btn btn-outline" onclick="closeGlobalFeedback()">Annuler</button>
         <button type="button" class="btn btn-primary" onclick="submitGlobalFeedback()" style="background:#7B2D8E;border-color:#7B2D8E">Envoyer à Maya</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================ MAYA — Confirmation suppression ================ -->
+  <div class="maya-modal-overlay" id="maya-del-overlay" onclick="if(event.target===this) mayaDeleteCancel()">
+    <div class="maya-modal" role="dialog" aria-labelledby="maya-del-title" style="max-width:440px;">
+      <div class="maya-modal-header" style="background:linear-gradient(135deg, #C62828, #8E1818);">
+        <div class="maya-modal-header-title" id="maya-del-title">🗑 Supprimer ce feedback ?</div>
+        <button type="button" class="maya-modal-close" onclick="mayaDeleteCancel()" aria-label="Fermer">✕</button>
+      </div>
+      <div class="maya-modal-body">
+        <p style="margin:0 0 10px 0; font-weight:600; color:#C62828;">Cette action est irréversible.</p>
+        <p id="maya-del-preview" style="background:#F5F5F5; border-left:3px solid #C62828; padding:8px 10px; border-radius:4px; font-size:12px; font-style:italic; color:#555; margin:0; max-height:120px; overflow-y:auto;"></p>
+      </div>
+      <div class="maya-modal-footer">
+        <button type="button" class="btn btn-outline" onclick="mayaDeleteCancel()">Non, annuler</button>
+        <button type="button" class="btn btn-primary" onclick="mayaDeleteConfirm()" style="background:#C62828;border-color:#C62828;">Oui, supprimer</button>
       </div>
     </div>
   </div>
