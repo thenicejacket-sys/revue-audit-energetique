@@ -898,6 +898,44 @@
       font-size: 11px; font-weight: 600; color: #2D5096;
       cursor: pointer;
     }
+    .maya-drawer-help-bar {
+      padding: 8px 16px; border-bottom: 1px solid #EEE; background: #F8F6FA;
+    }
+    .maya-drawer-help-toggle {
+      width: 100%; display: flex; justify-content: space-between; align-items: center;
+      background: #FFFFFF; border: 1px solid #D7C5DE; border-radius: 6px;
+      padding: 6px 10px; font-size: 11px; font-weight: 600; color: #5E1B6E;
+      cursor: pointer;
+    }
+    .maya-drawer-help-toggle:hover { background: #F5EFF8; }
+    .maya-drawer-help {
+      background: #FDF9FE; border-bottom: 1px solid #EADEEF;
+      padding: 12px 16px; font-size: 11px; color: #333; line-height: 1.5;
+    }
+    .maya-drawer-help[hidden] { display: none; }
+    .maya-drawer-help-lead {
+      margin: 0 0 10px 0; font-weight: 600; color: #4A148C;
+      background: #F5EFF8; border-left: 3px solid #7B2D8E;
+      padding: 6px 10px; border-radius: 0 4px 4px 0;
+    }
+    .maya-drawer-help-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 10px; }
+    .maya-drawer-help-table th, .maya-drawer-help-table td {
+      border: 1px solid #E5DAEC; padding: 6px 8px; text-align: left; vertical-align: top;
+    }
+    .maya-drawer-help-table th { background: #EADEEF; color: #4A148C; font-weight: 700; }
+    .maya-drawer-help-table td:first-child { white-space: nowrap; }
+    .maya-badge-demo {
+      display: inline-block; padding: 2px 8px; border-radius: 10px;
+      font-size: 10px; font-weight: 700; white-space: nowrap;
+    }
+    .maya-badge-demo.pending { background: #FFE0B2; color: #7F3D00; }
+    .maya-badge-demo.applied { background: #C8E6C9; color: #1B5E20; }
+    .maya-badge-demo.permanent { background: #E1BEE7; color: #4A148C; }
+    .maya-badge-demo.archived { background: #CFD8DC; color: #37474F; }
+    .maya-drawer-help-note {
+      margin: 8px 0 0 0; color: #5A3B65; font-size: 11px;
+      padding: 6px 10px; background: #FFF; border: 1px dashed #D7C5DE; border-radius: 4px;
+    }
     .maya-drawer-body {
       flex: 1; overflow-y: auto;
       padding: 14px 16px;
@@ -5794,6 +5832,21 @@ ${vtShort}`;
       });
       renderMayaDrawer();
     }
+    function toggleMayaHelp() {
+      var el = document.getElementById('maya-drawer-help');
+      var chev = document.getElementById('maya-help-chev');
+      var btn = document.querySelector('.maya-drawer-help-toggle');
+      if (!el) return;
+      if (el.hasAttribute('hidden')) {
+        el.removeAttribute('hidden');
+        if (chev) chev.textContent = '▴';
+        if (btn) btn.setAttribute('aria-expanded', 'true');
+      } else {
+        el.setAttribute('hidden', '');
+        if (chev) chev.textContent = '▾';
+        if (btn) btn.setAttribute('aria-expanded', 'false');
+      }
+    }
 
     function detectMayaRecurringLearnings(items) {
       // Patterns = 3+ feedbacks (line) sur le même id_champ/key OU 3+ feedbacks globaux d'une même catégorie
@@ -5887,12 +5940,8 @@ ${vtShort}`;
                +   '</div>'
                +   '<div class="maya-drawer-item-badges">' + statusBadge + scopeBadge + '</div>'
                +   '<div class="maya-drawer-item-text">' + escHtml(it.text || '') + '</div>'
-               +   '<div class="maya-drawer-item-actions">';
-          if (it.meta.status !== 'applied' && it.meta.status !== 'permanent') html += '<button type="button" class="maya-drawer-item-action" onclick="mayaMarkApplied(\'' + it.id + '\')">✓ Marquer appliqué</button>';
-          if (it.meta.status !== 'permanent') html += '<button type="button" class="maya-drawer-item-action" onclick="mayaMarkPermanent(\'' + it.id + '\')">🧠 Règle permanente</button>';
-          if (it.meta.status !== 'archived') html += '<button type="button" class="maya-drawer-item-action" onclick="mayaArchive(\'' + it.id + '\')">🗄 Archiver</button>';
-          if (it.meta.status !== 'pending') html += '<button type="button" class="maya-drawer-item-action" onclick="mayaRestore(\'' + it.id + '\')">↺ Restaurer (en attente)</button>';
-          html +=     '<button type="button" class="maya-drawer-item-action danger" onclick="mayaDeleteFeedback(\'' + it.id + '\')">🗑 Supprimer</button>'
+               +   '<div class="maya-drawer-item-actions">'
+               +     '<button type="button" class="maya-drawer-item-action danger" onclick="mayaDeleteFeedback(\'' + it.id + '\')" title="Retire définitivement ce feedback. Les statuts (En attente / Appliqué / Permanente) sont gérés automatiquement par le système et ne peuvent pas être modifiés manuellement.">🗑 Supprimer</button>'
                +   '</div>'
                + '</div>';
         });
@@ -7900,12 +7949,48 @@ ${vtShort}`;
       <button type="button" class="maya-drawer-close" onclick="closeMayaDrawer()" aria-label="Fermer">✕</button>
     </div>
     <div class="maya-drawer-filters">
-      <button type="button" class="maya-drawer-filter-btn active" data-filter="all" onclick="setMayaDrawerFilter('all')">Tous</button>
-      <button type="button" class="maya-drawer-filter-btn" data-filter="pending" onclick="setMayaDrawerFilter('pending')">En attente</button>
-      <button type="button" class="maya-drawer-filter-btn" data-filter="applied" onclick="setMayaDrawerFilter('applied')">Appliqués</button>
-      <button type="button" class="maya-drawer-filter-btn" data-filter="permanent" onclick="setMayaDrawerFilter('permanent')">🧠 Permanentes</button>
-      <button type="button" class="maya-drawer-filter-btn" data-filter="archived" onclick="setMayaDrawerFilter('archived')">Archivés</button>
+      <button type="button" class="maya-drawer-filter-btn active" data-filter="all" onclick="setMayaDrawerFilter('all')" title="Afficher tous les feedbacks, quel que soit leur statut.">Tous</button>
+      <button type="button" class="maya-drawer-filter-btn" data-filter="pending" onclick="setMayaDrawerFilter('pending')" title="Feedbacks enregistrés, pas encore utilisés par Maya. Seront automatiquement injectés dans le prompt Maya lors de votre prochaine analyse, puis passeront en 'Appliqué'.">En attente</button>
+      <button type="button" class="maya-drawer-filter-btn" data-filter="applied" onclick="setMayaDrawerFilter('applied')" title="Feedbacks déjà pris en compte par Maya au moins une fois. Conservés en historique, plus ré-injectés dans les analyses suivantes.">Appliqués</button>
+      <button type="button" class="maya-drawer-filter-btn" data-filter="permanent" onclick="setMayaDrawerFilter('permanent')" title="Règles ré-injectées dans Maya à CHAQUE analyse future. Promotion automatique après 3 feedbacks similaires sur la même ligne ou catégorie.">🧠 Permanentes</button>
+      <button type="button" class="maya-drawer-filter-btn" data-filter="archived" onclick="setMayaDrawerFilter('archived')" title="Feedbacks anciens archivés (historique). Ignorés par Maya.">Archivés</button>
       <button type="button" class="maya-drawer-export" onclick="exportMayaFeedbacksExcel()">📥 Exporter Excel</button>
+    </div>
+    <div class="maya-drawer-help-bar">
+      <button type="button" class="maya-drawer-help-toggle" onclick="toggleMayaHelp()" aria-expanded="false" aria-controls="maya-drawer-help">
+        <span>ℹ️ Comprendre les statuts des feedbacks</span>
+        <span id="maya-help-chev">▾</span>
+      </button>
+    </div>
+    <div class="maya-drawer-help" id="maya-drawer-help" hidden>
+      <p class="maya-drawer-help-lead">✨ Tout est automatique. Vous écrivez le feedback, le système gère le reste.</p>
+      <table class="maya-drawer-help-table">
+        <thead><tr><th>Statut</th><th>Ce que ça veut dire</th><th>Ce qui se passe automatiquement</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="maya-badge-demo pending">En attente</span></td>
+            <td>Feedback enregistré, pas encore utilisé par Maya.</td>
+            <td>Injecté dans le prompt Maya <b>à votre prochaine analyse</b> de dossier → passe ensuite en <b>Appliqué</b>.</td>
+          </tr>
+          <tr>
+            <td><span class="maya-badge-demo applied">Appliqué</span></td>
+            <td>Déjà utilisé par Maya au moins une fois.</td>
+            <td>Plus jamais ré-injecté. Gardé en historique pour traçabilité.</td>
+          </tr>
+          <tr>
+            <td><span class="maya-badge-demo permanent">🧠 Permanente</span></td>
+            <td>Pattern récurrent, règle à vie pour Maya.</td>
+            <td>Ré-injectée à <b>chaque analyse future</b>, avec un tag prioritaire. Promotion automatique après <b>3 feedbacks similaires</b> sur la même ligne ou catégorie.</td>
+          </tr>
+          <tr>
+            <td><span class="maya-badge-demo archived">Archivé</span></td>
+            <td>Feedback ancien conservé pour historique.</td>
+            <td>Ignoré par Maya.</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="maya-drawer-help-note">🤖 <b>Les statuts ne sont pas modifiables manuellement</b> — le système les gère selon un cycle de vie logique. Votre seule action disponible est 🗑 <b>Supprimer</b> pour retirer définitivement un feedback que vous regrettez.</p>
+      <p class="maya-drawer-help-note">🔄 <b>Cycle de vie typique</b> — Vous écrivez un feedback → <i>En attente</i> → (prochaine analyse) → <i>Appliqué</i>. Si vous répétez 3× le même feedback (même ligne ou même catégorie), il devient automatiquement <i>Permanent</i>.</p>
     </div>
     <div class="maya-drawer-body" id="maya-drawer-body"></div>
   </aside>
