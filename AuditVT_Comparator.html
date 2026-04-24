@@ -5940,8 +5940,11 @@ ${vtShort}`;
                +   '</div>'
                +   '<div class="maya-drawer-item-badges">' + statusBadge + scopeBadge + '</div>'
                +   '<div class="maya-drawer-item-text">' + escHtml(it.text || '') + '</div>'
-               +   '<div class="maya-drawer-item-actions">'
-               +     '<button type="button" class="maya-drawer-item-action danger" onclick="mayaDeleteFeedback(\'' + it.id + '\')" title="Retire définitivement ce feedback. Les statuts (En attente / Appliqué / Permanente) sont gérés automatiquement par le système et ne peuvent pas être modifiés manuellement.">🗑 Supprimer</button>'
+               +   '<div class="maya-drawer-item-actions">';
+          if (it.meta.status === 'pending') {
+            html +=   '<button type="button" class="maya-drawer-item-action" onclick="mayaEditFeedback(\'' + it.id + '\')" title="Modifier le texte de ce feedback. Possible uniquement tant qu\'il est En attente (Maya ne l\'a pas encore traité).">✏️ Modifier</button>';
+          }
+          html +=     '<button type="button" class="maya-drawer-item-action danger" onclick="mayaDeleteFeedback(\'' + it.id + '\')" title="Retire définitivement ce feedback. Les statuts (En attente / Appliqué / Permanente) sont gérés automatiquement par le système et ne peuvent pas être modifiés manuellement.">🗑 Supprimer</button>'
                +   '</div>'
                + '</div>';
         });
@@ -5974,6 +5977,46 @@ ${vtShort}`;
       try { MayaSupabase.updateFeedback(id, { status: 'pending' }); } catch(e) {}
       renderMayaDrawer(); updateMayaFabBadges();
     }
+    function mayaEditFeedback(id) {
+      var all = collectAllFeedbacks();
+      var it = all.find(function(i){ return i.id === id; });
+      if (!it) return;
+      if (it.meta && it.meta.status !== 'pending') {
+        showAlert('alerts-area', 'warning', 'Ce feedback a déjà été traité par Maya et ne peut plus être modifié. Utilisez Supprimer si vous voulez le retirer.');
+        return;
+      }
+      var newText = prompt('Modifier le feedback (uniquement tant qu\'il est "En attente") :', it.text || '');
+      if (newText === null) return;
+      newText = newText.trim();
+      if (!newText) {
+        showAlert('alerts-area', 'warning', 'Le feedback ne peut pas être vide. Utilisez Supprimer pour le retirer.');
+        return;
+      }
+      if (newText === (it.text || '').trim()) return;
+      if (id.indexOf('line:') === 0) {
+        var rest = id.substring(5);
+        var lastColon = rest.lastIndexOf(':');
+        var key = rest.substring(0, lastColon);
+        var ts  = rest.substring(lastColon + 1);
+        if (mayaFeedbacks[key]) {
+          for (var i = 0; i < mayaFeedbacks[key].length; i++) {
+            var fb = mayaFeedbacks[key][i];
+            if ((fb.timestamp || i) + '' === ts) { fb.text = newText; break; }
+          }
+          persistMayaFeedbacks();
+        }
+      } else if (id.indexOf('global:') === 0) {
+        var gid = id.substring(7);
+        for (var j = 0; j < mayaGlobalFeedbacks.length; j++) {
+          if (mayaGlobalFeedbacks[j].id === gid) { mayaGlobalFeedbacks[j].text = newText; break; }
+        }
+        persistMayaGlobalFeedbacks();
+      }
+      try { MayaSupabase.updateFeedback(id, { feedback_text: newText }); } catch(e) {}
+      renderMayaDrawer();
+      showAlert('alerts-area', 'success', '✅ Feedback modifié.');
+    }
+
     function mayaDeleteFeedback(id) {
       if (!confirm('Supprimer définitivement ce feedback ?')) return;
       // Parse id (line:key:timestamp | global:gfbId)
@@ -7989,7 +8032,7 @@ ${vtShort}`;
           </tr>
         </tbody>
       </table>
-      <p class="maya-drawer-help-note">🤖 <b>Les statuts ne sont pas modifiables manuellement</b> — le système les gère selon un cycle de vie logique. Votre seule action disponible est 🗑 <b>Supprimer</b> pour retirer définitivement un feedback que vous regrettez.</p>
+      <p class="maya-drawer-help-note">🤖 <b>Les statuts ne sont pas modifiables manuellement</b> — le système les gère selon un cycle de vie logique. Vos seules actions disponibles : ✏️ <b>Modifier</b> (uniquement tant que le feedback est <i>En attente</i>, avant que Maya ne le traite) et 🗑 <b>Supprimer</b> (à tout moment).</p>
       <p class="maya-drawer-help-note">🔄 <b>Cycle de vie typique</b> — Vous écrivez un feedback → <i>En attente</i> → (prochaine analyse) → <i>Appliqué</i>. Si vous répétez 3× le même feedback (même ligne ou même catégorie), il devient automatiquement <i>Permanent</i>.</p>
     </div>
     <div class="maya-drawer-body" id="maya-drawer-body"></div>
