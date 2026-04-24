@@ -3732,18 +3732,39 @@
       function stripAccents(s) {
         return s.replace(/[àâäãÀÂÄÃ]/g,'a').replace(/[éèêëÉÈÊË]/g,'e').replace(/[îïìÎÏÌ]/g,'i').replace(/[ôöòÔÖÒ]/g,'o').replace(/[ùûüúÙÛÜÚ]/g,'u').replace(/[çÇ]/g,'c').replace(/[ñÑ]/g,'n');
       }
-      // Recherche flexible : whitespace + accent insensitive dans le texte source
+      // Recherche flexible : whitespace + accent + encodage (m²↔m2, virgule↔point) insensitive
+      // Essaie plusieurs longueurs (50/30/20/15) et positions (début/fin/milieu) du needle
       function findOffsetFlex(needle, haystack) {
         if (!needle || !haystack) return -1;
-        var clean = stripAccents(needle.replace(/[\u2026\u00ab\u00bb\u201c\u201d""]/g,'').replace(/\s+/g,' ').trim().substring(0,50).toLowerCase());
-        if (clean.length < 5) return -1;
-        // Convertir en regex : chaque espace → \s+ pour matcher whitespace variable du PDF
-        var escaped = clean.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '\\s+');
-        try {
-          var rx = new RegExp(escaped);
-          var m = rx.exec(stripAccents(haystack.toLowerCase()));
-          return m ? m.index : -1;
-        } catch(e) { return -1; }
+        var rawNeedle = needle.replace(/[\u2026\u00ab\u00bb\u201c\u201d""]/g,'').replace(/\s+/g,' ').trim();
+        if (rawNeedle.length < 5) return -1;
+        var normHay = stripAccents(haystack.toLowerCase()).replace(/²/g,'2').replace(/³/g,'3');
+        function buildPattern(text) {
+          var norm = stripAccents(text.toLowerCase()).replace(/²/g,'2').replace(/³/g,'3');
+          var escaped = norm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          return escaped
+            .replace(/ /g, '\\s+')
+            .replace(/(\d)(?:\\\.|,)(\d)/g, '$1[.,]$2');
+        }
+        var lens = [50, 30, 20, 15];
+        for (var li = 0; li < lens.length; li++) {
+          var L = Math.min(lens[li], rawNeedle.length);
+          var candidates = [rawNeedle.substring(0, L)];
+          if (rawNeedle.length > L) {
+            candidates.push(rawNeedle.substring(rawNeedle.length - L));
+            var mid = Math.floor((rawNeedle.length - L) / 2);
+            if (mid > 0) candidates.push(rawNeedle.substring(mid, mid + L));
+          }
+          for (var ci = 0; ci < candidates.length; ci++) {
+            var clean = candidates[ci].trim();
+            if (clean.length < 5) continue;
+            try {
+              var m = new RegExp(buildPattern(clean)).exec(normHay);
+              if (m) return m.index;
+            } catch(e) {}
+          }
+        }
+        return -1;
       }
       (function preComputePages() {
         var audit = auditFull || '';
@@ -3905,6 +3926,50 @@
           }
         });
         console.log('[PAGES] Pass global rattrapage : ' + found + ' pages supplémentaires');
+      })();
+
+      // ── Pass fallback mot-par-mot : garantit une page dès qu'un extrait/contexte existe ──
+      (function computeSourcePagesWordFallback() {
+        var audit = auditFull || '';
+        var vt    = vtFull    || '';
+        var auditPL = state.auditPageLog || [];
+        var vtPL    = state.vtPageLog    || [];
+        if (!auditPL.length && !vtPL.length) return;
+        var COMMON = {};
+        ['dans','avec','pour','mais','sans','sous','comme','plus','moins','aussi','leur','leurs','tous','tout','toute','toutes','cette','celle','celui','ceux','quel','quelle','quels','quelles','etre','avoir','faire','ainsi','bien','meme','entre','selon','apres','avant','chaque','autre','autres','donc','grand','grande','petit','petite','alors','ensuite','depuis','jusque','lors','vers','sont','leur','leurs'].forEach(function(w){COMMON[w]=true;});
+        function extractDiscriminantWords(text) {
+          if (!text) return [];
+          var words = stripAccents(String(text).toLowerCase())
+            .replace(/[^a-z0-9\s]/g, ' ')
+            .split(/\s+/)
+            .filter(function(w){return w.length >= 4 && !COMMON[w];});
+          var seen = {}, out = [];
+          words.forEach(function(w){if(!seen[w]){seen[w]=true;out.push(w);}});
+          return out.slice(0, 6);
+        }
+        function findFirstWordOffset(words, haystack) {
+          if (!haystack) return -1;
+          var normHay = stripAccents(haystack.toLowerCase());
+          for (var i = 0; i < words.length; i++) {
+            var idx = normHay.indexOf(words[i]);
+            if (idx >= 0) return idx;
+          }
+          return -1;
+        }
+        var found = 0;
+        state.analysisResults.forEach(function(rv) {
+          if (!rv._page_audit) {
+            var wA = extractDiscriminantWords(rv._ctx_audit || rv.extrait_audit || rv.valeur_audit);
+            var iA = findFirstWordOffset(wA, audit);
+            if (iA >= 0) { rv._page_audit = findPageForOffset(auditPL, iA); found++; }
+          }
+          if (!rv._page_vt) {
+            var wV = extractDiscriminantWords(rv._ctx_vt || rv.extrait_vt || rv.valeur_vt);
+            var iV = findFirstWordOffset(wV, vt);
+            if (iV >= 0) { rv._page_vt = findPageForOffset(vtPL, iV); found++; }
+          }
+        });
+        console.log('[PAGES] Pass fallback mot-par-mot : ' + found + ' pages supplémentaires');
       })();
 
       updateProgress(100, 'Analyse terminée !', 'Rapport prêt.');
