@@ -5689,6 +5689,7 @@ ${vtShort}`;
       Object.keys(mayaFeedbacks || {}).forEach(function(k){
         (mayaFeedbacks[k] || []).forEach(function(fb, idx){
           var fid = 'line:' + k + ':' + (fb.timestamp || idx);
+          if (typeof mayaTombstones !== 'undefined' && mayaTombstones && mayaTombstones[fid]) return;
           items.push({
             id: fid, scope: 'line', key: k,
             timestamp: fb.timestamp, text: fb.text,
@@ -5700,6 +5701,7 @@ ${vtShort}`;
       });
       (mayaGlobalFeedbacks || []).forEach(function(fb){
         var fid = 'global:' + fb.id;
+        if (typeof mayaTombstones !== 'undefined' && mayaTombstones && mayaTombstones[fid]) return;
         items.push({
           id: fid, scope: 'global', key: null,
           timestamp: fb.timestamp, text: fb.text,
@@ -5995,15 +5997,17 @@ ${vtShort}`;
       if (newText === (it.text || '').trim()) return;
       if (id.indexOf('line:') === 0) {
         var rest = id.substring(5);
-        var lastColon = rest.lastIndexOf(':');
-        var key = rest.substring(0, lastColon);
-        var ts  = rest.substring(lastColon + 1);
-        if (mayaFeedbacks[key]) {
-          for (var i = 0; i < mayaFeedbacks[key].length; i++) {
-            var fb = mayaFeedbacks[key][i];
-            if ((fb.timestamp || i) + '' === ts) { fb.text = newText; break; }
+        var firstColon = rest.indexOf(':');
+        if (firstColon > 0) {
+          var key = rest.substring(0, firstColon);
+          var ts  = rest.substring(firstColon + 1);
+          if (mayaFeedbacks[key]) {
+            for (var i = 0; i < mayaFeedbacks[key].length; i++) {
+              var fb = mayaFeedbacks[key][i];
+              if ((fb.timestamp || i) + '' === ts) { fb.text = newText; break; }
+            }
+            persistMayaFeedbacks();
           }
-          persistMayaFeedbacks();
         }
       } else if (id.indexOf('global:') === 0) {
         var gid = id.substring(7);
@@ -6049,21 +6053,25 @@ ${vtShort}`;
       var ov = document.getElementById('maya-del-overlay');
       if (ov) ov.classList.remove('visible');
       if (!id) return;
-      // Tombstone AVANT tout — empêche la résurrection même si tout le reste échoue
+      // Tombstone AVANT tout — empêche la résurrection même si le reste échoue
       mayaTombstones[id] = new Date().toISOString();
       persistMayaTombstones();
+      // Parse ID (line:key:timestamp | global:gfbId). IMPORTANT : indexOf (pas lastIndexOf)
+      // car le timestamp ISO 'YYYY-MM-DDTHH:MM:SS.sssZ' contient des ':' qui faussaient le split.
       if (id.indexOf('line:') === 0) {
         var rest = id.substring(5);
-        var lastColon = rest.lastIndexOf(':');
-        var key = rest.substring(0, lastColon);
-        var ts  = rest.substring(lastColon + 1);
-        if (mayaFeedbacks[key]) {
-          mayaFeedbacks[key] = mayaFeedbacks[key].filter(function(fb, idx){
-            return (fb.timestamp || idx) + '' !== ts;
-          });
-          if (mayaFeedbacks[key].length === 0) delete mayaFeedbacks[key];
-          persistMayaFeedbacks();
-          if (typeof renderTable === 'function') { try { renderTable(currentFilter); } catch(e){} }
+        var firstColon = rest.indexOf(':');
+        if (firstColon > 0) {
+          var key = rest.substring(0, firstColon);
+          var ts  = rest.substring(firstColon + 1);
+          if (mayaFeedbacks[key]) {
+            mayaFeedbacks[key] = mayaFeedbacks[key].filter(function(fb, idx){
+              return (fb.timestamp || idx) + '' !== ts;
+            });
+            if (mayaFeedbacks[key].length === 0) delete mayaFeedbacks[key];
+            persistMayaFeedbacks();
+            if (typeof renderTable === 'function') { try { renderTable(currentFilter); } catch(e){} }
+          }
         }
       } else if (id.indexOf('global:') === 0) {
         var gid = id.substring(7);
