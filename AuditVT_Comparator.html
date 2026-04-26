@@ -7703,9 +7703,11 @@ ${vtShort}`;
       } else {
         label.textContent = 'Modèle (OpenRouter)';
         document.getElementById('model-select').innerHTML = `
+          <option value="z-ai/glm-4.7-flash">Z.AI GLM 4.7 Flash</option>
           <option value="openai/gpt-4o-mini">OpenAI GPT-4o Mini</option>
           <option value="openai/gpt-4o">OpenAI GPT-4o</option>
           <option value="anthropic/claude-haiku-4-5">Anthropic Haiku 4.5</option>
+          <option value="custom">Saisie libre...</option>
         `;
       }
 
