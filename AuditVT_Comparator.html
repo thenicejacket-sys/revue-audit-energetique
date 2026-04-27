@@ -3758,6 +3758,56 @@
         return !!(rv.valeur_audit && rv.valeur_audit.trim() && rv.valeur_audit.trim() !== '-');
       });
 
+      // ── ANTI-DOUBLON-PAROIS : une paroi appartient à UNE seule section ──────
+      // Règle métier : la nature de la paroi (mur/plancher/toiture/menuiserie) est encodée
+      // dans son instance_label (ex "Paroi 01 — Mur extérieur" → MURS).
+      // Si l'IA a halluciné cette paroi sur un champ de la mauvaise section → suppression.
+      (function _antiCrossTalkParois(){
+        function _inferCat(text) {
+          if (!text) return null;
+          var s = String(text).toLowerCase();
+          if (/fen[eê]tre|porte|baie|vitrage|menuiserie|ouvrant/.test(s)) return 'menuiserie';
+          if (/toiture|comble|plafond[\s-]*haut|plancher[\s-]*haut|rampant/.test(s)) return 'toiture';
+          if (/plancher(?!\s*haut)|dalle(?!\s*(?:haut|haute|plafond|toiture))|vide[\s-]?san|terre[\s-]?plein/.test(s)) return 'plancher';
+          if (/\bmur(?!\s*(?:porteur\s*mitoyen))|fa[çc]ade|paroi\s*opaque(?!\s*(?:bas|haut))/.test(s)) return 'mur';
+          return null;
+        }
+        function _fieldCat(rv) { return _inferCat(getFieldSection(rv.id_champ) || ''); }
+
+        // Étape 1 : catégorie canonique de chaque paroi (par son label)
+        // Priorité : regex sur le label > vote majoritaire sur les sections champs où elle apparaît
+        var catByLabel = {};
+        state.analysisResults.forEach(function(rv){
+          if (!rv.instance_label) return;
+          var key = String(rv.instance_label).trim().toLowerCase();
+          if (catByLabel[key] !== undefined) return;
+          var direct = _inferCat(rv.instance_label);
+          if (direct) { catByLabel[key] = direct; return; }
+          var votes = { mur:0, plancher:0, toiture:0, menuiserie:0 };
+          state.analysisResults.forEach(function(rv2){
+            if (String(rv2.instance_label||'').trim().toLowerCase() !== key) return;
+            var c = _fieldCat(rv2); if (c) votes[c]++;
+          });
+          var best=null, max=0;
+          Object.keys(votes).forEach(function(k){ if (votes[k]>max){ max=votes[k]; best=k; } });
+          catByLabel[key] = best;
+        });
+
+        // Étape 2 : supprimer les hallucinations cross-section
+        var removed = 0;
+        state.analysisResults = state.analysisResults.filter(function(rv){
+          if (!rv.instance_label) return true;
+          var paroiCat = catByLabel[String(rv.instance_label).trim().toLowerCase()];
+          if (!paroiCat) return true;
+          var fc = _fieldCat(rv);
+          if (!fc) return true;
+          if (paroiCat === fc) return true;
+          removed++;
+          return false;
+        });
+        if (removed > 0) console.log('[ANTI-DOUBLON-PAROIS] ' + removed + ' résultat(s) cross-section supprimé(s)');
+      })();
+
       // ── Pré-calcul des pages sources PDF (AVANT Maya pour qu'elle les utilise) ──
       function findPageForOffset(pageLog, charIndex) {
         if (!pageLog || !pageLog.length || charIndex < 0) return null;
