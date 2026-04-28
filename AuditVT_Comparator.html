@@ -6145,9 +6145,11 @@ ${vtShort}`;
       var rebuiltLine = {};
       var rebuiltGlobal = [];
       var rebuiltMeta = {};
+      var remoteIds = new Set(); // pour détecter les locaux jamais syncés
       remote.forEach(function(row){
         var id = row.id || '';
         if (!id) return;
+        remoteIds.add(id);
         if (mayaTombstones && mayaTombstones[id]) {
           // Supprimé localement — tente une nouvelle suppression distante et ignore
           try { MayaSupabase.deleteFeedback(id); } catch(e) {}
@@ -6179,8 +6181,64 @@ ${vtShort}`;
           });
         }
       });
-      // Merge avec le local : Supabase gagne, mais on préserve le local qui n'est pas encore pushé
-      // Pour éviter les conflits, on fait un simple overwrite complet (Supabase = source de vérité partagée)
+
+      // ── Réconciliation locale → distante : préserve ET upload les feedbacks locaux jamais syncés ──
+      // CRITIQUE : sans ça, l'écrasement des structures locales perdrait les feedbacks locaux à jamais
+      var uploadedLine = 0, uploadedGlobal = 0;
+      // 1. Feedbacks par ligne locaux
+      Object.keys(mayaFeedbacks || {}).forEach(function(key){
+        (mayaFeedbacks[key] || []).forEach(function(fb){
+          var fbId = 'line:' + key + ':' + (fb.timestamp || '');
+          if (remoteIds.has(fbId)) return; // déjà en distant
+          if (mayaTombstones && mayaTombstones[fbId]) return; // supprimé localement
+          // Préserver dans la structure reconstruite
+          if (!rebuiltLine[key]) rebuiltLine[key] = [];
+          rebuiltLine[key].push(fb);
+          if (mayaFeedbackMeta && mayaFeedbackMeta[fbId]) rebuiltMeta[fbId] = mayaFeedbackMeta[fbId];
+          // Upload vers Supabase
+          if (MayaSupabase.isAvailable()) {
+            try {
+              MayaSupabase.saveFeedback({
+                id: fbId, scope: 'line', key_field: key,
+                feedback_text: fb.text || '',
+                audit_value: fb.snapshot && fb.snapshot.valeur_audit,
+                vt_value: fb.snapshot && fb.snapshot.valeur_vt,
+                conformity_status: fb.snapshot && fb.snapshot.statut,
+                commentaire: fb.snapshot && fb.snapshot.commentaire,
+                snapshot: fb.snapshot || null,
+                status: (mayaFeedbackMeta && mayaFeedbackMeta[fbId] && mayaFeedbackMeta[fbId].status) || 'pending',
+                created_at: fb.timestamp || new Date().toISOString()
+              });
+              uploadedLine++;
+            } catch(e) { console.warn('[MAYA-SYNC] upload feedback line ' + fbId + ':', e.message); }
+          }
+        });
+      });
+      // 2. Feedbacks globaux locaux
+      (mayaGlobalFeedbacks || []).forEach(function(gfb){
+        var gfbId = 'global:' + gfb.id;
+        if (remoteIds.has(gfbId)) return;
+        if (mayaTombstones && mayaTombstones[gfbId]) return;
+        rebuiltGlobal.push(gfb);
+        if (mayaFeedbackMeta && mayaFeedbackMeta[gfbId]) rebuiltMeta[gfbId] = mayaFeedbackMeta[gfbId];
+        if (MayaSupabase.isAvailable()) {
+          try {
+            MayaSupabase.saveFeedback({
+              id: gfbId, scope: 'global',
+              feedback_text: gfb.text || '',
+              category: gfb.category || 'other',
+              status: (mayaFeedbackMeta && mayaFeedbackMeta[gfbId] && mayaFeedbackMeta[gfbId].status) || 'pending',
+              created_at: gfb.timestamp || new Date().toISOString()
+            });
+            uploadedGlobal++;
+          } catch(e) { console.warn('[MAYA-SYNC] upload feedback global ' + gfbId + ':', e.message); }
+        }
+      });
+      if (uploadedLine + uploadedGlobal > 0) {
+        console.log('[MAYA-SYNC] ⬆ Upload feedbacks locaux : ' + uploadedLine + ' par ligne + ' + uploadedGlobal + ' globaux');
+      }
+
+      // Maintenant on peut écraser sans perte
       mayaFeedbacks = rebuiltLine;
       mayaGlobalFeedbacks = rebuiltGlobal;
       mayaFeedbackMeta = rebuiltMeta;
@@ -7294,6 +7352,37 @@ ${vtShort}`;
       historyData = merged;
       persistHistory();
       console.log('[MAYA-SYNC] Historique chargé depuis Supabase: ' + remote.length + ' report(s) distants, ' + localOnly.length + ' local(aux) en attente.');
+
+      // ── Réconciliation locale → distante : upload des reports locaux jamais syncés ──
+      // (cas typique : testeurs qui ont créé des reports avant que les tables Supabase existent
+      //  ou pendant une période où l'API était down → MayaSupabase.disable() avait coupé la sync)
+      if (localOnly.length > 0 && MayaSupabase.isAvailable()) {
+        console.log('[MAYA-SYNC] ⬆ Upload de ' + localOnly.length + ' report(s) local(aux) vers Supabase…');
+        localOnly.forEach(function(entry) {
+          try {
+            var resultsJson = null;
+            if (entry.results) {
+              try { resultsJson = (typeof entry.results === 'string') ? JSON.parse(entry.results) : entry.results; }
+              catch(e) { resultsJson = null; }
+            }
+            MayaSupabase.saveReport({
+              id: String(entry.id),
+              title: entry.dossier || 'Analyse',
+              audit_filename: entry.auditFile || null,
+              vt_filename: entry.vtFile || null,
+              score: entry.score, total: entry.total,
+              conformes: entry.conformes, oranges: entry.oranges,
+              rouges: entry.rouges, manquants: entry.manquants,
+              export_file: entry.exportFile || null,
+              date_fr: entry.date || null, time_fr: entry.time || null,
+              results_json: resultsJson,
+              metadata: { version: 'v1', source: 'web', migrated_from_local: true },
+              created_at: (Number(entry.id) ? new Date(Number(entry.id)).toISOString() : new Date().toISOString())
+            });
+          } catch(e) { console.warn('[MAYA-SYNC] upload report ' + entry.id + ':', e.message); }
+        });
+      }
+
       renderHistory();
     }
 
