@@ -6975,7 +6975,7 @@ ${vtShort}`;
         secR.forEach(function(rv){
           // Ligne vide entre instances successives dans les sections paroi
           if (_secIsParoi2 && rv.instance_label && _prevInstLbl2 !== null && rv.instance_label !== _prevInstLbl2) {
-            ws2.addRow(['','','','','','','','']).height = 6;
+            ws2.addRow(['','','','','','','','']).height = 18;
           }
           if (_secIsParoi2 && rv.instance_label) _prevInstLbl2 = rv.instance_label;
           var g=GRP[rv.statut]||GRP.MANQUANT;
@@ -7353,7 +7353,7 @@ ${vtShort}`;
           // Séparation visuelle entre instances (pas avant la première)
           if (instIdx > 0) {
             var sepRow = ws5.addRow([]);
-            sepRow.height = 6;
+            sepRow.height = 18;
           }
           var instNorm = inst.norm, instDisp = inst.display;
           var rowBg=alt?'FFF8FBFF':'FFFFFFFF'; alt=!alt;
