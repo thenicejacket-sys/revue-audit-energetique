@@ -2960,6 +2960,19 @@
       }
 
       // ---- Pré-extraction VT via lexique de composition (formules "A + B + C") ----
+      /**
+       * RÈGLE INVARIANTE — Extraction des parois
+       * ----------------------------------------
+       * TOUTE paroi présente dans le document d'audit DOIT apparaître dans le rapport Excel.
+       * Aucune paroi ne doit être silencieusement ignorée, peu importe sa catégorie
+       * (Murs, Planchers, Toitures, Plafonds, parois vitrées, etc.).
+       * Si une paroi n'a pas pu être extraite, logger un console.warn EXPLICITE
+       * (ne jamais utiliser un catch(e){} vide sur ce chemin).
+       *
+       * Vérifié le 2026-04-30 suite au bug de la Paroi 4 (Dalle béton / Toiture)
+       * qui était droppée du rapport par _antiCrossTalkParois._inferCat classant
+       * "dalle" comme plancher au lieu de toiture.
+       */
       // ---- Pré-détection des instances de parois — multi-format, multi-pass ----
       function detectBatiauditInstances(text) {
         var murs=[], planchers=[], toitures=[], menuiseries=[];
@@ -3262,6 +3275,34 @@
         var log = Object.keys(detectedInstances).filter(function(k){return detectedInstances[k].length>0;})
           .map(function(k){return k+'('+detectedInstances[k].length+'): '+detectedInstances[k].join(' / ');}).join(' | ');
         if (log) console.log('[INSTANCES PAROIS]', log);
+      })();
+      // ASSERTION RUNTIME — RÈGLE INVARIANTE : toutes les parois doivent être comptées et loguées.
+      // Si le nombre de parois détectées ne correspond pas au nombre attendu (d'après les "Paroi NN"
+      // présents dans le texte brut), un console.warn explicite est émis.
+      (function _assertAllParoisDetected(){
+        var totalDetected = (detectedInstances.murs||[]).length
+          + (detectedInstances.planchers||[]).length
+          + (detectedInstances.toitures||[]).length;
+        console.info('[PAROIS EXTRAITES] murs=' + (detectedInstances.murs||[]).length
+          + ' planchers=' + (detectedInstances.planchers||[]).length
+          + ' toitures=' + (detectedInstances.toitures||[]).length
+          + ' menuiseries=' + (detectedInstances.menuiseries||[]).length
+          + ' — total parois opaques=' + totalDetected);
+        // Compter les références "Paroi NN" dans le texte brut (indicateur du nombre attendu)
+        var paroiRefs = [];
+        var paroiRE = /[Pp]aroi\s+0*(\d+[a-z]?)/g;
+        var m;
+        while ((m = paroiRE.exec(auditFull)) !== null) {
+          if (paroiRefs.indexOf(m[1]) < 0) paroiRefs.push(m[1]);
+        }
+        if (paroiRefs.length > 0 && totalDetected < paroiRefs.length) {
+          console.warn('[PAROIS MANQUANTES] ' + paroiRefs.length + ' référence(s) "Paroi NN" trouvée(s) dans le texte brut'
+            + ' mais seulement ' + totalDetected + ' paroi(s) opaque(s) détectée(s).'
+            + ' Parois référencées dans le texte : ' + paroiRefs.join(', ')
+            + ' | Détectées murs=[' + (detectedInstances.murs||[]).join(', ') + ']'
+            + ' planchers=[' + (detectedInstances.planchers||[]).join(', ') + ']'
+            + ' toitures=[' + (detectedInstances.toitures||[]).join(', ') + ']');
+        }
       })();
 
       // ---- Expansion des champs par instances détectées ----
@@ -3762,27 +3803,66 @@
       // Règle métier : la nature de la paroi (mur/plancher/toiture/menuiserie) est encodée
       // dans son instance_label (ex "Paroi 01 — Mur extérieur" → MURS).
       // Si l'IA a halluciné cette paroi sur un champ de la mauvaise section → suppression.
+      //
+      // RÈGLE INVARIANTE (2026-04-30) : detectedInstances EST la source de vérité absolue
+      // pour la catégorie de chaque paroi. _inferCat (regex sur le texte du label) ne fait que
+      // compléter pour les parois sans description. Elle NE doit JAMAIS contredire
+      // detectedInstances. Cas typique : "Dalle de béton" est une TOITURE dans le PDF
+      // (section Toitures), mais "dalle" matcherait naïvement la regex plancher → bug.
       (function _antiCrossTalkParois(){
+        // Normalise un label de paroi pour comparaison (retire préfixe "Paroi NN —")
+        function _normLabel(lbl) {
+          return (lbl||'').toLowerCase()
+            .replace(/\bparoi\s+0*(\d+)/g, 'paroi $1')
+            .replace(/\([^)]*\)/g, '')
+            .replace(/\s+/g, ' ').trim()
+            .split(/\s*(?:—|–)\s*/)[0].trim();
+        }
+
+        // SOURCE DE VÉRITÉ ABSOLUE : detectedInstances (résultat de detectBatiauditInstances)
+        // Construire un map normLabel → catégorie canonique depuis detectedInstances
+        var _di = state.detectedInstances || {};
+        var _diCatMap = {}; // normLabel → 'mur'|'plancher'|'toiture'|'menuiserie'
+        (_di.murs||[]).forEach(function(lbl){ _diCatMap[_normLabel(lbl)] = 'mur'; });
+        (_di.planchers||[]).forEach(function(lbl){ _diCatMap[_normLabel(lbl)] = 'plancher'; });
+        (_di.toitures||[]).forEach(function(lbl){ _diCatMap[_normLabel(lbl)] = 'toiture'; });
+        (_di.menuiseries||[]).forEach(function(lbl){ _diCatMap[_normLabel(lbl)] = 'menuiserie'; });
+
+        // _inferCat : utilisé UNIQUEMENT en fallback si le label n'est pas dans detectedInstances.
+        // ATTENTION : ne pas utiliser "dalle" comme indicateur plancher car une dalle de toiture
+        // (ex: "Dalle de béton" en section Toitures du BATIAUDIT) est une toiture, pas un plancher.
         function _inferCat(text) {
           if (!text) return null;
           var s = String(text).toLowerCase();
           if (/fen[eê]tre|porte|baie|vitrage|menuiserie|ouvrant/.test(s)) return 'menuiserie';
           if (/toiture|comble|plafond[\s-]*haut|plancher[\s-]*haut|rampant/.test(s)) return 'toiture';
-          if (/plancher(?!\s*haut)|dalle(?!\s*(?:haut|haute|plafond|toiture))|vide[\s-]?san|terre[\s-]?plein/.test(s)) return 'plancher';
+          // "dalle" seul est AMBIGU (peut être plancher bas OU dalle de toiture) — ne pas l'utiliser
+          // comme discriminant. Seuls les mots non-ambigus sont acceptés ici.
+          if (/plancher(?!\s*haut)|vide[\s-]?san|terre[\s-]?plein|mitoyen(?!\s*mur)/.test(s)) return 'plancher';
           if (/\bmur(?!\s*(?:porteur\s*mitoyen))|fa[çc]ade|paroi\s*opaque(?!\s*(?:bas|haut))/.test(s)) return 'mur';
           return null;
         }
         function _fieldCat(rv) { return _inferCat(getFieldSection(rv.id_champ) || ''); }
 
         // Étape 1 : catégorie canonique de chaque paroi (par son label)
-        // Priorité : regex sur le label > vote majoritaire sur les sections champs où elle apparaît
+        // Priorité 1 : detectedInstances (source de vérité absolue)
+        // Priorité 2 : _inferCat sur le texte du label (fallback texte)
+        // Priorité 3 : vote majoritaire sur les sections des champs retournés par l'IA
         var catByLabel = {};
         state.analysisResults.forEach(function(rv){
           if (!rv.instance_label) return;
           var key = String(rv.instance_label).trim().toLowerCase();
           if (catByLabel[key] !== undefined) return;
+          // Priorité 1 : detectedInstances
+          var normKey = _normLabel(rv.instance_label);
+          if (_diCatMap[normKey] !== undefined) {
+            catByLabel[key] = _diCatMap[normKey];
+            return;
+          }
+          // Priorité 2 : inférence textuelle (sans "dalle" comme indicateur plancher)
           var direct = _inferCat(rv.instance_label);
           if (direct) { catByLabel[key] = direct; return; }
+          // Priorité 3 : vote majoritaire sur les sections des champs
           var votes = { mur:0, plancher:0, toiture:0, menuiserie:0 };
           state.analysisResults.forEach(function(rv2){
             if (String(rv2.instance_label||'').trim().toLowerCase() !== key) return;
@@ -3802,10 +3882,15 @@
           var fc = _fieldCat(rv);
           if (!fc) return true;
           if (paroiCat === fc) return true;
+          // Ne jamais supprimer silencieusement — logger chaque suppression explicitement
+          console.warn('[ANTI-DOUBLON-PAROIS] Suppression cross-section : paroi="'
+            + rv.instance_label + '" (cat=' + paroiCat + ') dans section champ cat=' + fc
+            + ' (champ=' + rv.id_champ + ')');
           removed++;
           return false;
         });
         if (removed > 0) console.log('[ANTI-DOUBLON-PAROIS] ' + removed + ' résultat(s) cross-section supprimé(s)');
+        else console.info('[ANTI-DOUBLON-PAROIS] Aucun résultat cross-section — toutes les parois sont dans leur bonne catégorie.');
       })();
 
       // ── Pré-calcul des pages sources PDF (AVANT Maya pour qu'elle les utilise) ──
@@ -6473,6 +6558,81 @@ ${vtShort}`;
     }
 
     // =====================================================================
+    // DOUBLE VÉRIFICATION INTÉGRITÉ PAROIS — 2ème ligne de défense
+    // =====================================================================
+    // 1ère ligne : _assertAllParoisDetected (au moment de l'extraction PDF, console.warn).
+    // 2ème ligne : verifyExportParoisIntegrity (au moment du rendu Excel, visible + bloquant).
+    //
+    // Ajoutée le 2026-04-30 suite au bug "Paroi 4 — Dalle béton/TOITURES" silencieusement
+    // droppée du rapport Excel avant le fix. Cette fonction est indépendante de la 1ère.
+    //
+    // @param {ExcelJS.Workbook} wb       - Le workbook déjà construit, avant écriture
+    // @param {Object} detectedInstances  - Résultat de detectBatiauditInstances (vérité PASS 0)
+    //                                      Clés : murs, planchers, toitures, menuiseries (arrays de labels)
+    // @param {Object} renderedCounts     - Comptage des parois effectivement rendues dans l'onglet Parois
+    //                                      { murs:N, planchers:N, toitures:N, menuiseries:N }
+    //                                      Accumulé pendant le ENE_CATS.forEach juste avant l'appel.
+    // @returns {{ ok:boolean, missing:Array<{label:string,category:string}>, counts:{attendu,rendu} }}
+    function verifyExportParoisIntegrity(wb, detectedInstances, renderedCounts) {
+      var _di = detectedInstances || {};
+      var _rc = renderedCounts   || {};
+
+      // Attendu (depuis PASS 0, après reclassification sémantique _DI — ref dans exportExcel)
+      var attendu = {
+        murs:        (_di.murs        || []).length,
+        planchers:   (_di.planchers   || []).length,
+        toitures:    (_di.toitures    || []).length,
+        menuiseries: (_di.menuiseries || []).length
+      };
+      // Rendu (accumulé pendant le forEach ENE_CATS)
+      var rendu = {
+        murs:        _rc.murs        || 0,
+        planchers:   _rc.planchers   || 0,
+        toitures:    _rc.toitures    || 0,
+        menuiseries: _rc.menuiseries || 0
+      };
+
+      // Calcul des parois manquantes par catégorie
+      var missing = [];
+      var cats = ['murs','planchers','toitures','menuiseries'];
+      cats.forEach(function(ck) {
+        if (rendu[ck] < attendu[ck]) {
+          // Identifier précisément lesquelles manquent
+          // Les labels attendus sont dans _di[ck], les labels rendus sont inconnus à ce stade
+          // On signale le déficit avec les labels source (_di[ck])
+          var labelsSource = _di[ck] || [];
+          // On ne peut pas savoir exactement quels labels sont absents sans scanner le sheet,
+          // mais le compte dit combien manquent — on liste les dernières (ordre inverse = plus probable)
+          var deficit = attendu[ck] - rendu[ck];
+          // Heuristique : les labels manquants sont ceux qui n'ont pas été rendus.
+          // Sans re-scanner le sheet, on liste TOUS les labels de la catégorie et signale le déficit.
+          labelsSource.forEach(function(lbl, idx) {
+            // On liste uniquement les labels en surnombre (les 'deficit' derniers)
+            if (idx >= rendu[ck]) {
+              missing.push({ label: lbl, category: ck.toUpperCase() });
+            }
+          });
+        }
+      });
+
+      var ok = missing.length === 0;
+
+      if (ok) {
+        console.info('[VERIF EXPORT] OK — toutes les parois rendues : murs=' + rendu.murs
+          + ' planchers=' + rendu.planchers + ' toitures=' + rendu.toitures
+          + ' menuiseries=' + rendu.menuiseries);
+      } else {
+        console.error('[VERIF EXPORT] PAROIS MANQUANTES dans le rapport Excel :', {
+          attendu: attendu,
+          rendu:   rendu,
+          manquantes: missing.map(function(m){ return m.label + ' (' + m.category + ')'; })
+        });
+      }
+
+      return { ok: ok, missing: missing, counts: { attendu: attendu, rendu: rendu } };
+    }
+
+    // =====================================================================
     // EXPORT EXCEL
     // =====================================================================
     async function exportExcel() {
@@ -6724,10 +6884,28 @@ ${vtShort}`;
       // ── Reclassification sémantique ws2 : chaque paroi va dans sa "vraie" catégorie
       //   selon instance_label (mur/plancher/toiture/menuiserie), pas selon la section du champ.
       //   Évite qu'un "Paroi 1 — Mur…" apparaisse dans la section PLANCHERS.
+      //
+      // RÈGLE INVARIANTE (2026-04-30) : detectedInstances est la source de vérité absolue.
+      // Les regexes ci-dessous ne servent que de FALLBACK pour les labels non reconnus.
+      // "dalle" a été retiré de _WS2_RX_PLANCHER car une "Dalle de béton" peut être
+      // une toiture (dalle de toit) et non un plancher bas — seul detectedInstances sait.
       var _WS2_RX_MENUIS   = /fen[eê]tre|porte|baie|vitrage|menuiserie|ouvrant/i;
       var _WS2_RX_TOITURE  = /toiture|comble|plafond[\s-]*haut|plancher[\s-]*haut|rampant/i;
-      var _WS2_RX_PLANCHER = /plancher(?!\s*haut)|dalle(?!\s*(?:haut|haute|plafond|toiture))|vide[\s-]?san|terre[\s-]?plein/i;
+      var _WS2_RX_PLANCHER = /plancher(?!\s*haut)|vide[\s-]?san|terre[\s-]?plein|mitoyen(?!\s*mur)/i;
       var _WS2_RX_MUR      = /\bmur(?!\s*(?:porteur\s*mitoyen))|fa[çc]ade|paroi\s*opaque(?!\s*(?:bas|haut))/i;
+      // Précalcul du map normLabel → catégorie depuis detectedInstances (source de vérité)
+      var _di_ws2 = state.detectedInstances || {};
+      function _normLblWs2(lbl) {
+        return (lbl||'').toLowerCase()
+          .replace(/\bparoi\s+0*(\d+)/g, 'paroi $1')
+          .replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim()
+          .split(/\s*(?:—|–)\s*/)[0].trim();
+      }
+      var _diCatMapWs2 = {};
+      (_di_ws2.murs||[]).forEach(function(l){ _diCatMapWs2[_normLblWs2(l)] = 'mur'; });
+      (_di_ws2.planchers||[]).forEach(function(l){ _diCatMapWs2[_normLblWs2(l)] = 'plancher'; });
+      (_di_ws2.toitures||[]).forEach(function(l){ _diCatMapWs2[_normLblWs2(l)] = 'toiture'; });
+      (_di_ws2.menuiseries||[]).forEach(function(l){ _diCatMapWs2[_normLblWs2(l)] = 'menuiserie'; });
       function _ws2FindSection(kw) {
         var lc=kw.toLowerCase();
         for (var i=0;i<sectionOrder.length;i++){ if (sectionOrder[i].toLowerCase().indexOf(lc)>=0) return sectionOrder[i]; }
@@ -6756,6 +6934,8 @@ ${vtShort}`;
         }
       });
       // Assigne effectiveSection par résultat
+      // Priorité 1 : detectedInstances (source de vérité absolue pour les parois connues)
+      // Priorité 2 : inférence textuelle via regex (fallback pour labels non dans detectedInstances)
       state.analysisResults.forEach(function(rv){
         var origSec = getFieldSection(rv.id_champ) || '';
         rv._effectiveSection = origSec;
@@ -6765,10 +6945,17 @@ ${vtShort}`;
         var origIsParoi = /mur|plancher|toiture|menuis|paroi|fen[eê]tre|fenetre|ouvrant|enveloppe/.test(origLC);
         if (!origIsParoi) return;
         var inferred = null;
-        if (_WS2_RX_MENUIS.test(lbl))        inferred = 'menuiserie';
-        else if (_WS2_RX_TOITURE.test(lbl))  inferred = 'toiture';
-        else if (_WS2_RX_PLANCHER.test(lbl)) inferred = 'plancher';
-        else if (_WS2_RX_MUR.test(lbl))      inferred = 'mur';
+        // Priorité 1 : lookup dans detectedInstances
+        var normKey = _normLblWs2(rv.instance_label);
+        if (_diCatMapWs2[normKey] !== undefined) {
+          inferred = _diCatMapWs2[normKey];
+        } else {
+          // Priorité 2 : inférence textuelle (sans "dalle" pour éviter la confusion toiture/plancher)
+          if (_WS2_RX_MENUIS.test(lbl))        inferred = 'menuiserie';
+          else if (_WS2_RX_TOITURE.test(lbl))  inferred = 'toiture';
+          else if (_WS2_RX_PLANCHER.test(lbl)) inferred = 'plancher';
+          else if (_WS2_RX_MUR.test(lbl))      inferred = 'mur';
+        }
         if (inferred && _WS2_SEC[inferred]) rv._effectiveSection = _WS2_SEC[inferred];
       });
 
@@ -6954,31 +7141,39 @@ ${vtShort}`;
       }
 
       // Reclassification sémantique de detectedInstances avant le rendu
-      // Si un label dans 'murs' contient des mots de plancher ou toiture, le déplacer dans la bonne catégorie
+      // Si un label dans 'murs' contient des mots non ambigus de plancher ou toiture,
+      // le déplacer dans la bonne catégorie.
+      //
+      // RÈGLE INVARIANTE (2026-04-30) : "dalle" a été retiré de _SEM_PLANCHER.
+      // Une "Dalle de béton" placée en section Toitures par PASS 0 est une toiture,
+      // pas un plancher — la reclassification sémantique ne doit pas l'écraser.
       var _DI = state.detectedInstances || {};
-      var _SEM_PLANCHER = /plancher(?!\s*haut)|mitoyen(?!\s*mur)|dalle(?!\s*(?:haut|haute|plafond|toiture))|vide[\s-]san|terre[\s-]plein/i;
+      var _SEM_PLANCHER = /plancher(?!\s*haut)|mitoyen(?!\s*mur)|vide[\s-]san|terre[\s-]plein/i;
       var _SEM_TOITURE = /toiture|comble|plafond[\s-]*haut|plancher[\s-]*haut|rampant/i;
       if (_DI.murs) {
         _DI.murs = _DI.murs.filter(function(lbl) {
           if (_SEM_PLANCHER.test(lbl)) {
             if (!_DI.planchers) _DI.planchers = [];
             if (_DI.planchers.indexOf(lbl) < 0) _DI.planchers.push(lbl);
+            console.warn('[SEM-RECLASSIF] "' + lbl + '" déplacé de murs → planchers (mot-clé plancher/mitoyen détecté)');
             return false;
           }
           if (_SEM_TOITURE.test(lbl)) {
             if (!_DI.toitures) _DI.toitures = [];
             if (_DI.toitures.indexOf(lbl) < 0) _DI.toitures.push(lbl);
+            console.warn('[SEM-RECLASSIF] "' + lbl + '" déplacé de murs → toitures (mot-clé toiture détecté)');
             return false;
           }
           return true;
         });
       }
-      // Idem pour planchers → toitures si mal classé
+      // Idem pour planchers → toitures si mal classé (ex: plancher haut = toiture)
       if (_DI.planchers) {
         _DI.planchers = _DI.planchers.filter(function(lbl) {
           if (_SEM_TOITURE.test(lbl) && !/plancher\s*bas/i.test(lbl)) {
             if (!_DI.toitures) _DI.toitures = [];
             if (_DI.toitures.indexOf(lbl) < 0) _DI.toitures.push(lbl);
+            console.warn('[SEM-RECLASSIF] "' + lbl + '" déplacé de planchers → toitures (plancher haut/toiture détecté)');
             return false;
           }
           return true;
@@ -7050,6 +7245,10 @@ ${vtShort}`;
       ne5d.getCell(1).fill = xlFill(C.GRY_META);
       ne5d.getCell(1).font = xlFont(C.BLU_DARK, false, 9, true);
       ne5d.getCell(1).alignment = {vertical:'middle', horizontal:'left', wrapText:false};
+
+      // Accumulateur pour la 2ème vérification d'intégrité (verifyExportParoisIntegrity)
+      // Compté par catégorie : nombre de parois distinctes effectivement rendues dans l'onglet
+      var _verifRendered = { murs: 0, planchers: 0, toitures: 0, menuiseries: 0 };
 
       ENE_CATS.forEach(function(cat) {
         var catRes = eneGetResults(cat.catKey, cat.secKeys);
@@ -7136,6 +7335,9 @@ ${vtShort}`;
           ws5.getColumn(2+i*2+1).width=colW;
         });
 
+        // Comptage des instances rendues pour la 2ème vérification d'intégrité
+        _verifRendered[cat.catKey] = (_verifRendered[cat.catKey] || 0) + instances.length;
+
         // Lignes de données (une par instance)
         var alt=false;
         instances.forEach(function(inst){
@@ -7163,6 +7365,69 @@ ${vtShort}`;
           });
         });
       });
+
+      // ── DOUBLE VÉRIFICATION INTÉGRITÉ PAROIS (2ème ligne de défense) ────────────
+      // Utilise _DI (déjà reclassifié sémantiquement) comme source de vérité,
+      // et _verifRendered accumulé pendant le ENE_CATS.forEach ci-dessus.
+      var _integrity = verifyExportParoisIntegrity(wb, _DI, _verifRendered);
+      if (!_integrity.ok) {
+        // Action 1 : console.error explicite (déjà émis dans verifyExportParoisIntegrity)
+
+        // Action 2 : bandeau bloquant confirm() visible par l'utilisateur
+        var _missingLines = _integrity.missing.map(function(m){
+          return '• ' + m.label + ' (' + m.category + ')';
+        }).join('\n');
+        var _confirmMsg = '⚠️ Vérification d\'intégrité : '
+          + _integrity.missing.length + ' paroi(s) détectée(s) dans l\'audit ne se retrouve(nt) PAS dans le rapport Excel :\n\n'
+          + _missingLines
+          + '\n\nTélécharger quand même ? (Annuler = stopper l\'export)';
+        var _proceed = confirm(_confirmMsg);
+        if (!_proceed) {
+          console.warn('[VERIF EXPORT] Export annulé par l\'utilisateur suite à la détection de parois manquantes.');
+          return;
+        }
+
+        // Action 3 : onglet _DIAGNOSTIC ajouté au workbook (seulement si KO + utilisateur confirme)
+        var _wsDiag = wb.addWorksheet('_DIAGNOSTIC');
+        _wsDiag.columns = [{width:28},{width:60}];
+        var _diagDate = new Date().toLocaleString('fr-FR');
+        _wsDiag.addRow(['_DIAGNOSTIC — Généré le', _diagDate]);
+        _wsDiag.addRow(['Bug détecté', 'Paroi(s) présente(s) dans l\'audit PDF mais absente(s) du rapport Excel']);
+        _wsDiag.addRow([]);
+        _wsDiag.addRow(['PAROIS ATTENDUES (PASS 0 — source vérité)', '']);
+        ['murs','planchers','toitures','menuiseries'].forEach(function(ck) {
+          var labels = (_DI[ck]||[]);
+          if (labels.length > 0) {
+            _wsDiag.addRow(['  ' + ck.toUpperCase() + ' (' + labels.length + ')', labels.join(' | ')]);
+          }
+        });
+        _wsDiag.addRow([]);
+        _wsDiag.addRow(['PAROIS RENDUES (onglet Parois)', '']);
+        ['murs','planchers','toitures','menuiseries'].forEach(function(ck) {
+          _wsDiag.addRow(['  ' + ck.toUpperCase(), String(_verifRendered[ck] || 0)]);
+        });
+        _wsDiag.addRow([]);
+        _wsDiag.addRow(['PAROIS MANQUANTES', '']);
+        _integrity.missing.forEach(function(m) {
+          _wsDiag.addRow(['  ' + m.category, m.label]);
+        });
+        // Style minimal : fond rouge clair sur les en-têtes
+        [1,2,4,8,10].forEach(function(rn) {
+          var row = _wsDiag.getRow(rn);
+          row.eachCell(function(cell) {
+            cell.fill = { type:'pattern', pattern:'solid', fgColor:{ argb:'FFFFCCCC' } };
+            cell.font = { bold: true };
+          });
+        });
+        _integrity.missing.forEach(function(m, idx) {
+          var row = _wsDiag.getRow(11 + idx);
+          row.eachCell(function(cell) {
+            cell.fill = { type:'pattern', pattern:'solid', fgColor:{ argb:'FFFFEEEE' } };
+            cell.font = { color:{ argb:'FF990000' }, bold: true };
+          });
+        });
+      }
+      // ── FIN DOUBLE VÉRIFICATION ──────────────────────────────────────────────
 
       var dossierName = (state.dossierName || '').trim().replace(/[^a-zA-Z0-9À-ÿ _-]/g, '').replace(/\s+/g, '_') || 'Analyse';
       var dateFile='OTEnergie_' + dossierName + '_' + new Date().toISOString().slice(0,10)+'.xlsx';
