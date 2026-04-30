@@ -6969,7 +6969,15 @@ ${vtShort}`;
         }
         firstSect2=false;
         mrow(ws2,['   \u203a  '+sec,'','','','','','',''],N1,SECT_BG2,SECT_TXT2,{bold:true,sz:10,italic:true},16);
+        // Détection sections paroi pour séparation visuelle entre instances
+        var _secIsParoi2 = /mur|plancher|toiture|menuis|paroi|enveloppe/i.test(sec);
+        var _prevInstLbl2 = null;
         secR.forEach(function(rv){
+          // Ligne vide entre instances successives dans les sections paroi
+          if (_secIsParoi2 && rv.instance_label && _prevInstLbl2 !== null && rv.instance_label !== _prevInstLbl2) {
+            ws2.addRow(['','','','','','','','']).height = 6;
+          }
+          if (_secIsParoi2 && rv.instance_label) _prevInstLbl2 = rv.instance_label;
           var g=GRP[rv.statut]||GRP.MANQUANT;
           var lib=rv.instance_label?getFieldNom(rv.id_champ)+' \u2014 '+rv.instance_label:getFieldNom(rv.id_champ);
           var vfCell=buildVerifCell(rv);
@@ -7339,8 +7347,14 @@ ${vtShort}`;
         _verifRendered[cat.catKey] = (_verifRendered[cat.catKey] || 0) + instances.length;
 
         // Lignes de données (une par instance)
+        // Une ligne vide est insérée entre chaque instance pour la lisibilité (pas avant la 1ère, pas après la dernière)
         var alt=false;
-        instances.forEach(function(inst){
+        instances.forEach(function(inst, instIdx){
+          // Séparation visuelle entre instances (pas avant la première)
+          if (instIdx > 0) {
+            var sepRow = ws5.addRow([]);
+            sepRow.height = 6;
+          }
           var instNorm = inst.norm, instDisp = inst.display;
           var rowBg=alt?'FFF8FBFF':'FFFFFFFF'; alt=!alt;
           var dVals=[instDisp];
