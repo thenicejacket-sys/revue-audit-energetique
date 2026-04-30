@@ -2241,6 +2241,124 @@
     const STORAGE_KEY_HISTORY = 'otenergie_history';
 
     // =====================================================================
+    // REGISTRE DES ÉQUIVALENCES SÉMANTIQUES
+    // Source unique de vérité pour les synonymes audit/VT (ex: RDC=1, R+1=2,
+    // "Avant 1948"=1947). Utilisé par toNiveaux/toDept/etc. ET par les prompts
+    // LLM, pour éviter de maintenir les mêmes règles en 4 endroits différents.
+    //
+    // Pour ajouter une équivalence : éditer ICI uniquement.
+    // Vérifié le 2026-04-30 lors du refactor DRY synonymes.
+    // =====================================================================
+    var SEMANTIC_EQUIVALENCES = {
+      niveaux: {
+        label: "Nombre de niveaux",
+        fieldKeywords: ["niveau", "étage", "etage"],
+        synonyms: {
+          "rdc": 1,
+          "r": 1,
+          "rez-de-chaussée": 1,
+          "rezdechaussée": 1,
+          "rezdechaussé": 1,
+          "rdc+0": 1,
+          "r+1": 2,
+          "r+2": 3,
+          "r+3": 4,
+          "r+4": 5,
+          "r+5": 6
+        },
+        rPlusPattern: /^r\+(\d+)$/,
+        promptDescription: '"RDC" = "rez-de-chaussée" = "1" = "1,0" = 1 niveau ; "R+1" = 2 niveaux ; "R+2" = 3 niveaux ; etc. Si les deux valeurs représentent le même nombre de niveaux → VERT.'
+      },
+      annee_construction: {
+        label: "Année de construction",
+        fieldKeywords: ["année.*construction", "annee.*construction", "année.*const"],
+        synonyms: {
+          "avant 1948": 1947,
+          "avant1948": 1947,
+          "avant 1975": 1974,
+          "avant1975": 1974,
+          "avant 1990": 1989,
+          "avant1990": 1989,
+          "avant 2000": 1999,
+          "avant2000": 1999
+        },
+        promptDescription: '"Avant 1948" ≈ 1947, "Avant 1975" ≈ 1974, "Avant 1990" ≈ 1989, "Avant 2000" ≈ 1999. Si l\'audit donne une période ("Avant 1948") et la VT une année exacte, comparer à la borne supérieure → VERT si l\'année VT < borne audit.'
+      },
+      departement: {
+        label: "Département",
+        fieldKeywords: ["département", "departement"],
+        normalize: function(v) {
+          var s = String(v || '').trim();
+          if (/^\d{5}$/.test(s)) return s.slice(0, 2);
+          if (/^\d{2,3}$/.test(s)) return s.padStart(2, '0');
+          return s;
+        },
+        promptDescription: 'Le département est identifié par les 2 premiers chiffres du code postal. "88200 Remiremont" → "88". Si dept VT = dept Audit → VERT.'
+      }
+    };
+
+    /**
+     * Résout une valeur audit/VT vers sa forme normalisée
+     * en consultant le registre SEMANTIC_EQUIVALENCES.
+     *
+     * @param {string} value   - Valeur brute audit/VT
+     * @param {string} equivKey - Clé du registre ("niveaux", "annee_construction", "departement")
+     * @returns {number|string|null}
+     */
+    function resolveEquivalence(value, equivKey) {
+      var entry = SEMANTIC_EQUIVALENCES[equivKey];
+      if (!entry) return null;
+      var str = String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+      var strNoSpace = str.replace(/\s+/g, '');
+
+      if (entry.synonyms) {
+        if (entry.synonyms[str] !== undefined) return entry.synonyms[str];
+        if (entry.synonyms[strNoSpace] !== undefined) return entry.synonyms[strNoSpace];
+      }
+
+      if (entry.rPlusPattern) {
+        var m = strNoSpace.match(entry.rPlusPattern);
+        if (m) return 1 + parseInt(m[1], 10);
+      }
+
+      if (typeof entry.normalize === 'function') {
+        return entry.normalize(value);
+      }
+
+      var n = parseFloat(strNoSpace.replace(',', '.'));
+      return isNaN(n) ? null : n;
+    }
+
+    /**
+     * Retourne la clé d'équivalence applicable à un nom de champ.
+     *
+     * @param {string} fieldNom - Nom du champ (ex: "Nombre de niveaux")
+     * @returns {string|null}
+     */
+    function getEquivalenceKey(fieldNom) {
+      if (!fieldNom) return null;
+      var lower = String(fieldNom).toLowerCase();
+      for (var key in SEMANTIC_EQUIVALENCES) {
+        var kws = SEMANTIC_EQUIVALENCES[key].fieldKeywords || [];
+        for (var i = 0; i < kws.length; i++) {
+          if (new RegExp(kws[i]).test(lower)) return key;
+        }
+      }
+      return null;
+    }
+
+    // Génération du bloc de texte pour les prompts LLM — source unique depuis le registre
+    var SEMANTIC_PROMPT_BLOCK = '';
+    (function() {
+      for (var k in SEMANTIC_EQUIVALENCES) {
+        var e = SEMANTIC_EQUIVALENCES[k];
+        if (e.promptDescription) {
+          SEMANTIC_PROMPT_BLOCK += '\n- ' + e.label + ' : ' + e.promptDescription;
+        }
+      }
+    })();
+
+    // =====================================================================
     // SUPABASE SYNC — partage feedbacks Maya + historique reports
     // (fallback silencieux localStorage si API down)
     // =====================================================================
@@ -3556,13 +3674,12 @@
           return m ? parseFloat(m[1]) : null;
         };
         // Normalise un nombre de niveaux : RDC=1, R+1=2, R+2=3, "1"=1, "1,0"=1, etc.
+        // D\u00e9l\u00e8gue au registre SEMANTIC_EQUIVALENCES["niveaux"] \u2014 \u00e9diter l\u00e0-haut uniquement.
         var toNiveaux = function(s) {
-          var str = String(s || '').trim().toLowerCase().replace(/\s+/g, '');
-          if (str === 'rdc' || str === 'r' || str === 'rez-de-chauss\u00e9e' || str === 'rezdeplauss\u00e9e' || str === 'rezdeplauss\u00e9' || str.startsWith('rdc+0')) return 1;
-          var rPlus = str.match(/^r\+(\d+)$/);
-          if (rPlus) return 1 + parseInt(rPlus[1]);
-          var n = parseFloat(str.replace(',', '.'));
-          return isNaN(n) ? null : Math.round(n);
+          var v = resolveEquivalence(s, 'niveaux');
+          if (v === null) return null;
+          if (typeof v === 'number' && !isNaN(v)) return Math.round(v);
+          return null;
         };
 
         // Regle departement : extrait les 2 premiers chars du code postal VT pour determiner le dept
@@ -3582,15 +3699,10 @@
           const fieldNom = (getFieldNom(rv.id_champ) || '').toLowerCase();
 
           // ---- Règle département ----
+          // Délègue au registre SEMANTIC_EQUIVALENCES["departement"] — éditer là-haut uniquement.
           if (fieldNom.includes('d\u00e9partement') || fieldNom.includes('departement')) {
-            const toDept = function(v) {
-              var s = String(v || '').trim();
-              if (/^\d{5}$/.test(s)) return s.slice(0, 2); // code postal 5 chiffres -> 2 premiers
-              if (/^\d{2,3}$/.test(s)) return s.padStart(2, '0'); // deja un dept
-              return s;
-            };
-            var deptVT    = rv.valeur_vt    ? toDept(rv.valeur_vt)    : rv.valeur_vt;
-            var deptAudit = rv.valeur_audit ? toDept(rv.valeur_audit) : rv.valeur_audit;
+            var deptVT    = rv.valeur_vt    ? resolveEquivalence(rv.valeur_vt, 'departement')    : rv.valeur_vt;
+            var deptAudit = rv.valeur_audit ? resolveEquivalence(rv.valeur_audit, 'departement') : rv.valeur_audit;
             var newStatut = rv.statut;
             var newComment = rv.commentaire || '';
             if (deptVT && deptAudit && deptVT === deptAudit) {
@@ -4406,10 +4518,8 @@ RÈGLE TRANCHES ET PÉRIODES (VERT automatique) :
 - Ex: Audit="1948-1974", VT="1960" → VERT car 1960 ∈ [1948,1974].
 - Ex: Audit="45-80 m²", VT="65 m²" → VERT.
 
-RÈGLE ÉQUIVALENCES SÉMANTIQUES NIVEAUX (VERT automatique) :
-- "RDC" = "rez-de-chaussée" = "1" = "1,0" = 1 niveau → si Audit="1" et VT="RDC" → VERT.
-- "R+1" = 2 niveaux, "R+2" = 3 niveaux, etc.
-- Si les deux valeurs représentent le même nombre de niveaux → VERT.
+RÈGLE ÉQUIVALENCES SÉMANTIQUES (VERT automatique) :
+${SEMANTIC_PROMPT_BLOCK}
 
 RÈGLE ÉQUIVALENCES OUI/NON (VERT automatique) :
 - "Non isolé", "non doublé", "sans isolation", "pas d'isolation" dans l'Audit ↔ "Non" dans la VT (pour un champ isolation/doublage) → VERT. Les deux expriment l'absence d'isolation.
@@ -5113,7 +5223,7 @@ CONTRÔLES À EFFECTUER SUR CHAQUE RÉSULTAT :
    - Les VT ne contiennent PAS de surfaces individuelles par paroi. Si une surface VT = surface audit → hallucination.
 5. ÉQUIVALENCES SÉMANTIQUES (pour les ROUGE) :
    - "Non isolé" vs "Non" → même sens → corriger_statut VERT
-   - "1,0" vs "RDC" → même sens → corriger_statut VERT
+   - Équivalences niveaux (${SEMANTIC_EQUIVALENCES.niveaux.promptDescription}) → corriger_statut VERT si même nombre de niveaux
    - "Référence paroi" = type d'adjacence (Extérieur, Terre-Plein, Locaux non chauffés, etc.)
 6. MANQUANT RÉCUPÉRABLES : la valeur existe-t-elle dans la VT sous un synonyme ou libellé différent ?
 
