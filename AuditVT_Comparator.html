@@ -4757,6 +4757,183 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
       // on force la valeur pré-extraite qui est fiable (extraction directe du document).
       if (parsed.resultats && parsed.resultats.length > 0) {
         parsed.resultats = parsed.resultats.map(function(rv) {
+          /**
+           * RÈGLE INVARIANTE — Affichage des valeurs Audit / VT (validation typée)
+           * -----------------------------------------------------------------------
+           * La valeur extraite par le LLM DOIT être affichée telle quelle dans la grille,
+           * y compris si elle contient une virgule décimale française (ex: "53,00 m²").
+           * Ne JAMAIS faire transiter la string d'affichage par parseFloat — JS perd
+           * la partie numérique car parseFloat("53,00") retourne 53 mais parseFloat("53,00 m²") retourne NaN.
+           * La conversion numérique est UNIQUEMENT pour la comparaison statut conforme/écart,
+           * pas pour le rendu visuel.
+           *
+           * VALIDATION TYPÉE : chaque champ se voit attribuer un type ('number' | 'text' | 'mixed')
+           * inféré depuis son nom via _inferFieldType(). Ce type détermine si une valeur sans chiffre
+           * est légitime (champ text : "Oui", "RDC", "Appartement") ou corrompue (champ number : "m²").
+           *
+           * Cette approche REMPLACE l'heuristique fragile _isUnitOnly qui produisait des faux positifs
+           * sur les valeurs textuelles courtes ("Oui", "RDC", "Avant 1948", "Extérieur", "Appartement").
+           * _isUnitOnly est conservée comme garde supplémentaire UNIQUEMENT sur les champs 'mixed'.
+           *
+           * Vérifié le 2026-04-30 suite au bug Surface de référence (audit affichait juste "m²").
+           */
+
+          /**
+           * Infère le type attendu d'un champ depuis son nom.
+           * Retourne 'number', 'text', ou 'mixed'.
+           *
+           * Règles :
+           *   - 'number' : tout champ portant une unité dimensionnelle ou un terme quantitatif
+           *     (surface, superficie, hauteur, altitude, année, profondeur, épaisseur, résistance,
+           *      R, U, λ, inertie, déperdition, perméabilité, surface paroi, surface ouvrant, etc.)
+           *   - 'text' : enumerations et descripteurs qualitatifs
+           *     (type, adjacence, matériau, état, orientation, nature, doublage, local, zone, etc.)
+           *   - 'mixed' : ambigu ou non classifiable → on n'invalide rien dans ce cas
+           *
+           * @param {string} nom - Nom du champ (ex: "Surface de référence", "Type de bien")
+           * @returns {'number'|'text'|'mixed'}
+           */
+          var _inferFieldType = function(nom) {
+            if (!nom) return 'mixed';
+            var n = nom.toLowerCase()
+              .replace(/[éèêë]/g,'e').replace(/[àâä]/g,'a').replace(/[ùûü]/g,'u')
+              .replace(/[îï]/g,'i').replace(/[ôö]/g,'o').replace(/[ç]/g,'c');
+
+            // Champs NUMBER : présence d'un terme quantitatif ou d'une unité implicite
+            var numberPatterns = [
+              /surface/,        // surface de reference, surface paroi, surface ouvrant, etc.
+              /superficie/,
+              /hauteur/,
+              /altitude/,
+              /annee|age\b/,    // annee de construction
+              /epaisseur/,
+              /profondeur/,
+              /resistance|resista/,  // resistance thermique, R
+              /\bR\b|\bU\b|\blambda\b/, // R, U, λ
+              /uw\b|ug\b|ujn\b/,
+              /inertie/,
+              /deperdition/,
+              /permeabilite/,
+              /coefficient/,
+              /niveau.*chal|niveau.*bsth/,  // niveau de performance
+              /periode|annees?$/,
+              /nombre.*niveau|nb.*niveau/,  // nombre de niveaux (mixte possible mais souvent num)
+              /poids|masse/,
+              /longueur|largeur/,
+              /volume/,
+              /puissance/,
+              /debit/,
+              /temperature/,
+              /kwh|kw\b/,
+              /watt/,
+              /\bsh?ab\b/,      // SHAB, SDP
+              /\bsdp\b/,
+              /\bshon\b/,
+            ];
+            for (var ni = 0; ni < numberPatterns.length; ni++) {
+              if (numberPatterns[ni].test(n)) return 'number';
+            }
+
+            // Champs TEXT : énumérations et descripteurs qualitatifs
+            var textPatterns = [
+              /type\b/,           // type de bien, type d'adjacence, type de chauffage, etc.
+              /adjacence/,
+              /materiau|materiaux/,
+              /etat\b/,           // etat d'isolation, etat de la paroi
+              /orientation/,
+              /nature\b/,         // nature du sol
+              /doublage/,
+              /\blocal\b/,        // local non deperditif
+              /zone\b/,
+              /secteur/,
+              /\bposition\b/,
+              /mitoyen/,
+              /usage\b/,
+              /\btypo/,           // typologie
+              /categorie/,
+              /classe\b/,
+              /notation/,
+              /reference\b.*paroi/, // reference paroi (adjacence)
+              /paroi.*reference/,
+              /mitoyennete/,
+              /exposition/,
+              /description/,
+              /commentaire/,
+              /observation/,
+              /denomination/,
+              /appellation/,
+              /\bnom\b/,
+              /\bmarque\b/,
+              /fabricant/,
+              /modele\b/,
+              /\bprovenance/,
+              /\borigine\b/,
+              /vitrage/,          // type de vitrage (double, triple...) → texte
+              /menuiserie\b/,     // type de menuiserie
+              /\bvolet/,
+              /\bfen.tre\b|\bporte\b/,
+              /qualite\b/,
+              /\bclasse.*perf/,
+              /isolation.*type|type.*isolation/,
+              /generateur/,
+              /energie\b/,        // type d'energie
+              /\bcombustible/,
+            ];
+            for (var ti = 0; ti < textPatterns.length; ti++) {
+              if (textPatterns[ti].test(n)) return 'text';
+            }
+
+            // Cas non classifiable → mixed (accepté sans invalider)
+            return 'mixed';
+          };
+
+          /**
+           * Valide qu'une valeur extraite est cohérente avec le type attendu du champ.
+           *
+           * - 'number' : doit contenir AU MOINS un chiffre.
+           *   Si la valeur ne contient aucun chiffre → invalide (le LLM a renvoyé seulement l'unité).
+           * - 'text'   : toujours valide, quelle que soit la valeur ("Oui", "RDC", "Appartement"…).
+           * - 'mixed'  : délègue à _isUnitOnly pour attraper les cas évidents (ex: "m²" seul),
+           *   mais préserve les valeurs textuelles ambiguës.
+           *
+           * @param {string} value     - Valeur brute renvoyée par le LLM
+           * @param {string} fieldType - 'number' | 'text' | 'mixed'
+           * @returns {boolean} true si la valeur est valide pour ce type
+           */
+          var _isUnitOnly = function(s) {
+            // Conservé uniquement pour le cas 'mixed' (garde supplémentaire sur les unités pures évidentes)
+            if (!s) return false;
+            var trimmed = s.trim();
+            if (/\d/.test(trimmed)) return false;
+            return /^[\s\-\/\.·%°²³a-zA-ZÀ-ÿ²³]+$/.test(trimmed) && trimmed.length <= 15;
+          };
+
+          var _isValidForFieldType = function(value, fieldType) {
+            if (value == null || String(value).trim() === '') return false; // vide = toujours invalide
+            if (fieldType === 'text') return true;    // texte qualitatif : tout est valide
+            if (fieldType === 'number') {
+              return /\d/.test(String(value));         // doit contenir au moins un chiffre
+            }
+            // mixed : garde supplémentaire — invalide seulement les unités orphelines évidentes
+            return !_isUnitOnly(String(value));
+          };
+
+          // Résoudre le type du champ courant depuis le batch (fields est en closure)
+          var _currentField = fields.find(function(f) { return f.id === rv.id_champ; });
+          var _fieldType    = _currentField ? _inferFieldType(_currentField.nom) : 'mixed';
+
+          // Sanity-check typé : invalider la valeur si incohérente avec le type attendu
+          var _auditRaw = (rv.valeur_audit || '').trim();
+          var _vtRaw    = (rv.valeur_vt    || '').trim();
+          if (!_isValidForFieldType(_auditRaw, _fieldType)) {
+            console.warn('[TYPE-MISMATCH-AUDIT] champ="' + rv.id_champ + '" nom="' + (_currentField ? _currentField.nom : '?') + '" type=' + _fieldType + ' valeur="' + _auditRaw + '" → null');
+            rv = Object.assign({}, rv, { valeur_audit: null });
+          }
+          if (!_isValidForFieldType(_vtRaw, _fieldType)) {
+            console.warn('[TYPE-MISMATCH-VT] champ="' + rv.id_champ + '" nom="' + (_currentField ? _currentField.nom : '?') + '" type=' + _fieldType + ' valeur="' + _vtRaw + '" → null');
+            rv = Object.assign({}, rv, { valeur_vt: null });
+          }
+
           // Enforcement Audit : preExtracted contient les valeurs BATIAUDIT fiables
           var preAudit = preExtracted[rv.id_champ];
           if (preAudit) {
@@ -4765,7 +4942,7 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
             var aiHasDigit  = /\d/.test(aiAudit);
             // Cas 1 : IA a retourné vide/null → utiliser pré-extrait
             // Cas 2 : pré-extrait contient un nombre mais IA n'en a pas (ex: "m²" au lieu de "36,00 m²")
-            if (!aiAudit || (preHasDigit && !aiHasDigit && aiAudit.length < 10)) {
+            if (!aiAudit || (preHasDigit && !aiHasDigit)) {
               console.log('[ENFORCE-AUDIT] "' + rv.id_champ + '" : IA="' + aiAudit + '" → forcé="' + preAudit + '"');
               rv = Object.assign({}, rv, { valeur_audit: preAudit });
             }
@@ -4776,7 +4953,7 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
             var aiVt = (rv.valeur_vt || '').trim();
             var preVtHasDigit = /\d/.test(preVt);
             var aiVtHasDigit  = /\d/.test(aiVt);
-            if (!aiVt || (preVtHasDigit && !aiVtHasDigit && aiVt.length < 10)) {
+            if (!aiVt || (preVtHasDigit && !aiVtHasDigit)) {
               console.log('[ENFORCE-VT] "' + rv.id_champ + '" : IA="' + aiVt + '" → forcé="' + preVt + '"');
               rv = Object.assign({}, rv, { valeur_vt: preVt });
             }
