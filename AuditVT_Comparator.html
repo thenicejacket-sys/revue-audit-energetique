@@ -4462,6 +4462,62 @@
     // Exposer pour utilisation depuis la console navigateur
     window.kbMigrateHistory = kbMigrateHistory;
 
+    /**
+     * Formate un nombre en notation française (7.53 → "7,53").
+     * @param {number} n
+     * @returns {string}
+     */
+    function _frNum(n) {
+      if (n == null || isNaN(n)) return '?';
+      return String(Math.round(n * 100) / 100).replace('.', ',');
+    }
+
+    /**
+     * RÈGLE INVARIANTE — Affichage détaillé des surfaces de paroi
+     * -----------------------------------------------------------
+     * Quand le VT décompose une paroi en plusieurs sous-surfaces, on DOIT afficher
+     * dans la colonne "Valeur VT" :
+     *  - NET  : la somme des surfaces à isoler (si distincte du brut)
+     *  - BRUT : la somme détaillée des façades (v1 + v2 + ... = total)
+     * Pour permettre à l'utilisateur de comparer directement le total VT au cumul
+     * brut donné par l'audit (ex: audit 18,01 m² ↔ BRUT VT 7,53 + 6,39 + ... = 18,45).
+     *
+     * Ce format évite les faux ORANGE quand l'audit donne le cumul brut et le VT ne
+     * montrait qu'une seule sous-valeur isolée.
+     *
+     * Vérifié le 2026-04-30 suite au bug Paroi 1 Mur pierre de taille (audit 18,01 m²
+     * vs VT 8,07 m² seul → faux orange).
+     *
+     * @param {Object} detail - Objet valeur_vt_detail retourné par le LLM
+     * @returns {string|null} String d'affichage multi-lignes ou null si detail absent/invalide
+     */
+    function formatParoiSurface(detail) {
+      if (!detail || !detail.type) return null;
+      var unit = detail.unit || 'm²';
+      if (detail.type === 'single') {
+        if (detail.value == null || isNaN(detail.value)) return null;
+        var prefix = detail.is_net ? 'NET : ' : '';
+        return prefix + _frNum(detail.value) + ' ' + unit;
+      }
+      if (detail.type === 'paroi_multi') {
+        var lines = [];
+        if (detail.net != null && !isNaN(detail.net)) {
+          lines.push('NET  : ' + _frNum(detail.net) + ' ' + unit + ' (surface à isoler)');
+        }
+        if (detail.brut_parts && detail.brut_parts.length > 0) {
+          var validParts = detail.brut_parts.filter(function(p){ return p != null && !isNaN(p); });
+          if (validParts.length > 0) {
+            var sum = detail.brut_total != null && !isNaN(detail.brut_total)
+              ? detail.brut_total
+              : validParts.reduce(function(a, b){ return a + b; }, 0);
+            lines.push('BRUT : ' + validParts.map(_frNum).join(' + ') + ' = ' + _frNum(sum) + ' ' + unit);
+          }
+        }
+        return lines.length > 0 ? lines.join('\n') : null;
+      }
+      return null;
+    }
+
     async function callAI(fields, auditText, vtText, preExtracted, instanceHints) {
       preExtracted = preExtracted || {};
       instanceHints = instanceHints || {};
@@ -4715,6 +4771,33 @@ Pour CHAQUE valeur non-MANQUANT que tu retournes, tu DOIS fournir l'extrait exac
 - INTERDIT de paraphraser ou reformuler — copie-colle le texte exact tel qu'il apparaît dans le document.
 - Si tu ne peux pas citer un extrait exact pour une valeur → cette valeur doit être MANQUANT. Pas de valeur sans source.
 
+RÈGLE SURFACES DE PAROI MULTI-FAÇADES (CRITIQUE — AFFICHAGE COMPARAISON) :
+Pour tout champ "Surface (m²)" d'une paroi (mur, plancher, toiture), le tableau FACADES de la VT décompose souvent la surface en plusieurs lignes par orientation ou étage.
+→ Tu DOIS scanner TOUTES les lignes du tableau FACADES de la VT qui concernent cette paroi, pas seulement la première.
+→ Remplis obligatoirement le champ "valeur_vt_detail" dans ta réponse pour ce type de champ :
+
+CAS A — plusieurs lignes de surfaces dans la VT pour cette paroi :
+- Identifie toutes les sous-surfaces brutes (ex: "7,53 m²", "6,39 m²", "3,07 m²", "1,46 m²")
+- Si une valeur "surface à isoler" ou "surface nette" est explicitement présente (souvent inférieure au total brut) → c'est le "net"
+- valeur_vt_detail = { "type": "paroi_multi", "net": <nombre ou null>, "brut_parts": [<liste de nombres>], "brut_total": <somme>, "unit": "m²" }
+- valeur_vt = laisse vide (sera générée par le JS depuis valeur_vt_detail)
+
+CAS B — une seule valeur dans la VT, et on sait que c'est la surface à isoler (nette) :
+- valeur_vt_detail = { "type": "single", "value": <nombre>, "is_net": true, "unit": "m²" }
+- valeur_vt = la valeur en string (ex: "8,07 m²")
+
+CAS C — une seule valeur dans la VT, pas d'information sur net/brut :
+- valeur_vt_detail = { "type": "single", "value": <nombre>, "is_net": false, "unit": "m²" }
+- valeur_vt = la valeur en string
+
+CAS D — aucune valeur surface trouvée :
+- valeur_vt = MANQUANT, valeur_vt_detail omis
+
+RÈGLE STATUT pour les surfaces multi-façades :
+- Compare TOUJOURS le brut_total (ou la valeur unique si single) avec valeur_audit pour déterminer VERT/ORANGE/ROUGE.
+- Si brut_total ≈ valeur_audit (±5%) → VERT même si le net seul diffère.
+- INTERDIT de mettre ORANGE/ROUGE si le total brut VT correspond à l'audit — c'est seulement la décomposition qui diffère.
+
 Réponds UNIQUEMENT en JSON valide, sans markdown, sans commentaire.`;
 
       // Synonymes VT pour les champs de surface générale du logement (SHAB)
@@ -4786,6 +4869,7 @@ FORMAT DE RÉPONSE (JSON strict) :
       "valeur_audit": "...",
       "extrait_audit": "phrase exacte copiée du document Audit (ou vide si MANQUANT)",
       "valeur_vt": "...",
+      "valeur_vt_detail": { "type": "paroi_multi|single", "net": null, "brut_parts": [], "brut_total": null, "value": null, "is_net": false, "unit": "m²" },
       "extrait_vt": "phrase exacte copiée de la VT (ou vide si MANQUANT)",
       "statut": "VERT|ORANGE|ROUGE|MANQUANT",
       "commentaire": "..."
@@ -4795,6 +4879,7 @@ FORMAT DE RÉPONSE (JSON strict) :
     { "champ_id": "...", "terme_suggere": "..." }
   ]
 }
+NOTE : valeur_vt_detail est OPTIONNEL — ne le fournis QUE pour les champs surface de paroi (mur/plancher/toiture). Pour tous les autres champs, omets-le.
 RAPPEL : si un champ en entrée a déjà "instance_label" renseigné → retourne EXACTEMENT 1 résultat pour cette instance. Copie l'instance_label tel quel dans ta réponse. Ne retourne pas d'autres instances pour ce champ.
 Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans la réponse (sauf si plusieurs instances à retourner selon le bloc INSTANCES ci-dessus).`;
 
@@ -5068,6 +5153,45 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
               rv = Object.assign({}, rv, { valeur_vt: preVt });
             }
           }
+
+          // ── Formatage détaillé des surfaces de paroi (valeur_vt_detail) ──────
+          // Si le LLM a retourné un objet valeur_vt_detail (surfaces multi-façades),
+          // on génère la string d'affichage depuis cet objet et on remplace valeur_vt.
+          // Le statut est recalculé en utilisant le total brut pour la comparaison.
+          if (rv.valeur_vt_detail && rv.valeur_vt_detail.type) {
+            var _vtDetailFormatted = formatParoiSurface(rv.valeur_vt_detail);
+            if (_vtDetailFormatted) {
+              rv = Object.assign({}, rv, { valeur_vt: _vtDetailFormatted });
+              console.log('[PAROI-DETAIL] champ="' + rv.id_champ + '" instance="' + (rv.instance_label||'') + '" → "' + _vtDetailFormatted.replace(/\n/g, ' | ') + '"');
+            }
+            // Recalcul du statut via brut_total si disponible
+            var _det = rv.valeur_vt_detail;
+            var _brutTotal = null;
+            if (_det.type === 'paroi_multi' && _det.brut_total != null && !isNaN(_det.brut_total)) {
+              _brutTotal = _det.brut_total;
+            } else if (_det.type === 'single' && _det.value != null && !isNaN(_det.value)) {
+              _brutTotal = _det.value;
+            }
+            if (_brutTotal != null && rv.valeur_audit) {
+              var _auditNum = parseFloat(String(rv.valeur_audit).replace(',', '.').replace(/[^0-9.]/g, ''));
+              if (!isNaN(_auditNum) && _auditNum > 0) {
+                var _ecartPct = Math.abs(_brutTotal - _auditNum) / _auditNum;
+                var _newStatut;
+                if (_ecartPct <= 0.05) {
+                  _newStatut = 'VERT';
+                } else if (_ecartPct <= 0.10) {
+                  _newStatut = 'ORANGE';
+                } else {
+                  _newStatut = 'ROUGE';
+                }
+                if (_newStatut !== rv.statut) {
+                  console.log('[PAROI-STATUT] champ="' + rv.id_champ + '" : statut "' + rv.statut + '" → "' + _newStatut + '" (brut=' + _brutTotal + ' m² vs audit=' + _auditNum + ' m², écart=' + Math.round(_ecartPct*100) + '%)');
+                  rv = Object.assign({}, rv, { statut: _newStatut });
+                }
+              }
+            }
+          }
+
           return rv;
         });
       }
@@ -5763,7 +5887,7 @@ ${vtShort}`;
             '<td>' + rowNum + '</td>' +
             '<td><strong>' + escHtml(r.id_champ || '') + '</strong><br><span style="font-size:11px;color:var(--text-muted)">' + escHtml(getFieldNom(r.id_champ)) + '</span>' + instanceTag + '</td>' +
             '<td style="max-width:180px;font-size:12px">' + escHtml(r.valeur_audit || '\u2014') + '</td>' +
-            '<td style="max-width:180px;font-size:12px">' + escHtml(r.valeur_vt || '\u2014') + '</td>' +
+            '<td style="max-width:180px;font-size:12px;white-space:pre-line">' + escHtml(r.valeur_vt || '\u2014') + '</td>' +
             '<td>' + statusChip(r.statut) + '</td>' +
             confCell +
             '<td style="max-width:200px;font-size:12px;color:var(--text-muted)">' + escHtml(r.commentaire || '\u2014') + (r._maya_corrected ? ' <span style="display:inline-block;margin-top:3px;padding:1px 7px;background:#7B2D8E;color:white;border-radius:10px;font-size:9px;font-weight:700">&#10022; Maya</span>' : '') + '</td>' +
@@ -7026,10 +7150,13 @@ ${vtShort}`;
       // Calcule la hauteur de ligne en fonction du contenu des colonnes E et F
       function calcRowH(rv, vfCell) {
         // Col E : Commentaire IA — Calibri 10, largeur ~52 chars
-        // Col F masquée → hauteur basée uniquement sur col E
+        // Col C : Valeur VT — peut être multi-lignes (surfaces multi-façades)
         var comment = rv.commentaire || '';
         var linesE = Math.max(1, Math.ceil(comment.length / 52));
-        return Math.max(linesE * 13 + 4, 16);
+        // Compte les sauts de ligne dans valeur_vt (format "NET : ...\nBRUT : ...")
+        var vtVal = rv.valeur_vt || '';
+        var linesC = 1 + (vtVal.match(/\n/g) || []).length;
+        return Math.max(Math.max(linesE, linesC) * 13 + 4, 16);
       }
 
       const wb = new ExcelJS.Workbook();
@@ -7274,7 +7401,7 @@ ${vtShort}`;
           var confCol = CONF_COL[conf.level];
           var dr=ws2.addRow([lib,rv.valeur_audit||'-',rv.valeur_vt||'-',rv.statut,confXls,commentXls,vfCell.txt,rv.revu_doc||'']); dr.height=calcRowH(rv,vfCell);
           sc(dr.getCell(1),g.row,g.rtxt,{bold:true}); sc(dr.getCell(2),g.row,g.rtxt,{});
-          sc(dr.getCell(3),g.row,g.rtxt,{}); sc(dr.getCell(4),g.badge,C.WHT,{bold:true,align:'center'});
+          sc(dr.getCell(3),g.row,g.rtxt,{wrap:true}); sc(dr.getCell(4),g.badge,C.WHT,{bold:true,align:'center'});
           sc(dr.getCell(5),confCol.bg,confCol.fg,{bold:true,align:'center'});
           if (conf.reason) {
             try {
@@ -7307,7 +7434,7 @@ ${vtShort}`;
           var confCol = CONF_COL[conf.level];
           var dr=ws2.addRow([lib,rv.valeur_audit||'-',rv.valeur_vt||'-',rv.statut,confXls,commentXls,vfCell.txt,rv.revu_doc||'']); dr.height=calcRowH(rv,vfCell);
           sc(dr.getCell(1),g.row,g.rtxt,{bold:true}); sc(dr.getCell(2),g.row,g.rtxt,{});
-          sc(dr.getCell(3),g.row,g.rtxt,{}); sc(dr.getCell(4),g.badge,C.WHT,{bold:true,align:'center'});
+          sc(dr.getCell(3),g.row,g.rtxt,{wrap:true}); sc(dr.getCell(4),g.badge,C.WHT,{bold:true,align:'center'});
           sc(dr.getCell(5),confCol.bg,confCol.fg,{bold:true,align:'center'});
           if (conf.reason) {
             try {
