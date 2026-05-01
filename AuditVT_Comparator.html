@@ -7892,7 +7892,9 @@ ${vtShort}`;
       const rouges     = results.filter(r => r.statut === 'ROUGE').length;
       const manquants  = results.filter(r => r.statut === 'MANQUANT').length;
       const total      = results.length;
-      const pct        = total > 0 ? Math.round((conformes / total) * 100) : 0;
+      // Aligné sur l'onglet principal (ligne 5696) et l'export Excel (ligne 7081) :
+      // score = (conformes + approximatifs) / total. Les ORANGE comptent comme "OK partiel".
+      const pct        = total > 0 ? Math.round(((conformes + oranges) / total) * 100) : 0;
       const now        = new Date();
       const entry = {
         id:         now.getTime(),
@@ -8111,7 +8113,12 @@ ${vtShort}`;
       if (countEl) countEl.textContent = query ? filtered.length + ' résultat(s) sur ' + historyData.length : historyData.length + ' analyse(s)';
 
       tbody.innerHTML = filtered.map(function(e) {
-        const scoreClass = e.score >= 90 ? 'score-high' : e.score >= 70 ? 'score-mid' : 'score-low';
+        // Recalcul à la volée pour aligner sur l'onglet principal (conformes + oranges) / total.
+        // Auto-heal des anciennes entrées sauvegardées avec l'ancienne formule (conformes / total seul).
+        const computedScore = (e.total > 0)
+          ? Math.round(((e.conformes + e.oranges) / e.total) * 100)
+          : (e.score || 0);
+        const scoreClass = computedScore >= 90 ? 'score-high' : computedScore >= 70 ? 'score-mid' : 'score-low';
         const dlBtn = e.results
           ? '<button class="dl-btn" onclick="downloadHistoryEntry(' + e.id + ')" title="T\u00e9l\u00e9charger le fichier Excel"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>'
           : '';
@@ -8132,7 +8139,7 @@ ${vtShort}`;
           '<td style="white-space:nowrap;color:var(--text-muted)">' + escHtml(e.time) + '</td>' +
           '<td title="' + escHtml(e.auditFile||'') + '">' + escHtml(auditShort) + '</td>' +
           '<td title="' + escHtml(e.vtFile||'') + '">' + escHtml(vtShort) + '</td>' +
-          '<td><span class="score-badge ' + scoreClass + '">' + e.score + '%</span></td>' +
+          '<td><span class="score-badge ' + scoreClass + '">' + computedScore + '%</span></td>' +
           '<td style="text-align:center;color:#276221;font-weight:700">' + e.conformes + '</td>' +
           '<td style="text-align:center;color:#7A4A00;font-weight:700">' + e.oranges + '</td>' +
           '<td style="text-align:center;color:#820000;font-weight:700">' + e.rouges + '</td>' +
