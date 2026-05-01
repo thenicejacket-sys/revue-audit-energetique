@@ -4475,18 +4475,22 @@
     /**
      * RÈGLE INVARIANTE — Affichage détaillé des surfaces de paroi
      * -----------------------------------------------------------
-     * Quand le VT décompose une paroi en plusieurs sous-surfaces, on DOIT afficher
-     * dans la colonne "Valeur VT" :
-     *  - NET  : la somme des surfaces à isoler (si distincte du brut)
-     *  - BRUT : la somme détaillée des façades (v1 + v2 + ... = total)
-     * Pour permettre à l'utilisateur de comparer directement le total VT au cumul
-     * brut donné par l'audit (ex: audit 18,01 m² ↔ BRUT VT 7,53 + 6,39 + ... = 18,45).
+     * Pour les surfaces de PAROI uniquement (mur, plancher, toiture) :
+     *  - NET  : détail des surfaces à isoler (v1 + v2 + ... = total) + mention "(surface à isoler)"
+     *  - BRUT : détail des façades brutes (v1 + v2 + ... = total)
+     * Les 2 lignes sont détaillées de la même façon (symétrie totale).
      *
-     * Ce format évite les faux ORANGE quand l'audit donne le cumul brut et le VT ne
-     * montrait qu'une seule sous-valeur isolée.
+     * EXCEPTION : les champs "Surface de référence", "Surface habitable", "SHAB",
+     * "Surface de plancher", "Surface au sol" sont la surface GLOBALE du logement
+     * (pas une paroi). Pour ces champs, AUCUN format NET/BRUT n'est appliqué — la
+     * valeur LLM brute est affichée telle quelle.
      *
-     * Vérifié le 2026-04-30 suite au bug Paroi 1 Mur pierre de taille (audit 18,01 m²
-     * vs VT 8,07 m² seul → faux orange).
+     * Compatibilité descendante : si le LLM retourne l'ancien schéma "net" (nombre unique)
+     * au lieu de "net_parts/net_total", il est traité comme net_parts = [net].
+     *
+     * Vérifié le 2026-05-01 suite aux 2 bugs :
+     *  - Bug 1 : "Surface de référence" affichait "NET : 70,65 m²" à tort
+     *  - Bug 2 : NET d'une paroi multi-façades n'était pas détaillé comme BRUT
      *
      * @param {Object} detail - Objet valeur_vt_detail retourné par le LLM
      * @returns {string|null} String d'affichage multi-lignes ou null si detail absent/invalide
@@ -4501,18 +4505,41 @@
       }
       if (detail.type === 'paroi_multi') {
         var lines = [];
-        if (detail.net != null && !isNaN(detail.net)) {
-          lines.push('NET  : ' + _frNum(detail.net) + ' ' + unit + ' (surface à isoler)');
+
+        // NET — compatibilité descendante : net_parts (nouveau) ou net (ancien nombre unique)
+        var netParts = detail.net_parts && detail.net_parts.length > 0
+          ? detail.net_parts.filter(function(p){ return p != null && !isNaN(p); })
+          : (detail.net != null && !isNaN(detail.net) ? [detail.net] : null);
+        if (netParts && netParts.length > 0) {
+          var netTotal = detail.net_total != null && !isNaN(detail.net_total)
+            ? detail.net_total
+            : netParts.reduce(function(a, b){ return a + b; }, 0);
+          var netLine = 'NET  : ';
+          if (netParts.length === 1) {
+            netLine += _frNum(netParts[0]) + ' ' + unit + ' (surface à isoler)';
+          } else {
+            netLine += netParts.map(_frNum).join(' + ') + ' = ' + _frNum(netTotal) + ' ' + unit + ' (surface à isoler)';
+          }
+          lines.push(netLine);
         }
+
+        // BRUT — inchangé
         if (detail.brut_parts && detail.brut_parts.length > 0) {
           var validParts = detail.brut_parts.filter(function(p){ return p != null && !isNaN(p); });
           if (validParts.length > 0) {
-            var sum = detail.brut_total != null && !isNaN(detail.brut_total)
+            var brutTotal = detail.brut_total != null && !isNaN(detail.brut_total)
               ? detail.brut_total
               : validParts.reduce(function(a, b){ return a + b; }, 0);
-            lines.push('BRUT : ' + validParts.map(_frNum).join(' + ') + ' = ' + _frNum(sum) + ' ' + unit);
+            var brutLine = 'BRUT : ';
+            if (validParts.length === 1) {
+              brutLine += _frNum(validParts[0]) + ' ' + unit;
+            } else {
+              brutLine += validParts.map(_frNum).join(' + ') + ' = ' + _frNum(brutTotal) + ' ' + unit;
+            }
+            lines.push(brutLine);
           }
         }
+
         return lines.length > 0 ? lines.join('\n') : null;
       }
       return null;
@@ -4772,14 +4799,18 @@ Pour CHAQUE valeur non-MANQUANT que tu retournes, tu DOIS fournir l'extrait exac
 - Si tu ne peux pas citer un extrait exact pour une valeur → cette valeur doit être MANQUANT. Pas de valeur sans source.
 
 RÈGLE SURFACES DE PAROI MULTI-FAÇADES (CRITIQUE — AFFICHAGE COMPARAISON) :
+EXCEPTION PRÉALABLE OBLIGATOIRE : pour les champs "Surface de référence", "Surface habitable", "SHAB", "Surface de plancher", "Surface au sol" et tout champ désignant la surface GLOBALE du logement — ce ne sont PAS des parois. NE PAS remplir valeur_vt_detail pour ces champs. Retourne directement valeur_vt comme une simple string (ex: "70,65 m²") sans objet detail.
+
 Pour tout champ "Surface (m²)" d'une paroi (mur, plancher, toiture), le tableau FACADES de la VT décompose souvent la surface en plusieurs lignes par orientation ou étage.
 → Tu DOIS scanner TOUTES les lignes du tableau FACADES de la VT qui concernent cette paroi, pas seulement la première.
 → Remplis obligatoirement le champ "valeur_vt_detail" dans ta réponse pour ce type de champ :
 
 CAS A — plusieurs lignes de surfaces dans la VT pour cette paroi :
 - Identifie toutes les sous-surfaces brutes (ex: "7,53 m²", "6,39 m²", "3,07 m²", "1,46 m²")
-- Si une valeur "surface à isoler" ou "surface nette" est explicitement présente (souvent inférieure au total brut) → c'est le "net"
-- valeur_vt_detail = { "type": "paroi_multi", "net": <nombre ou null>, "brut_parts": [<liste de nombres>], "brut_total": <somme>, "unit": "m²" }
+- Si des valeurs "surface à isoler" ou "surface nette" sont explicitement présentes (souvent inférieures au total brut) → ce sont les "net_parts". Collecte-les TOUTES (une par façade/orientation), pas seulement la première.
+- valeur_vt_detail = { "type": "paroi_multi", "net_parts": [<liste de nombres nets, une par façade>], "net_total": <somme des nets>, "brut_parts": [<liste de nombres bruts>], "brut_total": <somme des bruts>, "unit": "m²" }
+- Si le NET n'a qu'une seule valeur connue : net_parts = [valeur], net_total = valeur
+- Si aucune surface nette n'est fournie par la VT : omettre net_parts et net_total
 - valeur_vt = laisse vide (sera générée par le JS depuis valeur_vt_detail)
 
 CAS B — une seule valeur dans la VT, et on sait que c'est la surface à isoler (nette) :
@@ -4869,7 +4900,7 @@ FORMAT DE RÉPONSE (JSON strict) :
       "valeur_audit": "...",
       "extrait_audit": "phrase exacte copiée du document Audit (ou vide si MANQUANT)",
       "valeur_vt": "...",
-      "valeur_vt_detail": { "type": "paroi_multi|single", "net": null, "brut_parts": [], "brut_total": null, "value": null, "is_net": false, "unit": "m²" },
+      "valeur_vt_detail": { "type": "paroi_multi|single", "net_parts": [], "net_total": null, "brut_parts": [], "brut_total": null, "value": null, "is_net": false, "unit": "m²" },
       "extrait_vt": "phrase exacte copiée de la VT (ou vide si MANQUANT)",
       "statut": "VERT|ORANGE|ROUGE|MANQUANT",
       "commentaire": "..."
@@ -5158,7 +5189,14 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
           // Si le LLM a retourné un objet valeur_vt_detail (surfaces multi-façades),
           // on génère la string d'affichage depuis cet objet et on remplace valeur_vt.
           // Le statut est recalculé en utilisant le total brut pour la comparaison.
-          if (rv.valeur_vt_detail && rv.valeur_vt_detail.type) {
+          // GARDE : les champs surface globale du logement (SHAB, surface de référence…)
+          // ne sont PAS des parois — on ignore valeur_vt_detail même s'il est présent.
+          var _GLOBAL_SURFACE_RE = /surface.*r[eé]f[eé]rence|surface.*habit|^shab\b|surface.*plancher|surface.*au.*sol/i;
+          var _fieldNomForGuard = (function() {
+            var fMatch = fields.find(function(f){ return f.id === rv.id_champ; });
+            return fMatch ? (fMatch.nom || '') : '';
+          })();
+          if (rv.valeur_vt_detail && rv.valeur_vt_detail.type && !_GLOBAL_SURFACE_RE.test(_fieldNomForGuard)) {
             var _vtDetailFormatted = formatParoiSurface(rv.valeur_vt_detail);
             if (_vtDetailFormatted) {
               rv = Object.assign({}, rv, { valeur_vt: _vtDetailFormatted });
