@@ -6347,7 +6347,14 @@ ${vtShort}`;
       if (toInject.length === 0) return { block: '', injectedIds: [] };
 
       var catLbl = { pattern: 'Pattern récurrent', rule: 'Règle manquante', prompt: 'Ajustement prompt', other: 'Remarque transverse' };
-      var lines = toInject.map(function(it){
+
+      // collectAllFeedbacks trie desc par timestamp → on garde la plus récente occurrence par groupe
+      var seen = {};
+      var dedupedIds = [];
+      var skipped = 0;
+      var lines = [];
+
+      toInject.forEach(function(it){
         var label = '';
         if (it.scope === 'line' && it.key) {
           var r = findResultByFbKey(it.key);
@@ -6355,17 +6362,37 @@ ${vtShort}`;
         } else {
           label = '🌐 Global — ' + (catLbl[it.category] || 'Remarque');
         }
+        var normTxt = (it.text || '').replace(/\s+/g, ' ').trim().toLowerCase();
+        var dedupKey = label + '||' + normTxt;
+        // tous les ids du groupe doivent flipper pending→applied, même les doublons
+        dedupedIds.push(it.id);
+        if (seen[dedupKey]) { skipped++; return; }
+        seen[dedupKey] = true;
+
         var isPerm = (it.meta && it.meta.status === 'permanent');
         var permTag = isPerm ? ' [🧠 RÈGLE PERMANENTE]' : '';
-        var txt = (it.text || '').replace(/\s+/g, ' ').trim();
-        return '- [' + label + ']' + permTag + ' : ' + txt;
+        var displayTxt = (it.text || '').replace(/\s+/g, ' ').trim();
+
+        // Snapshot : ce que Maya avait sorti à l'origine (rejeté par l'utilisateur)
+        var ctxSuffix = '';
+        if (it.scope === 'line' && it.snapshot && (it.snapshot.valeur_audit || it.snapshot.valeur_vt || it.snapshot.statut)) {
+          var va = (it.snapshot.valeur_audit || '—').toString().replace(/\s+/g, ' ').trim();
+          var vv = (it.snapshot.valeur_vt    || '—').toString().replace(/\s+/g, ' ').trim();
+          var st = (it.snapshot.statut       || '').toString().trim();
+          ctxSuffix = '\n    └ contexte rejeté : Audit="' + va + '" | VT="' + vv + '"' + (st ? ' | statut="' + st + '"' : '');
+        }
+
+        lines.push('- [' + label + ']' + permTag + ' : ' + displayTxt + ctxSuffix);
       });
 
+      if (skipped > 0) console.log('[MAYA-DRAWER] ' + skipped + ' feedback(s) doublon(s) déduplé(s) avant injection.');
+
       var block = '\n\n=== RÈGLES APPRISES DE L\'UTILISATEUR (à appliquer obligatoirement) ===\n'
-                + 'L\'utilisateur t\'a déjà donné les retours suivants lors de précédentes analyses. Tu DOIS les appliquer strictement lors de cette nouvelle passe. Les [🧠 RÈGLE PERMANENTE] sont des patterns récurrents (≥3 retours) à respecter systématiquement :\n'
+                + 'L\'utilisateur t\'a déjà donné les retours suivants lors de précédentes analyses. Tu DOIS les appliquer strictement lors de cette nouvelle passe. Les [🧠 RÈGLE PERMANENTE] sont des patterns récurrents (≥3 retours) à respecter systématiquement.\n'
+                + 'Quand "contexte rejeté" est indiqué, c\'est ce que tu avais sorti la fois précédente — l\'utilisateur l\'a explicitement contesté. Ajuste ton raisonnement pour ne plus produire cette sortie.\n'
                 + lines.join('\n') + '\n'
                 + '==================================================================\n';
-      return { block: block, injectedIds: toInject.map(function(i){ return i.id; }) };
+      return { block: block, injectedIds: dedupedIds };
     }
 
     // ---- Marquage auto pending → applied après injection réussie ----
@@ -8910,7 +8937,13 @@ ${vtShort}`;
           <div class="maya-modal-context-row"><span class="maya-modal-context-label">Confiance :</span><span class="maya-modal-context-value" id="maya-fb-confidence">—</span></div>
         </div>
         <label class="maya-modal-field-label" for="maya-fb-textarea">Qu'est-ce qui ne va pas dans le résultat de Maya ?</label>
-        <textarea id="maya-fb-textarea" class="maya-modal-textarea" placeholder="Ex : La valeur VT est fausse — le vrai résultat est « 0,25 W/m².K ». Maya a mal lu la page 4 du rapport."></textarea>
+        <div class="maya-fb-coach" style="background:#F8F4FA;border-left:3px solid #7B2D8E;padding:8px 10px;margin-bottom:8px;border-radius:4px;font-size:11.5px;color:#4A1F5E;line-height:1.5;">
+          <strong>📝 Pour un feedback efficace, écris :</strong><br>
+          1️⃣ <strong>Le bon résultat attendu</strong> (la valeur, le statut)<br>
+          2️⃣ <strong>Pourquoi</strong> (où Maya a mal lu, ou règle métier qui s'applique)<br>
+          3️⃣ <strong>Quand le rappliquer</strong> (cas isolé OU règle générale à reproduire)
+        </div>
+        <textarea id="maya-fb-textarea" class="maya-modal-textarea" placeholder="Ex : Le bon statut est « Conforme ». Pour les voutains sur solives métalliques, la VT page 13 indique explicitement « pas d'isolant ». Règle générale : toujours considérer ce type de plancher comme non isolé sauf mention contraire dans la VT."></textarea>
         <div id="maya-fb-existing" class="maya-modal-existing" style="display:none"></div>
       </div>
       <div class="maya-modal-footer">
@@ -8953,7 +8986,12 @@ ${vtShort}`;
           <option value="other">Autre remarque</option>
         </select>
         <label class="maya-modal-field-label" for="maya-gfb-textarea">Ta remarque</label>
-        <textarea id="maya-gfb-textarea" class="maya-modal-textarea" placeholder="Ex : Maya surestime systématiquement les provisions. Pense à vérifier l'écart sur les charges sociales avant de conclure."></textarea>
+        <div class="maya-fb-coach" style="background:#F8F4FA;border-left:3px solid #7B2D8E;padding:8px 10px;margin-bottom:8px;border-radius:4px;font-size:11.5px;color:#4A1F5E;line-height:1.5;">
+          <strong>📝 Format recommandé pour une règle générale :</strong><br>
+          <em>« Quand [situation déclencheuse] → fais [action attendue]. Raison : [pourquoi]. »</em><br>
+          → Plus c'est généralisable, plus Maya saura le rappliquer sur les futurs dossiers.
+        </div>
+        <textarea id="maya-gfb-textarea" class="maya-modal-textarea" placeholder="Ex : Quand le rapport mentionne un Ujn calculé sur menuiserie ancienne (avant 1980) → vérifier systématiquement la cohérence avec le coefficient global Uw. Raison : les anciennes menuiseries ont souvent un Uw > 4 sous-estimé dans l'audit."></textarea>
       </div>
       <div class="maya-modal-footer">
         <button type="button" class="btn btn-outline" onclick="closeGlobalFeedback()">Annuler</button>
