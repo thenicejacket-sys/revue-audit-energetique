@@ -4105,6 +4105,130 @@
         })();
       })();
 
+      // ═══════════════════════════════════════════════════════════════════
+      // FUSION CHAUFFAGES IDENTIQUES (Chauffage 1 + Chauffage 2 → Chauffage 1, surfaces additionnées)
+      // L'audit sépare parfois un même chauffage en plusieurs instances seulement pour répartir
+      // la surface chauffée. Si TOUS les champs sauf surface sont identiques entre instances,
+      // on fusionne en une seule instance avec la somme des surfaces.
+      // ═══════════════════════════════════════════════════════════════════
+      (function mergeIdenticalChauffages(){
+        function isChauffageField(rv) {
+          var sec = (getFieldSection(rv.id_champ) || '').toLowerCase();
+          var nom = (getFieldNom(rv.id_champ) || '').toLowerCase();
+          // Section ou nom contient "chauffage" / "chaudière". Exclu : ECS, eau chaude.
+          if (/eau\s+chaude|ecs|sanitaire/.test(sec) || /eau\s+chaude|ecs|sanitaire/.test(nom)) return false;
+          return /chauffage|chaudi[eè]re|g[eé]n[eé]rateur(?!\s*ecs)/.test(sec) || /chauffage|chaudi[eè]re/.test(nom);
+        }
+        function isSurfaceField(rv) {
+          var nom = (getFieldNom(rv.id_champ) || '').toLowerCase();
+          return /surface(?!\s+(?:r[eé]f|habit|au\s*sol|totale))/.test(nom);
+        }
+        function parseNum(s) {
+          if (s == null) return NaN;
+          var n = parseFloat(String(s).replace(/ /g,'').replace(',', '.').replace(/[^\d.\-]/g, ''));
+          return isNaN(n) ? NaN : n;
+        }
+
+        var chauffageResults = state.analysisResults.filter(isChauffageField);
+        if (chauffageResults.length === 0) return;
+
+        // Grouper par instance_label (les champs sans instance ne sont pas mergeables)
+        var byInstance = {};
+        chauffageResults.forEach(function(rv){
+          var lbl = (rv.instance_label || '').trim();
+          if (!lbl) return;
+          if (!byInstance[lbl]) byInstance[lbl] = [];
+          byInstance[lbl].push(rv);
+        });
+        var instances = Object.keys(byInstance);
+        if (instances.length < 2) {
+          if (instances.length === 1) console.info('[CHAUFFAGE-MERGE] 1 seul chauffage — pas de fusion nécessaire.');
+          return;
+        }
+
+        // Construit valuesByField : id_champ → { instance_label: valeur_audit }
+        var valuesByField = {};
+        chauffageResults.forEach(function(rv){
+          var lbl = (rv.instance_label || '').trim();
+          if (!lbl) return;
+          if (!valuesByField[rv.id_champ]) valuesByField[rv.id_champ] = {};
+          valuesByField[rv.id_champ][lbl] = String(rv.valeur_audit || '').trim();
+        });
+
+        // Vérifie l'identité de TOUS les champs non-surface entre instances
+        var divergentFields = [];
+        Object.keys(valuesByField).forEach(function(idChamp){
+          var sample = chauffageResults.find(function(rv){ return rv.id_champ === idChamp; });
+          if (!sample || isSurfaceField(sample)) return; // on ignore les champs surface
+          var valsByInst = valuesByField[idChamp];
+          var present = Object.keys(valsByInst)
+            .map(function(k){ return valsByInst[k]; })
+            .filter(function(v){ return v && v !== 'MANQUANT' && v !== 'null'; });
+          if (present.length === 0) return; // tous MANQUANT → considéré identique
+          // Compare en normalisant casse + espaces
+          var norm = present.map(function(v){ return v.toLowerCase().replace(/\s+/g, ' ').trim(); });
+          var first = norm[0];
+          var allSame = norm.every(function(v){ return v === first; });
+          if (!allSame) {
+            divergentFields.push((getFieldNom(idChamp) || idChamp) + ' : [' + present.join(' ≠ ') + ']');
+          }
+        });
+
+        if (divergentFields.length > 0) {
+          console.info('[CHAUFFAGE-MERGE] Pas de fusion — chauffages réellement différents. Champs divergents : ' + divergentFields.slice(0, 3).join(' | ') + (divergentFields.length > 3 ? ' …(+' + (divergentFields.length - 3) + ')' : ''));
+          return;
+        }
+
+        // → Fusion : instance canonique = première par tri alpha-numérique (ex: "Chauffage 1")
+        var canonicalLabel = instances.slice().sort(function(a, b){
+          // Tri qui met "Chauffage 1" avant "Chauffage 2"
+          return a.localeCompare(b, 'fr', { numeric: true, sensitivity: 'base' });
+        })[0];
+        var otherLabels = instances.filter(function(i){ return i !== canonicalLabel; });
+
+        // 1. Pour chaque champ surface de l'instance canonique → additionner les valeurs des autres instances
+        var surfaceMerges = 0;
+        chauffageResults.forEach(function(rv){
+          if (rv.instance_label !== canonicalLabel) return;
+          if (!isSurfaceField(rv)) return;
+          // Collecte les valeurs de toutes les instances pour ce champ
+          var allValuesNum = [];
+          var allValuesRaw = [];
+          chauffageResults.forEach(function(r){
+            if (r.id_champ !== rv.id_champ) return;
+            var n = parseNum(r.valeur_audit);
+            if (!isNaN(n)) {
+              allValuesNum.push(n);
+              allValuesRaw.push(String(r.valeur_audit).trim());
+            }
+          });
+          if (allValuesNum.length < 2) return; // pas de somme à faire
+          var sum = allValuesNum.reduce(function(a, b){ return a + b; }, 0);
+          // Détecte l'unité depuis la première valeur (ex: "30 m²" → "m²")
+          var unitMatch = (allValuesRaw[0] || '').match(/[a-zA-Z²³µ]+\s*$/);
+          var unit = unitMatch ? unitMatch[0].trim() : 'm²';
+          rv.valeur_audit = sum.toFixed(2).replace('.', ',') + ' ' + unit;
+          var note = '[Chauffage fusionné — ' + instances.length + ' instances identiques mergées (sauf surface) : ' + allValuesRaw.join(' + ') + ' = ' + rv.valeur_audit + ']';
+          if ((rv.commentaire || '').indexOf('Chauffage fusionné') === -1) {
+            rv.commentaire = (rv.commentaire ? rv.commentaire + ' ' : '') + note;
+          }
+          surfaceMerges++;
+        });
+
+        // 2. Supprimer toutes les autres instances chauffage
+        var beforeCount = state.analysisResults.length;
+        state.analysisResults = state.analysisResults.filter(function(rv){
+          if (!isChauffageField(rv)) return true;
+          if (otherLabels.indexOf((rv.instance_label || '').trim()) === -1) return true;
+          return false; // dégage
+        });
+        var deletedCount = beforeCount - state.analysisResults.length;
+
+        console.log('[CHAUFFAGE-MERGE] ✓ Fusion : ' + instances.length + ' instances → 1 (canonique = "' + canonicalLabel + '") — ' + surfaceMerges + ' champ(s) surface additionné(s), ' + deletedCount + ' résultat(s) doublon(s) supprimé(s).');
+        console.log('[CHAUFFAGE-MERGE] Instances supprimées : ' + otherLabels.join(', '));
+      })();
+
+
       // ── Pré-calcul des pages sources PDF (AVANT Maya pour qu'elle les utilise) ──
       function findPageForOffset(pageLog, charIndex) {
         if (!pageLog || !pageLog.length || charIndex < 0) return null;
@@ -4947,6 +5071,13 @@ RÈGLE STATUT pour les surfaces multi-façades :
 - Compare TOUJOURS le brut_total (ou la valeur unique si single) avec valeur_audit pour déterminer VERT/ORANGE/ROUGE.
 - Si brut_total ≈ valeur_audit (±5%) → VERT même si le net seul diffère.
 - INTERDIT de mettre ORANGE/ROUGE si le total brut VT correspond à l'audit — c'est seulement la décomposition qui diffère.
+
+RÈGLE CHAUFFAGE — FUSION INSTANCES IDENTIQUES :
+L'audit sépare parfois un même chauffage en plusieurs instances ("Chauffage 1" / "Chauffage 2"…) uniquement pour répartir la surface chauffée. Les caractéristiques techniques (type, énergie, puissance, marque, année, ECS, régulation, etc.) sont alors identiques entre les instances — seule la SURFACE diffère.
+→ Si tu détectes que tous les champs chauffage NON-SURFACE ont des valeurs identiques entre Chauffage 1 et Chauffage 2 → ce sont en réalité le même chauffage.
+→ Le système JS post-traitement détecte ce cas, fusionne les instances en une seule (la première : "Chauffage 1") et additionne les surfaces.
+→ Tu n'as RIEN à faire de spécial : extrais normalement chaque instance avec ses valeurs telles qu'écrites dans l'audit. La fusion est automatique en post-traitement.
+→ Cette règle s'applique UNIQUEMENT au chauffage (PAS à l'ECS, PAS à la ventilation).
 
 RÈGLE SURFACE MUR — TOTAL VT IDENTIQUE POUR TOUTES LES PAROIS-MUR AUDIT (CRITIQUE) :
 L'audit groupe souvent les murs en N parois (Paroi 01, Paroi 02, Paroi 03), mais la VT les décompose en M façades distinctes (M peut être > N). Ne JAMAIS essayer de répartir les façades VT entre les parois audit (ce mapping n'existe pas).
