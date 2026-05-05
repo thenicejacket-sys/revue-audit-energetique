@@ -4694,6 +4694,24 @@ Exemples : "hauteur sous plafond" = HSP / hauteur libre / hauteur de volume / h.
 "résistance thermique" = R / R-value / résistance isolant
 Ne rate jamais une valeur parce que le libellé exact ne correspond pas — cherche le sens, pas le mot.
 
+RÈGLE ABSOLUE — PAGE 6 DE L'AUDIT = SOURCE DE VÉRITÉ POUR LES CATÉGORIES :
+La page 6 de l'audit contient le tableau récapitulatif "État initial du logement" avec une SECTION distincte pour chaque catégorie (MURS, PLANCHERS, TOITURES, MENUISERIES). Les en-têtes de colonnes sont "Description" et "Isolation".
+→ La catégorie de CHAQUE paroi est définie par la SECTION dans laquelle elle apparaît page 6 — pas par son nom, ni son matériau, ni son adjacence.
+→ Si la paroi "Paroi 3 — Plancher mitoyen" apparaît sous l'en-tête PLANCHERS page 6 → catégorie = PLANCHER (jamais "mur" même si le mot "mitoyen" apparaît dans son nom).
+→ INTERDICTION ABSOLUE de classer une paroi dans une catégorie autre que celle où elle figure page 6.
+→ Si le bloc INSTANCES ci-dessous liste les parois par catégorie (murs / planchers / toitures / menuiseries), c'est le résultat de l'extraction page 6 → respecte-la strictement.
+
+RÈGLE ABSOLUE — ANTI-DOUBLONS PAROIS :
+Aucune paroi ne doit apparaître dans deux catégories à la fois.
+→ Une paroi a UNE et UNE SEULE catégorie (mur OU plancher OU toiture OU menuiserie).
+→ Si tu détectes la même paroi (même numéro, même description) dans plusieurs catégories de tes résultats → c'est un doublon. Conserve uniquement la catégorie page 6 et supprime l'autre.
+→ Chaque instance_label doit être unique dans la sortie. Si deux résultats ont le même instance_label pour le même id_champ → c'est un doublon, fusionne-les ou retire le redondant.
+
+RÈGLE ABSOLUE — ALIGNEMENT CHAMP / CATÉGORIE :
+Un champ explicitement orienté pour une catégorie (ex: "Matériau mur", "Composition mur") ne doit jamais être appliqué à une paroi d'une autre catégorie.
+→ Si la paroi est un PLANCHER (page 6) et que le champ s'appelle "Matériau mur" → ce champ est NON-APPLICABLE → retourne valeur_audit/valeur_vt = null, statut MANQUANT, et précise dans commentaire : "Champ non-applicable : paroi de catégorie PLANCHER (page 6 audit), champ orienté MUR".
+→ Idem dans l'autre sens : ne jamais appliquer un champ "plancher" à une paroi mur, ni "toiture" à un plancher, etc.
+
 RÈGLE MULTI-INSTANCES — TOUTES PAROIS, TOUTES CATÉGORIES (ABSOLUE — PRIORITÉ MAXIMALE) :
 L'audit contient des parois numérotées dans chaque catégorie : MURS (Paroi 01, Paroi 02...), PLANCHERS, TOITURES, MENUISERIES.
 ⚠️ Le nombre de résultats retournés DOIT correspondre exactement au nombre de parois détectées dans le document.
@@ -4707,6 +4725,7 @@ RÈGLES :
 - Ne regroupe JAMAIS plusieurs parois dans un seul résultat.
 - instance_label = nom/référence précise de la paroi tel qu'écrit dans l'audit (ex: "Paroi 01 — Mur extérieur", "Mur Nord", "Plancher bas sur vide sanitaire", "Fenêtre 1 (1,50×1,60)").
 - Si les instances sont listées dans le bloc INSTANCES ci-dessous → utilise EXACTEMENT ces labels et retourne UN résultat par instance listée.
+- ORDRE OBLIGATOIRE des catégories dans la sortie : MURS d'abord → PLANCHERS → TOITURES → MENUISERIES.
 
 RÈGLE MENUISERIES MULTI-INSTANCES (CRITIQUE) :
 Les menuiseries peuvent apparaître sous DEUX formats dans l'audit — les deux sont valides :
@@ -5388,6 +5407,8 @@ CONTRÔLES À EFFECTUER SUR CHAQUE RÉSULTAT :
    - Équivalences niveaux (${SEMANTIC_EQUIVALENCES.niveaux.promptDescription}) → corriger_statut VERT si même nombre de niveaux
    - "Référence paroi" = type d'adjacence (Extérieur, Terre-Plein, Locaux non chauffés, etc.)
 6. MANQUANT RÉCUPÉRABLES : la valeur existe-t-elle dans la VT sous un synonyme ou libellé différent ?
+7. CATÉGORIE PAROI = PAGE 6 AUDIT (ABSOLUE) : la catégorie de chaque paroi (mur/plancher/toiture/menuiserie) est définie par la page 6 de l'audit (tableau récapitulatif "État initial du logement"). Si un résultat applique un champ orienté "mur" (ex: Matériau mur, Composition mur) à une paroi dont l'instance_label indique PLANCHER ou TOITURE → c'est une erreur de catégorisation. Action : corriger_statut MANQUANT avec raison "Champ non-applicable à cette catégorie de paroi (page 6 audit)".
+8. ANTI-DOUBLONS PAROIS (ABSOLUE) : aucune paroi ne doit apparaître dans deux catégories. Si tu détectes la même paroi (même numéro + même description) dans plusieurs catégories des résultats → flag hallucination_detectee pour les occurrences hors page 6 et conserve uniquement celle alignée page 6.
 
 ⚠️ CONTRE-VÉRIFICATION OBLIGATOIRE (silencieuse, dans ce même appel) :
 Avant de retourner chaque correction, fais-toi mentalement l'avocat du diable — en silence, dans le même raisonnement :
