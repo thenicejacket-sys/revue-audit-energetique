@@ -4106,10 +4106,13 @@
       })();
 
       // ═══════════════════════════════════════════════════════════════════
-      // FUSION CHAUFFAGES IDENTIQUES (Chauffage 1 + Chauffage 2 → Chauffage 1, surfaces additionnées)
-      // L'audit sépare parfois un même chauffage en plusieurs instances seulement pour répartir
-      // la surface chauffée. Si TOUS les champs sauf surface sont identiques entre instances,
-      // on fusionne en une seule instance avec la somme des surfaces.
+      // FUSION CHAUFFAGES — critère = TYPE de chauffage identique
+      // L'audit sépare parfois un même chauffage en "Chauffage 1" / "Chauffage 2"
+      // pour répartir la surface chauffée. Si le TYPE est identique entre instances,
+      // on fusionne en UNE seule instance (canonique = "Chauffage 1") :
+      //  - Les surfaces sont additionnées
+      //  - Les autres champs ne sont pas répétés (les autres instances sont supprimées)
+      // Si plusieurs types différents → groupes distincts, pas de fusion entre groupes.
       // ═══════════════════════════════════════════════════════════════════
       (function mergeIdenticalChauffages(){
         function isChauffageField(rv) {
@@ -4122,6 +4125,16 @@
         function isSurfaceField(rv) {
           var nom = (getFieldNom(rv.id_champ) || '').toLowerCase();
           return /surface(?!\s+(?:r[eé]f|habit|au\s*sol|totale))/.test(nom);
+        }
+        // Critère de fusion : champs "type" du chauffage (type chauffage / type énergie / type générateur / type système).
+        // Si ces champs sont identiques entre instances → on fusionne.
+        function isTypeChauffageField(rv) {
+          var nom = (getFieldNom(rv.id_champ) || '').toLowerCase();
+          if (!/\btype\b|^syst/.test(nom)) return false;
+          return /chauffage|[eé]nergie|g[eé]n[eé]rateur|chaudi[eè]re|syst[eè]me/.test(nom);
+        }
+        function normVal(s) {
+          return String(s == null ? '' : s).toLowerCase().replace(/\s+/g, ' ').trim();
         }
         function parseNum(s) {
           if (s == null) return NaN;
@@ -4146,86 +4159,90 @@
           return;
         }
 
-        // Construit valuesByField : id_champ → { instance_label: valeur_audit }
-        var valuesByField = {};
-        chauffageResults.forEach(function(rv){
-          var lbl = (rv.instance_label || '').trim();
-          if (!lbl) return;
-          if (!valuesByField[rv.id_champ]) valuesByField[rv.id_champ] = {};
-          valuesByField[rv.id_champ][lbl] = String(rv.valeur_audit || '').trim();
+        // Pour chaque instance, calcule sa SIGNATURE TYPE (concatène les valeurs des champs "type")
+        var typeByInstance = {};
+        instances.forEach(function(lbl){
+          var typeVals = byInstance[lbl]
+            .filter(isTypeChauffageField)
+            .map(function(rv){ return normVal(rv.valeur_audit); })
+            .filter(function(v){ return v && v !== 'manquant' && v !== 'null'; });
+          typeByInstance[lbl] = typeVals.sort().join(' | ');
         });
-
-        // Vérifie l'identité de TOUS les champs non-surface entre instances
-        var divergentFields = [];
-        Object.keys(valuesByField).forEach(function(idChamp){
-          var sample = chauffageResults.find(function(rv){ return rv.id_champ === idChamp; });
-          if (!sample || isSurfaceField(sample)) return; // on ignore les champs surface
-          var valsByInst = valuesByField[idChamp];
-          var present = Object.keys(valsByInst)
-            .map(function(k){ return valsByInst[k]; })
-            .filter(function(v){ return v && v !== 'MANQUANT' && v !== 'null'; });
-          if (present.length === 0) return; // tous MANQUANT → considéré identique
-          // Compare en normalisant casse + espaces
-          var norm = present.map(function(v){ return v.toLowerCase().replace(/\s+/g, ' ').trim(); });
-          var first = norm[0];
-          var allSame = norm.every(function(v){ return v === first; });
-          if (!allSame) {
-            divergentFields.push((getFieldNom(idChamp) || idChamp) + ' : [' + present.join(' ≠ ') + ']');
-          }
-        });
-
-        if (divergentFields.length > 0) {
-          console.info('[CHAUFFAGE-MERGE] Pas de fusion — chauffages réellement différents. Champs divergents : ' + divergentFields.slice(0, 3).join(' | ') + (divergentFields.length > 3 ? ' …(+' + (divergentFields.length - 3) + ')' : ''));
+        var hasAnyType = instances.some(function(l){ return typeByInstance[l]; });
+        if (!hasAnyType) {
+          console.info('[CHAUFFAGE-MERGE] Aucun champ "type chauffage" trouvé — fusion impossible.');
           return;
         }
 
-        // → Fusion : instance canonique = première par tri alpha-numérique (ex: "Chauffage 1")
-        var canonicalLabel = instances.slice().sort(function(a, b){
-          // Tri qui met "Chauffage 1" avant "Chauffage 2"
-          return a.localeCompare(b, 'fr', { numeric: true, sensitivity: 'base' });
-        })[0];
-        var otherLabels = instances.filter(function(i){ return i !== canonicalLabel; });
+        // Groupe les instances par signature type identique
+        var groups = {};
+        instances.forEach(function(lbl){
+          var sig = typeByInstance[lbl] || '__notype__';
+          if (!groups[sig]) groups[sig] = [];
+          groups[sig].push(lbl);
+        });
 
-        // 1. Pour chaque champ surface de l'instance canonique → additionner les valeurs des autres instances
-        var surfaceMerges = 0;
-        chauffageResults.forEach(function(rv){
-          if (rv.instance_label !== canonicalLabel) return;
-          if (!isSurfaceField(rv)) return;
-          // Collecte les valeurs de toutes les instances pour ce champ
-          var allValuesNum = [];
-          var allValuesRaw = [];
-          chauffageResults.forEach(function(r){
-            if (r.id_champ !== rv.id_champ) return;
-            var n = parseNum(r.valeur_audit);
-            if (!isNaN(n)) {
-              allValuesNum.push(n);
-              allValuesRaw.push(String(r.valeur_audit).trim());
-            }
-          });
-          if (allValuesNum.length < 2) return; // pas de somme à faire
-          var sum = allValuesNum.reduce(function(a, b){ return a + b; }, 0);
-          // Détecte l'unité depuis la première valeur (ex: "30 m²" → "m²")
-          var unitMatch = (allValuesRaw[0] || '').match(/[a-zA-Z²³µ]+\s*$/);
-          var unit = unitMatch ? unitMatch[0].trim() : 'm²';
-          rv.valeur_audit = sum.toFixed(2).replace('.', ',') + ' ' + unit;
-          var note = '[Chauffage fusionné — ' + instances.length + ' instances identiques mergées (sauf surface) : ' + allValuesRaw.join(' + ') + ' = ' + rv.valeur_audit + ']';
-          if ((rv.commentaire || '').indexOf('Chauffage fusionné') === -1) {
-            rv.commentaire = (rv.commentaire ? rv.commentaire + ' ' : '') + note;
+        var totalFusions = 0, totalSurfaceMerges = 0, totalDeleted = 0, allOtherLabels = [];
+        Object.keys(groups).forEach(function(sig){
+          var grp = groups[sig];
+          if (grp.length < 2) return;
+          if (sig === '__notype__') {
+            console.info('[CHAUFFAGE-MERGE] ' + grp.length + ' instance(s) sans type identifié — non fusionnées : ' + grp.join(', '));
+            return;
           }
-          surfaceMerges++;
+          var canonicalLabel = grp.slice().sort(function(a, b){
+            return a.localeCompare(b, 'fr', { numeric: true, sensitivity: 'base' });
+          })[0];
+          var otherLabels = grp.filter(function(i){ return i !== canonicalLabel; });
+
+          // 1. Additionne les surfaces de toutes les instances du groupe dans l'instance canonique
+          var groupSurfaceMerges = 0;
+          byInstance[canonicalLabel].forEach(function(rv){
+            if (!isSurfaceField(rv)) return;
+            var allValuesNum = [];
+            var allValuesRaw = [];
+            grp.forEach(function(lbl){
+              var match = byInstance[lbl].find(function(r){ return r.id_champ === rv.id_champ; });
+              if (!match) return;
+              var n = parseNum(match.valeur_audit);
+              if (!isNaN(n)) {
+                allValuesNum.push(n);
+                allValuesRaw.push(String(match.valeur_audit).trim());
+              }
+            });
+            if (allValuesNum.length < 2) return;
+            var sum = allValuesNum.reduce(function(a, b){ return a + b; }, 0);
+            var unitMatch = (allValuesRaw[0] || '').match(/[a-zA-Z²³µ]+\s*$/);
+            var unit = unitMatch ? unitMatch[0].trim() : 'm²';
+            rv.valeur_audit = sum.toFixed(2).replace('.', ',') + ' ' + unit;
+            var note = '[Chauffage fusionné — type identique entre ' + grp.length + ' instances (' + grp.join(', ') + '). Surface additionnée : ' + allValuesRaw.join(' + ') + ' = ' + rv.valeur_audit + ']';
+            if ((rv.commentaire || '').indexOf('Chauffage fusionné') === -1) {
+              rv.commentaire = (rv.commentaire ? rv.commentaire + ' ' : '') + note;
+            }
+            groupSurfaceMerges++;
+          });
+
+          // 2. Supprime les autres instances du groupe
+          var beforeCount = state.analysisResults.length;
+          state.analysisResults = state.analysisResults.filter(function(rv){
+            if (!isChauffageField(rv)) return true;
+            if (otherLabels.indexOf((rv.instance_label || '').trim()) === -1) return true;
+            return false;
+          });
+          var deleted = beforeCount - state.analysisResults.length;
+
+          totalFusions++;
+          totalSurfaceMerges += groupSurfaceMerges;
+          totalDeleted += deleted;
+          allOtherLabels = allOtherLabels.concat(otherLabels);
+          console.log('[CHAUFFAGE-MERGE] ✓ Type "' + sig + '" : ' + grp.length + ' instance(s) → 1 (« ' + canonicalLabel + ' ») — ' + groupSurfaceMerges + ' surface(s) additionnée(s), ' + deleted + ' doublon(s) supprimé(s).');
         });
 
-        // 2. Supprimer toutes les autres instances chauffage
-        var beforeCount = state.analysisResults.length;
-        state.analysisResults = state.analysisResults.filter(function(rv){
-          if (!isChauffageField(rv)) return true;
-          if (otherLabels.indexOf((rv.instance_label || '').trim()) === -1) return true;
-          return false; // dégage
-        });
-        var deletedCount = beforeCount - state.analysisResults.length;
-
-        console.log('[CHAUFFAGE-MERGE] ✓ Fusion : ' + instances.length + ' instances → 1 (canonique = "' + canonicalLabel + '") — ' + surfaceMerges + ' champ(s) surface additionné(s), ' + deletedCount + ' résultat(s) doublon(s) supprimé(s).');
-        console.log('[CHAUFFAGE-MERGE] Instances supprimées : ' + otherLabels.join(', '));
+        if (totalFusions === 0) {
+          console.info('[CHAUFFAGE-MERGE] ' + instances.length + ' instance(s) chauffage avec types tous différents — pas de fusion.');
+        } else {
+          console.log('[CHAUFFAGE-MERGE] Bilan : ' + totalFusions + ' fusion(s), ' + totalSurfaceMerges + ' surface(s) additionnée(s), ' + totalDeleted + ' résultat(s) doublon(s) supprimé(s).');
+        }
       })();
 
 
