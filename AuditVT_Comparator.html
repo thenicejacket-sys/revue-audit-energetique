@@ -5911,9 +5911,25 @@ ${vtShort}`;
           const conf = computeConfidence(r);
           const fbKey = feedbackKey(r.id_champ, r.instance_label);
           const fbList = (mayaFeedbacks[fbKey] || []);
-          const fbCount = fbList.length;
+          // Ne comptent QUE les feedbacks "pending" \u2014 ceux que Maya n'a pas encore trait\u00e9s.
+          // Les "applied" / "permanent" / "archived" sont d\u00e9j\u00e0 int\u00e9gr\u00e9s et n'ont plus besoin d'\u00eatre visibles dans le badge.
+          const fbPendingCount = fbList.filter(function(fb){
+            var fid = 'line:' + fbKey + ':' + normTs(fb.timestamp || '');
+            var st = (mayaFeedbackMeta[fid] || {}).status || 'pending';
+            return st === 'pending';
+          }).length;
+          const fbTotalCount = fbList.length;
+          const fbCount = fbPendingCount; // badge = pending uniquement
           const fbClass = fbCount > 0 ? 'feedback-btn has-feedback' : 'feedback-btn';
-          const fbTitle = fbCount > 0 ? (fbCount + ' feedback(s) envoy\u00e9(s) \u00e0 Maya') : 'Signaler un probl\u00e8me \u00e0 Maya';
+          var _fbTitle;
+          if (fbCount > 0) {
+            _fbTitle = fbCount + ' feedback(s) en attente \u2014 Maya les traitera \u00e0 la prochaine analyse';
+          } else if (fbTotalCount > 0) {
+            _fbTitle = fbTotalCount + ' feedback(s) d\u00e9j\u00e0 trait\u00e9(s) par Maya \u2014 clique pour en ajouter un nouveau';
+          } else {
+            _fbTitle = 'Signaler un probl\u00e8me \u00e0 Maya';
+          }
+          const fbTitle = _fbTitle;
           const fbAttr = fbCount > 0 ? (' data-count="' + fbCount + '"') : '';
           const safeKey = fbKey.replace(/'/g, "\\'");
           const confCell =
@@ -6148,11 +6164,32 @@ ${vtShort}`;
         existingBlock.innerHTML = '';
       } else {
         existingBlock.style.display = 'block';
-        let html = '<div class="maya-modal-existing-title">Feedbacks déjà envoyés (' + list.length + ')</div>';
+        // Compte par statut pour titre informatif
+        var pendingN = 0, appliedN = 0, otherN = 0;
+        list.forEach(function(fb){
+          var fid = 'line:' + key + ':' + normTs(fb.timestamp || '');
+          var st = (mayaFeedbackMeta[fid] || {}).status || 'pending';
+          if (st === 'pending') pendingN++;
+          else if (st === 'applied' || st === 'permanent') appliedN++;
+          else otherN++;
+        });
+        var titleParts = [];
+        if (pendingN > 0)  titleParts.push('<span style="color:#7F3D00;font-weight:700;">' + pendingN + ' en attente</span>');
+        if (appliedN > 0)  titleParts.push('<span style="color:#1B5E20;">' + appliedN + ' déjà traité(s) par Maya</span>');
+        if (otherN > 0)    titleParts.push(otherN + ' archivé(s)');
+        let html = '<div class="maya-modal-existing-title">Historique (' + list.length + ') — ' + titleParts.join(' · ') + '</div>';
         list.slice().reverse().forEach(function(fb){
           const d = new Date(fb.timestamp);
           const dateStr = d.toLocaleDateString('fr-FR') + ' ' + d.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
-          html += '<div class="maya-modal-existing-item"><span class="maya-modal-existing-date">' + dateStr + '</span>' + escHtml(fb.text) + '</div>';
+          var fid = 'line:' + key + ':' + normTs(fb.timestamp || '');
+          var st = (mayaFeedbackMeta[fid] || {}).status || 'pending';
+          var stBadge = '';
+          if (st === 'pending')        stBadge = '<span style="display:inline-block;padding:1px 6px;background:#FFE0B2;color:#7F3D00;border-radius:8px;font-size:9.5px;font-weight:700;margin-right:5px;">⏳ En attente</span>';
+          else if (st === 'applied')   stBadge = '<span style="display:inline-block;padding:1px 6px;background:#C8E6C9;color:#1B5E20;border-radius:8px;font-size:9.5px;font-weight:700;margin-right:5px;">✅ Traité</span>';
+          else if (st === 'permanent') stBadge = '<span style="display:inline-block;padding:1px 6px;background:#E1BEE7;color:#4A148C;border-radius:8px;font-size:9.5px;font-weight:700;margin-right:5px;">🧠 Permanent</span>';
+          else if (st === 'archived')  stBadge = '<span style="display:inline-block;padding:1px 6px;background:#CFD8DC;color:#37474F;border-radius:8px;font-size:9.5px;font-weight:700;margin-right:5px;">📦 Archivé</span>';
+          var faded = (st === 'applied' || st === 'permanent' || st === 'archived') ? 'opacity:0.65;' : '';
+          html += '<div class="maya-modal-existing-item" style="' + faded + '">' + stBadge + '<span class="maya-modal-existing-date">' + dateStr + '</span>' + escHtml(fb.text) + '</div>';
         });
         existingBlock.innerHTML = html;
       }
