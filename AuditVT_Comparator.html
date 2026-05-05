@@ -3954,7 +3954,15 @@
           if (/\bmur(?!\s*(?:porteur\s*mitoyen))|fa[çc]ade|paroi\s*opaque(?!\s*(?:bas|haut))/.test(s)) return 'mur';
           return null;
         }
-        function _fieldCat(rv) { return _inferCat(getFieldSection(rv.id_champ) || ''); }
+        // Catégorie du CHAMP : on regarde d'abord sa section référentiel, puis son nom.
+        // Sans le fallback nom, un champ "Matériau mur" dont la section est neutre
+        // (ex: "Enveloppe", "Parois") n'était pas filtré et finissait collé aux planchers.
+        function _fieldCat(rv) {
+          var fromSection = _inferCat(getFieldSection(rv.id_champ) || '');
+          if (fromSection) return fromSection;
+          var fromName = _inferCat(getFieldNom(rv.id_champ) || '');
+          return fromName || null;
+        }
 
         // Étape 1 : catégorie canonique de chaque paroi (par son label)
         // Priorité 1 : detectedInstances (source de vérité absolue)
@@ -3985,8 +3993,20 @@
           catByLabel[key] = best;
         });
 
+        // Debug : afficher le mapping paroi → catégorie déterminé (source page 6 + fallbacks)
+        try {
+          var _catSummary = {};
+          Object.keys(catByLabel).forEach(function(k){
+            var c = catByLabel[k] || '?';
+            if (!_catSummary[c]) _catSummary[c] = [];
+            _catSummary[c].push(k);
+          });
+          console.log('[ANTI-DOUBLON-PAROIS] Catégorisation page 6 audit (source de vérité) :', _catSummary);
+        } catch(e) {}
+
         // Étape 2 : supprimer les hallucinations cross-section
         var removed = 0;
+        var removedSummary = [];
         state.analysisResults = state.analysisResults.filter(function(rv){
           if (!rv.instance_label) return true;
           var paroiCat = catByLabel[String(rv.instance_label).trim().toLowerCase()];
@@ -3995,14 +4015,19 @@
           if (!fc) return true;
           if (paroiCat === fc) return true;
           // Ne jamais supprimer silencieusement — logger chaque suppression explicitement
+          var champNom = (typeof getFieldNom === 'function') ? (getFieldNom(rv.id_champ) || rv.id_champ) : rv.id_champ;
           console.warn('[ANTI-DOUBLON-PAROIS] Suppression cross-section : paroi="'
-            + rv.instance_label + '" (cat=' + paroiCat + ') dans section champ cat=' + fc
-            + ' (champ=' + rv.id_champ + ')');
+            + rv.instance_label + '" (cat page 6 = ' + paroiCat + ') ≠ champ "' + champNom + '" (cat = ' + fc + ')');
+          removedSummary.push(champNom + ' / ' + rv.instance_label);
           removed++;
           return false;
         });
-        if (removed > 0) console.log('[ANTI-DOUBLON-PAROIS] ' + removed + ' résultat(s) cross-section supprimé(s)');
-        else console.info('[ANTI-DOUBLON-PAROIS] Aucun résultat cross-section — toutes les parois sont dans leur bonne catégorie.');
+        if (removed > 0) {
+          console.log('[ANTI-DOUBLON-PAROIS] ' + removed + ' résultat(s) cross-section supprimé(s) — alignés sur la page 6 de l\'audit');
+          console.log('[ANTI-DOUBLON-PAROIS] Détail :', removedSummary);
+        } else {
+          console.info('[ANTI-DOUBLON-PAROIS] Aucun résultat cross-section — toutes les parois sont dans leur bonne catégorie.');
+        }
       })();
 
       // ── Pré-calcul des pages sources PDF (AVANT Maya pour qu'elle les utilise) ──
