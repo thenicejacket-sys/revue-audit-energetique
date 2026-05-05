@@ -5702,12 +5702,28 @@ Réponds UNIQUEMENT en JSON strict :
       "instance_label": "... ou null",
       "raison": "pourquoi ta certitude est < 85% après contre-vérification (max 120 chars)"
     }
+  ],
+  "lexique_enrichment": [
+    {
+      "id_champ": "...",
+      "terme_vt": "le libellé EXACT utilisé dans la VT pour ce champ (ex: 'Surface utile', 'Composition', 'Aucun isolant')",
+      "raison": "pourquoi ce terme est un bon synonyme pour le champ (max 100 chars)"
+    }
   ]
 }
 IMPORTANT :
 - Pour CHAQUE correction, fournis source_excerpt_audit et/ou source_excerpt_vt — un court extrait BRUT du texte source (copié tel quel, pas reformulé) qui permet de vérifier ta décision. Max 200 caractères chacun. Si la valeur est absente du document, mets null.
 - low_confidence: true UNIQUEMENT si tu appliques quand même une correction MAIS avec doute résiduel (rare). Pour les cas où tu préfères ne pas corriger à cause du doute, utilise le bloc "low_confidence_flags".
-Si tout est correct ET certain, retourne {"corrections": [], "low_confidence_flags": []}` + (learningsBlock ? '\n' + learningsBlock : '') + (drawerInjection.block || '');
+
+LEXIQUE_ENRICHMENT — règle d'enrichissement automatique du référentiel :
+À chaque fois que tu corriges une valeur ROUGE ou MANQUANT en allant la trouver dans la VT sous un libellé qui ne figure PAS déjà dans le lexique_vt du champ, retourne une entrée dans lexique_enrichment.
+- Le terme_vt doit être le libellé EXACT tel qu'écrit dans la VT (pas paraphrasé).
+- Ne propose PAS d'enrichissement si le terme est déjà dans le lexique_vt fourni pour ce champ.
+- Ne propose PAS d'enrichissement pour les champs où la valeur a été trouvée par lexique existant (pas besoin).
+- Maximum 1 entrée par champ par appel.
+- Si aucun enrichissement à proposer, renvoie lexique_enrichment: [].
+
+Si tout est correct ET certain, retourne {"corrections": [], "low_confidence_flags": [], "lexique_enrichment": []}` + (learningsBlock ? '\n' + learningsBlock : '') + (drawerInjection.block || '');
 
       var suspectsCompact = suspects.map(function(r) {
         var o = {
@@ -5947,6 +5963,51 @@ ${vtShort}`;
             }).catch(function() {});
           }
         } catch (e) { console.warn('[MAYA-KB] Extraction learnings échouée:', e.message); }
+
+        // ── Auto-enrichissement du LEXIQUE VT depuis les découvertes Maya ──
+        // Quand Maya trouve une valeur dans la VT sous un libellé non encore présent dans le lexique
+        // du champ (colonnes Lex DVT), elle le retourne dans lexique_enrichment. On l'ajoute au
+        // référentiel automatiquement (champ lexAuto, persisté) — auditable dans Paramètres.
+        try {
+          if (mayaResult && Array.isArray(mayaResult.lexique_enrichment) && mayaResult.lexique_enrichment.length > 0) {
+            var enrichCount = 0, enrichSkipped = 0;
+            mayaResult.lexique_enrichment.forEach(function(entry) {
+              if (!entry || !entry.id_champ || !entry.terme_vt) { enrichSkipped++; return; }
+              var terme = String(entry.terme_vt).trim();
+              if (terme.length < 2 || terme.length > 80) { enrichSkipped++; return; }
+              var refField = state.referentiel.find(function(r){ return r.id === entry.id_champ; });
+              if (!refField) { enrichSkipped++; return; }
+              // Vérifie que le terme n'est PAS déjà dans le lexique existant ou auto
+              var existing = [refField.lexF, refField.lexG, refField.lexH, refField.lexAuto || '']
+                .filter(Boolean).join(';').toLowerCase();
+              var termeLC = terme.toLowerCase();
+              var alreadyPresent = existing.split(/[;,|]/).map(function(s){ return s.trim(); }).some(function(s){ return s === termeLC; });
+              if (alreadyPresent) { enrichSkipped++; return; }
+              // Ajoute au champ lexAuto (séparé pour distinguer auto vs manuel)
+              refField.lexAuto = (refField.lexAuto ? refField.lexAuto + ';' : '') + terme;
+              // Mémorise la raison pour l'UI Paramètres (badge avec tooltip)
+              if (!refField.lexAutoMeta) refField.lexAutoMeta = {};
+              refField.lexAutoMeta[terme] = {
+                raison: String(entry.raison || '').slice(0, 200),
+                addedAt: new Date().toISOString()
+              };
+              // Reconstruit la chaîne lexique unifiée utilisée par les pré-extractions et le prompt
+              refField.lexique = [refField.lexF, refField.lexG, refField.lexH, refField.lexAuto]
+                .filter(Boolean).join(';');
+              enrichCount++;
+              console.log('[LEXIQUE-AUTO] + "' + terme + '" → champ "' + (refField.nom || refField.id) + '" (raison: ' + entry.raison + ')');
+            });
+            if (enrichCount > 0) {
+              try { saveReferentiel(false); } catch(e) { console.warn('[LEXIQUE-AUTO] saveReferentiel échec:', e.message); }
+              console.log('[LEXIQUE-AUTO] ' + enrichCount + ' terme(s) ajouté(s) au lexique automatiquement, ' + enrichSkipped + ' ignoré(s).');
+              try {
+                showAlert('alerts-area', 'info', '✨ Lexique enrichi automatiquement : ' + enrichCount + ' nouveau(x) terme(s) VT ajouté(s). Visible dans Paramètres.');
+              } catch(e) {}
+            } else if (enrichSkipped > 0) {
+              console.info('[LEXIQUE-AUTO] ' + enrichSkipped + ' enrichissement(s) ignoré(s) (déjà présents ou invalides).');
+            }
+          }
+        } catch (e) { console.warn('[LEXIQUE-AUTO] Application enrichissement échouée:', e.message); }
 
         return results;
 
@@ -6492,6 +6553,50 @@ ${vtShort}`;
       var expectedStatus = elExpStatus ? (elExpStatus.value || '') : '';
       var expectedValue  = elExpValue ? elExpValue.value.trim() : '';
       var isRule         = !!(elIsRule && elIsRule.checked);
+
+      // ── Détection d'une demande d'annulation de terme dans le lexique auto ──
+      // Patterns reconnus : "retire X", "X n'est pas un synonyme", "X ne correspond pas",
+      // "X n'est pas le bon terme", "supprime X du lexique"
+      try {
+        var fbKey = currentFeedbackKey;
+        var idChamp = fbKey.split('|')[0];
+        var refField = state.referentiel.find(function(rr){ return rr.id === idChamp; });
+        if (refField && refField.lexAuto) {
+          var autoTerms = refField.lexAuto.split(';').map(function(s){ return s.trim(); }).filter(Boolean);
+          var lowerTxt = userTxt.toLowerCase();
+          var removalPatterns = [
+            /(?:retire|retirer|supprime|supprimer|enl[èe]ve|enlever)[^.]*?["«]?\s*([^"»\n]{2,60}?)\s*["»]?\s*(?:du\s+lexique|de\s+la\s+vt)/i,
+            /["«]\s*([^"»\n]{2,60}?)\s*["»]\s+n'?est\s+pas\s+(?:un\s+)?(?:bon\s+)?(?:synonyme|terme|libell[ée])/i,
+            /["«]\s*([^"»\n]{2,60}?)\s*["»]\s+ne\s+correspond\s+pas/i
+          ];
+          var removed = [];
+          autoTerms.forEach(function(term){
+            var termLC = term.toLowerCase();
+            // Match direct sur le terme dans le texte du feedback ET pattern de négation à proximité
+            if (lowerTxt.indexOf(termLC) >= 0) {
+              removalPatterns.forEach(function(rx){
+                var m = userTxt.match(rx);
+                if (m && m[1] && m[1].toLowerCase().trim() === termLC) {
+                  removed.push(term);
+                }
+              });
+            }
+          });
+          if (removed.length > 0) {
+            // Dédup
+            removed = removed.filter(function(t, i, a){ return a.indexOf(t) === i; });
+            removed.forEach(function(term){
+              autoTerms = autoTerms.filter(function(t){ return t !== term; });
+              if (refField.lexAutoMeta) delete refField.lexAutoMeta[term];
+            });
+            refField.lexAuto = autoTerms.join(';');
+            refField.lexique = [refField.lexF, refField.lexG, refField.lexH, refField.lexAuto].filter(Boolean).join(';');
+            try { saveReferentiel(false); } catch(e) {}
+            console.log('[LEXIQUE-AUTO] Retrait via feedback : ' + removed.join(', ') + ' (champ ' + (refField.nom || refField.id) + ')');
+            try { showAlert('alerts-area', 'info', '✦ Retiré du lexique auto : « ' + removed.join(' », « ') + ' » (champ « ' + (refField.nom || refField.id) + ' »).'); } catch(e) {}
+          }
+        }
+      } catch(e) { console.warn('[LEXIQUE-AUTO] Détection annulation échouée:', e.message); }
 
       // Construit un texte enrichi structuré pour le prompt Maya (plus efficace que du texte libre)
       var parts = [];
@@ -8879,13 +8984,30 @@ ${vtShort}`;
                 return '<option value="' + escHtml(o) + '"' + (r.check === o ? ' selected' : '') + '>' + escHtml(o) + '</option>';
               }).join('') + '</select>'
             : '';
+          // Termes auto-ajoutés par Maya — affichés sous forme de tags jaunes avec bouton ×
+          var autoTagsHtml = '';
+          if (r.lexAuto) {
+            var autoTerms = String(r.lexAuto).split(';').map(function(s){ return s.trim(); }).filter(Boolean);
+            if (autoTerms.length > 0) {
+              autoTagsHtml = '<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px;">' + autoTerms.map(function(t){
+                var meta = (r.lexAutoMeta && r.lexAutoMeta[t]) || {};
+                var tip = 'Auto-ajouté par Maya' + (meta.raison ? ' : ' + meta.raison : '') + (meta.addedAt ? ' (' + new Date(meta.addedAt).toLocaleDateString('fr-FR') + ')' : '') + ' — cliquer × pour retirer';
+                var safeT = String(t).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                return '<span class="lex-auto-tag" title="' + escHtml(tip) + '" style="display:inline-flex;align-items:center;background:#FFF3E0;color:#7F3D00;padding:1px 4px 1px 6px;border-radius:8px;font-size:10px;border:1px solid #FFB74D;line-height:1.4;">' +
+                  '<span style="background:#FFB74D;color:#5D2C00;font-size:8px;font-weight:700;padding:0 4px;border-radius:4px;margin-right:4px;">auto</span>' +
+                  escHtml(t) +
+                  '<button onclick="removeLexAuto(' + idx + ',\'' + safeT + '\')" style="border:none;background:none;color:#B71C1C;cursor:pointer;font-size:13px;padding:0;margin-left:4px;font-weight:700;line-height:1;" title="Retirer ce terme du lexique">&times;</button>' +
+                  '</span>';
+              }).join('') + '</div>';
+            }
+          }
           return '<tr data-idx="' + idx + '">' +
             '<td style="text-align:center;font-size:10px;font-weight:700;color:var(--text-muted);font-family:monospace;min-width:28px">' + escHtml(r.id) + '</td>' +
             '<td contenteditable="true" onblur="updateRef(' + idx + ',\'nom\',this)">' + escHtml(r.nom) + '</td>' +
             '<td>' + checkCell + '</td>' +
             '<td style="font-size:11px;color:var(--text-muted)">' + escHtml(r.lexF) + '</td>' +
             '<td style="font-size:11px;color:var(--text-muted)">' + escHtml(r.lexG) + '</td>' +
-            '<td style="font-size:11px;color:var(--text-muted)">' + escHtml(r.lexH) + '</td>' +
+            '<td style="font-size:11px;color:var(--text-muted)">' + escHtml(r.lexH) + autoTagsHtml + '</td>' +
             '<td><button class="del-btn" onclick="deleteRefRow(' + idx + ')" title="Supprimer" style="font-size:14px;line-height:1;padding:2px 5px">&times;</button></td>' +
             '</tr>';
         }).join('');
@@ -8919,6 +9041,21 @@ ${vtShort}`;
     function deleteRefRow(idx) {
       state.referentiel.splice(idx, 1);
       renderRefTable();
+    }
+
+    // Retire un terme auto-ajouté par Maya du lexique d'un champ
+    function removeLexAuto(idx, terme) {
+      var r = state.referentiel[idx];
+      if (!r || !r.lexAuto) return;
+      var terms = r.lexAuto.split(';').map(function(s){ return s.trim(); }).filter(Boolean);
+      var newTerms = terms.filter(function(t){ return t !== terme; });
+      r.lexAuto = newTerms.join(';');
+      if (r.lexAutoMeta) delete r.lexAutoMeta[terme];
+      // Recompose la chaîne lexique unifiée
+      r.lexique = [r.lexF, r.lexG, r.lexH, r.lexAuto].filter(Boolean).join(';');
+      try { saveReferentiel(false); } catch(e) {}
+      renderRefTable();
+      try { showAlert('alerts-area-params', 'info', '« ' + terme + ' » retiré du lexique du champ « ' + (r.nom || r.id) + ' ».'); } catch(e) {}
     }
 
     function saveReferentiel(notify = true) {

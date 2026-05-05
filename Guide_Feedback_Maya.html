@@ -417,6 +417,33 @@
 <div class="reformulation"><strong>Ce qu'il fallait écrire :</strong> via le bouton 💬 de la ligne concernée → dropdown statut <strong>VERT</strong> + champ valeur <strong>25,78 m²</strong> + explication : « La VT donne 25,78 m² dans la <em>fiche caractéristiques générales du logement</em>. Maya a lu à tort le tableau de surfaces des parois. Règle : pour <em>surface habitable</em>, toujours prendre la valeur de la fiche caractéristiques générales, pas du tableau parois. »</div>
 </div>
 
+<h2 class="blue"><span class="icon">📚</span>Construire un vocabulaire VT au fil du temps</h2>
+
+<p style="margin: 4px 0 8px 0; font-size: 10pt;">Maya s'appuie sur un <strong>lexique VT</strong> par champ (colonnes Lex DVT du référentiel Excel chargé dans Paramètres). Plus le lexique est riche, plus Maya trouve rapidement les bonnes valeurs dans la VT, sans hésiter.</p>
+
+<p style="margin: 4px 0 8px 0; font-size: 10pt;"><strong>Bonne nouvelle :</strong> l'enrichissement est désormais <strong>automatique</strong>. Quand Maya corrige une valeur ROUGE ou MANQUANT en allant la trouver dans la VT sous un libellé qui n'était pas encore au lexique, elle l'ajoute toute seule. Tu n'as rien à faire. Visible et auditable dans l'onglet Paramètres avec un badge <em>auto</em>.</p>
+
+<h3>Comment annuler un mauvais ajout</h3>
+
+<p style="margin: 4px 0 8px 0; font-size: 10pt;">Deux possibilités selon ton contexte.</p>
+
+<p style="margin: 4px 0 8px 0; font-size: 10pt;"><strong>Depuis l'onglet Paramètres :</strong> chaque terme auto-ajouté apparaît dans la cellule lexique avec un badge <em>auto</em> et une croix. Un clic sur la croix le retire.</p>
+
+<p style="margin: 4px 0 8px 0; font-size: 10pt;"><strong>Depuis le rapport :</strong> dans un feedback ligne, écrire une formulation du type « Surface utile n'est pas un synonyme de SHAB » ou « retire Surface utile du lexique ». L'app détecte le terme et le retire automatiquement.</p>
+
+<h3>Exemples de règles métier à enregistrer comme « Règle générale »</h3>
+
+<p style="margin: 4px 0 8px 0; font-size: 10pt;">Au-delà de l'enrichissement automatique du lexique, certaines règles plus larges méritent un feedback global. Quelques exemples utiles à constituer petit à petit :</p>
+
+<ul style="font-size: 10pt; line-height: 1.5;">
+  <li>« Pour la surface habitable, la VT utilise généralement le terme Surface utile, parfois SHAB. »</li>
+  <li>« Pour l'année de construction, la VT l'indique dans la section Caractéristiques générales du logement. »</li>
+  <li>« Pour l'état d'isolation d'une paroi, regarder la ligne Isolation de la fiche descriptive. Si vide, retourner non isolé et non MANQUANT. »</li>
+  <li>« Pour les menuiseries, les dimensions sont au format L × H, parfois L + H. Calculer la surface en multipliant. »</li>
+</ul>
+
+<p style="margin: 4px 0 8px 0; font-size: 10pt;">Au bout de 10 à 15 règles bien formulées, Maya devient nettement plus précise sur les patterns récurrents.</p>
+
 <div class="checklist no-break">
 <h3>📝 Check-list avant d'envoyer un feedback</h3>
 <ul>
@@ -432,7 +459,7 @@
 
 <div class="footer">
 Document généré pour les utilisateurs du comparateur Audit / VT — Mai 2026<br>
-Version 1.1 — basé sur l'analyse de 49 feedbacks réels en base
+Version 1.2 — ajout de l'enrichissement automatique du lexique VT
 </div>
 
 </body>
