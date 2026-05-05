@@ -4028,6 +4028,81 @@
         } else {
           console.info('[ANTI-DOUBLON-PAROIS] Aucun résultat cross-section — toutes les parois sont dans leur bonne catégorie.');
         }
+
+        // ───────────────────────────────────────────────────────────────────
+        // Étape 3 — Harmonisation surfaces de MUR (NET + BRUT)
+        // L'audit groupe les murs en N parois (ex: 2-3 parois mur) ; la VT décompose en M façades (ex: 5).
+        // Tenter de matcher individuellement N audit ↔ M VT ne marche pas. Solution : pour CHAQUE
+        // paroi-mur de l'audit, afficher la SOMME TOTALE des façades VT (NET et BRUT). Identique partout.
+        // → l'utilisateur voit la même valeur VT sur toutes les lignes "Surface (m²) — Paroi N — Mur..."
+        // ───────────────────────────────────────────────────────────────────
+        (function harmonizeWallSurfaces(){
+          var wallSurfaceResults = state.analysisResults.filter(function(rv){
+            if (!rv.instance_label) return false;
+            var paroiCat = catByLabel[String(rv.instance_label).trim().toLowerCase()];
+            if (paroiCat !== 'mur') return false;
+            var champNom = (getFieldNom(rv.id_champ) || '').toLowerCase();
+            // Champ surface de paroi (mais pas SHAB / surface de référence — exclus)
+            if (!/surface/.test(champNom)) return false;
+            if (/r[eé]f[eé]rence|habit|shab|sdp|au\s*sol|totale|utile/.test(champNom)) return false;
+            return true;
+          });
+          if (wallSurfaceResults.length < 2) {
+            if (wallSurfaceResults.length === 1) console.info('[SURFACE-MUR-HARMONIZE] 1 seule paroi-mur — pas d\'harmonisation nécessaire.');
+            return;
+          }
+          // Collecte de toutes les valeurs NET et BRUT extraites par le LLM (toutes parois mur confondues)
+          var allNet = [], allBrut = [];
+          wallSurfaceResults.forEach(function(rv){
+            var d = rv.valeur_vt_detail;
+            if (!d) return;
+            if (d.type === 'paroi_multi') {
+              (d.net_parts || []).forEach(function(v){ if (v != null && !isNaN(v)) allNet.push(Number(v)); });
+              (d.brut_parts || []).forEach(function(v){ if (v != null && !isNaN(v)) allBrut.push(Number(v)); });
+            } else if (d.type === 'single') {
+              if (d.value != null && !isNaN(d.value)) {
+                if (d.is_net) allNet.push(Number(d.value));
+                else allBrut.push(Number(d.value));
+              }
+            }
+          });
+          // Déduplication par valeur arrondie au cm² près (évite double-comptage des façades vues plusieurs fois)
+          function dedup(arr) {
+            var seen = {}, out = [];
+            arr.forEach(function(v){
+              var k = Math.round(v * 100);
+              if (!seen[k]) { seen[k] = true; out.push(v); }
+            });
+            return out;
+          }
+          var uniqueNet = dedup(allNet);
+          var uniqueBrut = dedup(allBrut);
+          if (uniqueNet.length === 0 && uniqueBrut.length === 0) {
+            console.info('[SURFACE-MUR-HARMONIZE] Aucune surface VT extraite — rien à harmoniser.');
+            return;
+          }
+          var totalNet = uniqueNet.reduce(function(a,b){ return a + b; }, 0);
+          var totalBrut = uniqueBrut.reduce(function(a,b){ return a + b; }, 0);
+          // Applique la même valeur (somme totale VT) à toutes les parois-mur audit
+          wallSurfaceResults.forEach(function(rv){
+            rv.valeur_vt_detail = {
+              type: 'paroi_multi',
+              net_parts: uniqueNet,
+              net_total: totalNet,
+              brut_parts: uniqueBrut,
+              brut_total: totalBrut,
+              unit: 'm²'
+            };
+            // Trace dans le commentaire pour traçabilité
+            var note = '[Surface mur — somme totale VT (' + uniqueBrut.length + ' façade(s)) appliquée à toutes les parois-mur audit]';
+            if ((rv.commentaire || '').indexOf(note) === -1) {
+              rv.commentaire = (rv.commentaire ? rv.commentaire + ' ' : '') + note;
+            }
+          });
+          console.log('[SURFACE-MUR-HARMONIZE] ' + wallSurfaceResults.length + ' paroi(s)-mur harmonisée(s) — NET total = '
+            + totalNet.toFixed(2) + ' m² (' + uniqueNet.length + ' façade(s)), BRUT total = '
+            + totalBrut.toFixed(2) + ' m² (' + uniqueBrut.length + ' façade(s))');
+        })();
       })();
 
       // ── Pré-calcul des pages sources PDF (AVANT Maya pour qu'elle les utilise) ──
@@ -4872,6 +4947,13 @@ RÈGLE STATUT pour les surfaces multi-façades :
 - Compare TOUJOURS le brut_total (ou la valeur unique si single) avec valeur_audit pour déterminer VERT/ORANGE/ROUGE.
 - Si brut_total ≈ valeur_audit (±5%) → VERT même si le net seul diffère.
 - INTERDIT de mettre ORANGE/ROUGE si le total brut VT correspond à l'audit — c'est seulement la décomposition qui diffère.
+
+RÈGLE SURFACE MUR — TOTAL VT IDENTIQUE POUR TOUTES LES PAROIS-MUR AUDIT (CRITIQUE) :
+L'audit groupe souvent les murs en N parois (Paroi 01, Paroi 02, Paroi 03), mais la VT les décompose en M façades distinctes (M peut être > N). Ne JAMAIS essayer de répartir les façades VT entre les parois audit (ce mapping n'existe pas).
+→ Pour le champ "Surface (m²)" d'une paroi de catégorie MUR, extrais TOUTES les façades de la VT (toutes orientations, tous étages, toutes lignes du tableau FACADES) et retourne-les dans net_parts/brut_parts.
+→ La MÊME liste complète de façades doit être retournée pour CHAQUE paroi-mur audit. Pas de répartition. Pas de filtrage par paroi.
+→ Le système JS post-traitement vérifie cette cohérence et harmonise automatiquement si besoin.
+→ Cette règle s'applique UNIQUEMENT aux MURS (mur, façade, paroi opaque verticale). Pour les planchers et toitures, garde la logique paroi-par-paroi.
 
 Réponds UNIQUEMENT en JSON valide, sans markdown, sans commentaire.`;
 
