@@ -9,7 +9,7 @@
   body {
     font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
     color: #2C2C2C;
-    font-size: 10.5pt;
+    font-size: 10pt;
     line-height: 1.4;
     margin: 0;
     padding: 0;
@@ -24,34 +24,95 @@
   .subtitle {
     color: #7B2D8E;
     font-size: 11pt;
-    margin-bottom: 18px;
+    margin-bottom: 14px;
     font-weight: 600;
   }
   .intro {
     background: linear-gradient(135deg, #F8F4FA 0%, #F0E6F5 100%);
     border-left: 4px solid #7B2D8E;
-    padding: 12px 14px;
+    padding: 10px 12px;
     border-radius: 5px;
-    margin-bottom: 22px;
-    font-size: 10.5pt;
+    margin-bottom: 16px;
+    font-size: 10pt;
   }
   h2 {
-    font-size: 14pt;
+    font-size: 13.5pt;
     color: #4A1F5E;
-    margin: 22px 0 10px 0;
-    padding-bottom: 5px;
+    margin: 18px 0 8px 0;
+    padding-bottom: 4px;
     border-bottom: 2px solid #7B2D8E;
   }
   h2.green { color: #1B5E20; border-bottom-color: #2E7D32; }
   h2.orange { color: #E65100; border-bottom-color: #FB8C00; }
   h2.red { color: #B71C1C; border-bottom-color: #E53935; }
+  h2.blue { color: #0D47A1; border-bottom-color: #1976D2; }
+  h3 {
+    font-size: 11.5pt;
+    color: #4A1F5E;
+    margin: 12px 0 6px 0;
+  }
+  .rule-box {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin: 8px 0 14px 0;
+  }
+  .rule-card {
+    border: 2px solid #DDD;
+    border-radius: 8px;
+    padding: 12px 14px;
+    background: #FAFAFA;
+  }
+  .rule-card.line { border-color: #1976D2; background: #E3F2FD; }
+  .rule-card.global { border-color: #E65100; background: #FFF3E0; }
+  .rule-card .rc-title {
+    font-weight: 700;
+    font-size: 11.5pt;
+    margin-bottom: 6px;
+  }
+  .rule-card.line .rc-title { color: #0D47A1; }
+  .rule-card.global .rc-title { color: #BF360C; }
+  .rule-card .rc-when {
+    font-size: 9.5pt;
+    margin: 4px 0 6px 0;
+    line-height: 1.5;
+  }
+  .rule-card .rc-icon-line {
+    display: inline-block;
+    background: #1976D2;
+    color: #fff;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 9pt;
+    font-weight: 700;
+    margin-right: 4px;
+  }
+  .rule-card .rc-icon-global {
+    display: inline-block;
+    background: #E65100;
+    color: #fff;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 9pt;
+    font-weight: 700;
+    margin-right: 4px;
+  }
+  .tip-box {
+    background: #FFF8E1;
+    border: 2px solid #FFC107;
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin: 10px 0 14px 0;
+    font-size: 9.5pt;
+  }
+  .tip-box strong { color: #5D4037; }
   .example {
     border-left: 4px solid #ccc;
     padding: 10px 12px;
     margin: 8px 0 10px 0;
     background: #FAFAFA;
     border-radius: 3px;
-    font-size: 10pt;
+    font-size: 9.7pt;
   }
   .example.good { border-left-color: #2E7D32; background: #F1F8E9; }
   .example.medium { border-left-color: #FB8C00; background: #FFF8E1; }
@@ -64,71 +125,90 @@
     border-radius: 3px;
     margin: 4px 0 6px 0;
     border: 1px solid #E0E0E0;
-    font-size: 10pt;
+    font-size: 9.7pt;
   }
-  .example .why {
+  .example .label-line {
+    font-size: 8.5pt;
+    color: #666;
+    margin-bottom: 3px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  .example .analysis {
     font-size: 9.5pt;
-    color: #555;
+    color: #444;
+    margin-top: 4px;
   }
-  .example .why strong { color: #2C2C2C; }
+  .example .analysis strong { color: #2C2C2C; }
+  .example .analysis ul { margin: 4px 0 4px 18px; padding: 0; }
+  .example .analysis li { margin-bottom: 2px; }
+  .example .reformulation {
+    margin-top: 6px;
+    padding: 6px 9px;
+    background: #fff;
+    border-left: 3px solid #2E7D32;
+    font-size: 9.5pt;
+    border-radius: 0 3px 3px 0;
+  }
+  .example .reformulation strong { color: #1B5E20; }
   .icon { font-size: 13pt; margin-right: 5px; }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 8px 0 14px 0;
-    font-size: 9.5pt;
+  .anatomy {
+    background: #F3E5F5;
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin: 10px 0 14px 0;
   }
-  th, td {
-    border: 1px solid #DADADA;
-    padding: 7px 9px;
-    vertical-align: top;
-    text-align: left;
+  .anatomy .ana-step {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 8px;
+    align-items: flex-start;
   }
-  th {
-    background: #F0E6F5;
-    color: #4A1F5E;
+  .anatomy .ana-num {
+    background: #7B2D8E;
+    color: #fff;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     font-weight: 700;
+    font-size: 11pt;
+    flex-shrink: 0;
   }
-  tr.good td:first-child { background: #E8F5E9; color: #1B5E20; font-weight: 600; }
-  tr.bad td:first-child { background: #FFEBEE; color: #B71C1C; font-weight: 600; }
+  .anatomy .ana-content { font-size: 10pt; line-height: 1.45; }
+  .anatomy .ana-content strong { color: #4A1F5E; }
   .checklist {
     background: #F8F4FA;
     border: 2px solid #7B2D8E;
     border-radius: 6px;
-    padding: 14px 16px;
-    margin: 16px 0 8px 0;
+    padding: 12px 14px;
+    margin: 14px 0 8px 0;
   }
   .checklist h3 {
-    margin: 0 0 8px 0;
-    font-size: 12pt;
+    margin: 0 0 6px 0;
+    font-size: 11.5pt;
     color: #4A1F5E;
   }
   .checklist ul {
     margin: 0;
-    padding-left: 22px;
-    line-height: 1.55;
+    padding-left: 20px;
+    line-height: 1.5;
+    font-size: 9.7pt;
   }
-  .checklist li { margin-bottom: 4px; }
+  .checklist li { margin-bottom: 3px; }
   .footer {
-    margin-top: 24px;
-    padding-top: 10px;
+    margin-top: 20px;
+    padding-top: 8px;
     border-top: 1px solid #DDD;
     font-size: 8.5pt;
     color: #888;
     text-align: center;
   }
-  .badge {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 10px;
-    font-size: 9pt;
-    font-weight: 700;
-    margin-right: 4px;
-  }
-  .badge.good { background: #C8E6C9; color: #1B5E20; }
-  .badge.medium { background: #FFE0B2; color: #7F3D00; }
-  .badge.bad { background: #FFCDD2; color: #B71C1C; }
   .page-break { page-break-before: always; }
+  .no-break { page-break-inside: avoid; }
 </style>
 </head>
 <body>
@@ -137,117 +217,222 @@
 <div class="subtitle">Guide rapide pour les utilisateurs du comparateur Audit / VT</div>
 
 <div class="intro">
-<strong>Pourquoi ce guide ?</strong> Maya s'améliore grâce à vos feedbacks — mais seulement s'ils sont <strong>clairs, généralisables et sans ambiguïté</strong>. Un commentaire vague comme « conforme » ne lui apprend rien. Ce guide montre des <strong>vrais exemples</strong> tirés de la base et explique comment passer d'un feedback faible à un feedback efficace.
+<strong>Pourquoi ce guide ?</strong> Maya s'améliore grâce à vos feedbacks — mais seulement s'ils sont <strong>clairs, généralisables et sans ambiguïté</strong>. Un commentaire vague comme « conforme » ne lui apprend rien. Ce guide rappelle d'abord la règle <strong>feedback ligne vs feedback global</strong>, puis montre des <strong>vrais exemples</strong> tirés de la base avec une analyse détaillée de ce qui les rend efficaces ou non.
 </div>
 
-<h2 class="green"><span class="icon">✅</span>Les BONS feedbacks (à reproduire)</h2>
+<h2 class="blue"><span class="icon">📐</span>Règle d'or — feedback ligne vs feedback global</h2>
 
-<div class="example good">
-<div class="quote">« Maya, l'année de construction est forcément une valeur numérique, pas un champ mètre carré. »</div>
-<div class="why"><strong>Pourquoi c'est bon :</strong> énonce une <strong>règle métier claire</strong>, dit ce qui est attendu (valeur numérique), et corrige une erreur de type. Maya peut l'appliquer à tous les futurs dossiers.</div>
+<p style="margin: 4px 0 8px 0; font-size: 10pt;">Maya accepte deux types de feedback. <strong>Choisir le bon type est aussi important que bien le rédiger.</strong> Voici la différence :</p>
+
+<div class="rule-box">
+
+  <div class="rule-card line no-break">
+    <div class="rc-title"><span class="rc-icon-line">💬</span>Feedback LIGNE</div>
+    <div class="rc-when">
+      <strong>Comment :</strong> bouton 💬 sur la ligne concernée du rapport.<br>
+      <strong>Effet :</strong> Maya ré-applique cette correction au <strong>prochain run du même dossier</strong>. La règle est attachée à un champ + une instance précis.<br>
+      <strong>Quand l'utiliser :</strong>
+      <ul style="margin: 4px 0 0 16px; padding: 0;">
+        <li>Une valeur spécifique mal lue par Maya</li>
+        <li>Une référence propre à CE dossier</li>
+        <li>Un cas ponctuel sans règle généralisable</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="rule-card global no-break">
+    <div class="rc-title"><span class="rc-icon-global">🌐</span>Feedback GLOBAL</div>
+    <div class="rc-when">
+      <strong>Comment :</strong> bouton flottant 💬 en bas à droite (catégorie : Pattern / Règle / Prompt / Autre).<br>
+      <strong>Effet :</strong> Maya l'applique à <strong>TOUS les futurs dossiers</strong>. Devient permanent après 3 occurrences.<br>
+      <strong>Quand l'utiliser :</strong>
+      <ul style="margin: 4px 0 0 16px; padding: 0;">
+        <li>Règle métier transverse (ex : « ITI ≠ planchers »)</li>
+        <li>Convention de format (ex : année = entier)</li>
+        <li>Équivalence sémantique (ex : « RDC » = 1 niveau)</li>
+      </ul>
+    </div>
+  </div>
+
 </div>
 
-<div class="example good">
-<div class="quote">« Non conforme : ITI correspond aux murs et non aux planchers. »</div>
-<div class="why"><strong>Pourquoi c'est bon :</strong> donne le <strong>statut attendu</strong> (non conforme = ROUGE), précise une <strong>règle sémantique</strong> précise et généralisable. Reproductible sur tous les dossiers où un plancher est annoté ITI.</div>
+<div class="tip-box no-break">
+  <strong>🎯 Raccourci :</strong> dans la modal feedback ligne, cocher la case <strong>« 🌐 Règle générale »</strong> envoie automatiquement <em>les deux</em> — la correction de ligne ET un feedback global. Idéal quand tu corriges un cas particulier qui révèle aussi une règle métier valable partout.
+  <br><br>
+  <strong>🧠 Promotion automatique :</strong> tout feedback (ligne ou global) reçu <strong>3 fois ou plus sur la même règle</strong> est automatiquement promu en « Règle permanente » et ré-injecté à chaque analyse.
 </div>
 
-<div class="example good">
-<div class="quote">« Inscris "RDC" dans le champ VT, noté comme exception aux valeurs numériques attendues pour le champ "nombre de niveaux". »</div>
-<div class="why"><strong>Pourquoi c'est bon :</strong> donne une <strong>règle d'exception nominative</strong>, indique le champ concerné, donne la sortie attendue. Maya saura quoi faire pour les futurs RDC.</div>
-</div>
+<h2 class="blue"><span class="icon">🧬</span>Anatomie d'un bon feedback</h2>
 
-<h2 class="orange"><span class="icon">🟠</span>Les feedbacks MOYENS (info utile mais cas unique)</h2>
-
-<div class="example medium">
-<div class="quote">« Ici la valeur VT est de 70,65 m². »</div>
-<div class="why"><strong>Pourquoi c'est moyen :</strong> donne la bonne valeur pour CE dossier, mais <strong>aucune règle</strong> exploitable ailleurs. Le prochain dossier aura une autre surface.<br>
-<strong>Mieux :</strong> « Pour le champ "surface plancher mitoyen", chercher dans la fiche descriptive de la paroi de la VT (section caractéristiques) — souvent oubliée par Maya. »</div>
-</div>
-
-<div class="example medium">
-<div class="quote">« Info en page 14 de la VT : Aucun isolant. »</div>
-<div class="why"><strong>Pourquoi c'est moyen :</strong> référence à un <strong>numéro de page absolu</strong> qui ne sera plus valide pour un autre dossier.<br>
-<strong>Mieux :</strong> « Pour les planchers bas, la VT indique "Aucun isolant" dans la section "Caractéristiques techniques de la paroi". Toujours lire cette section avant de conclure. »</div>
-</div>
-
-<h2 class="red"><span class="icon">❌</span>Les MAUVAIS feedbacks (à éviter absolument)</h2>
-
-<div class="example bad">
-<div class="quote">« conforme »</div>
-<div class="why"><strong>Pourquoi c'est mauvais :</strong> un seul mot. Pas de statut explicite (VERT ?), pas d'explication, pas de règle. Maya ne peut rien apprendre. Cela confond plus qu'autre chose.<br>
-<strong>Mieux :</strong> indiquer le statut attendu via le dropdown + expliquer pourquoi : « Statut : VERT. Les valeurs sont équivalentes (1,56 × 1,85 m vs 1,56 + 1,845 m), différence de 5 mm acceptable pour une menuiserie. »</div>
-</div>
-
-<div class="example bad">
-<div class="quote">« Tu as refais la même erreur, il me faut une valeur numérique. »</div>
-<div class="why"><strong>Pourquoi c'est mauvais :</strong> exprime de la frustration mais ne dit pas QUELLE erreur, ni POUR QUEL CHAMP, ni POURQUOI. Maya ne sait pas comment se corriger.<br>
-<strong>Mieux :</strong> « Pour le champ "année de construction", la sortie doit être un nombre entier (ex : 1985). Si la VT donne une plage ("2012-2020"), prendre la médiane ou flagger MANQUANT. »</div>
-</div>
-
-<div class="example bad">
-<div class="quote">« Valeutr en page 3 de la VT 25,78 »</div>
-<div class="why"><strong>Pourquoi c'est mauvais :</strong> typo, valeur spécifique au dossier, page absolue, pas de règle. Maya ne sait même pas de quel champ on parle.<br>
-<strong>Mieux :</strong> utiliser le bouton 💬 sur la ligne du champ concerné, indiquer la valeur attendue dans le champ dédié, expliquer où chercher dans la VT.</div>
+<div class="anatomy">
+  <div class="ana-step">
+    <div class="ana-num">1</div>
+    <div class="ana-content"><strong>Le statut attendu</strong> — VERT, ORANGE, ROUGE ou MANQUANT. Sélectionne-le dans le dropdown plutôt que d'écrire « conforme » ou « non conforme » en toutes lettres : c'est plus rapide et sans ambiguïté.</div>
+  </div>
+  <div class="ana-step">
+    <div class="ana-num">2</div>
+    <div class="ana-content"><strong>La valeur correcte</strong> (si applicable) — dans le champ dédié. Exemple : <em>25,78 m²</em> ou <em>1985</em>. Ne la mets pas dans l'explication, mets-la dans le champ.</div>
+  </div>
+  <div class="ana-step">
+    <div class="ana-num">3</div>
+    <div class="ana-content"><strong>Le pourquoi (règle métier)</strong> — explique <em>ce que Maya aurait dû faire</em>. Préfère « Pour les planchers, ITI ne s'applique pas car c'est une isolation murale » à « non conforme ITI ».</div>
+  </div>
+  <div class="ana-step">
+    <div class="ana-num">4</div>
+    <div class="ana-content"><strong>Un repère stable</strong> (pas un n° de page) — préfère <em>« section Caractéristiques techniques »</em> à <em>« page 14 »</em>. Les pages changent d'un dossier à l'autre, les sections non.</div>
+  </div>
+  <div class="ana-step">
+    <div class="ana-num">5</div>
+    <div class="ana-content"><strong>La portée</strong> — coche « 🌐 Règle générale » si la règle vaut pour tous les futurs dossiers. Ne la coche pas pour une valeur spécifique à ce dossier.</div>
+  </div>
 </div>
 
 <div class="page-break"></div>
 
-<h2><span class="icon">📋</span>Récapitulatif — Avant / Après</h2>
+<h2 class="green"><span class="icon">✅</span>Les BONS feedbacks (à reproduire)</h2>
 
-<table>
-<thead>
-  <tr>
-    <th style="width:50%">❌ Ne pas écrire</th>
-    <th style="width:50%">✅ Écrire à la place</th>
-  </tr>
-</thead>
-<tbody>
-  <tr class="bad"><td>« conforme »</td></tr>
-  <tr class="good"><td colspan="2">Sélectionner « VERT » dans le dropdown + « Les deux valeurs sont sémantiquement équivalentes ; <em>raison brève</em>. »</td></tr>
-  <tr class="bad"><td>« page 14 de la VT »</td></tr>
-  <tr class="good"><td colspan="2">« Section "Caractéristiques techniques de la paroi" de la VT » (repère sémantique stable d'un dossier à l'autre)</td></tr>
-  <tr class="bad"><td>« ici la valeur est 70,65 m² »</td></tr>
-  <tr class="good"><td colspan="2">Mettre la valeur dans le champ dédié + expliquer où la trouver et pourquoi Maya l'a ratée.</td></tr>
-  <tr class="bad"><td>« Tu as refais la même erreur »</td></tr>
-  <tr class="good"><td colspan="2">Énoncer la règle générique + cocher la case « 🌐 Règle générale » pour qu'elle s'applique à tous les dossiers.</td></tr>
-  <tr class="bad"><td>« non conforme »</td></tr>
-  <tr class="good"><td colspan="2">« Statut : ROUGE. Raison : ITI s'applique uniquement aux murs verticaux ; pour un plancher, c'est une erreur de classification. »</td></tr>
-</tbody>
-</table>
+<div class="example good no-break">
+<div class="label-line">Exemple #1 — Année de construction</div>
+<div class="quote">« Maya, l'année de construction est forcément une valeur numérique, pas un champ mètre carré. »</div>
+<div class="analysis">
+<strong>Pourquoi c'est bon :</strong>
+<ul>
+  <li><strong>Règle métier explicite</strong> : énonce une convention de format (« forcément une valeur numérique »).</li>
+  <li><strong>Identifie le champ</strong> : « année de construction » — pas d'ambiguïté.</li>
+  <li><strong>Reproductible</strong> : Maya peut l'appliquer aux futurs dossiers sans avoir besoin d'autre information.</li>
+  <li><strong>Diagnostic du raisonnement raté</strong> : « pas un champ mètre carré » dit ce que Maya a fait de travers.</li>
+</ul>
+</div>
+<div class="reformulation"><strong>Action recommandée :</strong> ce type de règle mérite la case <strong>« 🌐 Règle générale »</strong> car elle s'applique à 100% des dossiers.</div>
+</div>
 
-<div class="checklist">
+<div class="example good no-break">
+<div class="label-line">Exemple #2 — Confusion ITI / planchers</div>
+<div class="quote">« Non conforme : ITI correspond aux murs et non aux planchers. »</div>
+<div class="analysis">
+<strong>Pourquoi c'est bon :</strong>
+<ul>
+  <li><strong>Statut implicite</strong> : « non conforme » = ROUGE (à mettre dans le dropdown pour être encore plus net).</li>
+  <li><strong>Règle sémantique précise</strong> : énonce une distinction métier (ITI = murs uniquement) que Maya a confondue.</li>
+  <li><strong>Court et dense</strong> : 11 mots, mais chaque mot porte du sens.</li>
+  <li><strong>Généralisable</strong> : tout futur dossier où Maya verra « ITI » associé à un plancher déclenchera la règle.</li>
+</ul>
+</div>
+<div class="reformulation"><strong>Action recommandée :</strong> à promouvoir en <strong>règle globale</strong> (catégorie « Règle manquante »). C'est un cas typique d'erreur sémantique transverse.</div>
+</div>
+
+<div class="example good no-break">
+<div class="label-line">Exemple #3 — Exception RDC</div>
+<div class="quote">« Inscris "RDC" dans le champ VT, noté comme exception aux valeurs numériques attendues pour le champ "nombre de niveaux". »</div>
+<div class="analysis">
+<strong>Pourquoi c'est bon :</strong>
+<ul>
+  <li><strong>Action concrète</strong> : « inscris "RDC" » — Maya sait quoi écrire.</li>
+  <li><strong>Identifie le champ</strong> : « nombre de niveaux » — sans ambiguïté.</li>
+  <li><strong>Encadre l'exception</strong> : précise que c'est une <em>exception aux valeurs numériques</em> — Maya saura que c'est dérogatoire au format habituel.</li>
+  <li><strong>Reproductible</strong> : tout futur dossier avec un RDC déclenchera le bon comportement.</li>
+</ul>
+</div>
+<div class="reformulation"><strong>Action recommandée :</strong> règle globale, catégorie « Pattern récurrent observé ». Ce type de règle d'exception est exactement ce que Maya a besoin de mémoriser.</div>
+</div>
+
+<h2 class="orange"><span class="icon">🟠</span>Les feedbacks MOYENS (info utile mais cas unique)</h2>
+
+<div class="example medium no-break">
+<div class="label-line">Exemple #4 — Surface plancher mitoyen</div>
+<div class="quote">« Ici la valeur VT est de 70,65 m². »</div>
+<div class="analysis">
+<strong>Pourquoi c'est moyen :</strong>
+<ul>
+  <li><strong>Donne la bonne valeur</strong> pour ce dossier — utile, mais limité au dossier en cours.</li>
+  <li><strong>Aucune règle exploitable</strong> : le prochain dossier aura une autre surface (ex : 53,24 m²).</li>
+  <li><strong>« Ici »</strong> est ambigu : qu'est-ce qui a fait que Maya a raté la lecture ? Quel emplacement chercher ?</li>
+</ul>
+</div>
+<div class="reformulation"><strong>Mieux :</strong> « Statut attendu : VERT. Valeur attendue : 70,65 m². Pour le champ <em>surface plancher mitoyen</em>, la VT donne la valeur dans la fiche descriptive de la paroi correspondante (section caractéristiques) — Maya l'a manquée car elle n'a regardé que le tableau de synthèse. »<br>
+→ Au lieu d'une valeur isolée, on transmet une <strong>règle de lecture</strong> applicable aux futurs dossiers.</div>
+</div>
+
+<div class="example medium no-break">
+<div class="label-line">Exemple #5 — Référence à une page absolue</div>
+<div class="quote">« Info en page 14 de la VT : Aucun isolant. »</div>
+<div class="analysis">
+<strong>Pourquoi c'est moyen :</strong>
+<ul>
+  <li><strong>Référence à un n° de page absolu</strong> — page 14 de CE dossier ≠ page 14 du prochain.</li>
+  <li><strong>Champ implicite</strong> : on devine qu'il s'agit d'isolation, mais quel paroi ? Plancher bas ? Plafond ?</li>
+  <li><strong>Pas d'indication sur l'erreur de Maya</strong> : qu'est-ce qu'elle a sorti à tort ? Pourquoi ?</li>
+</ul>
+</div>
+<div class="reformulation"><strong>Mieux :</strong> « Statut attendu : VERT. Pour le <em>plancher bas</em>, la VT indique "Aucun isolant" dans la <em>fiche descriptive de la paroi</em>. Maya a sorti "ITI / Polystyrène" en lisant à tort le bloc des façades. Règle : ne jamais propager les caractéristiques d'isolation des façades aux planchers. »<br>
+→ On remplace une page par un repère sémantique stable et on diagnostique l'erreur.</div>
+</div>
+
+<div class="page-break"></div>
+
+<h2 class="red"><span class="icon">❌</span>Les MAUVAIS feedbacks (à éviter absolument)</h2>
+
+<div class="example bad no-break">
+<div class="label-line">Exemple #6 — Le mot unique</div>
+<div class="quote">« conforme »</div>
+<div class="analysis">
+<strong>Pourquoi c'est mauvais :</strong>
+<ul>
+  <li><strong>Aucun statut explicite</strong> — VERT ? L'utilisateur veut dire que Maya s'est trompée en mettant ROUGE/ORANGE ? Ou qu'elle confirme le VERT déjà sorti ?</li>
+  <li><strong>Aucune explication</strong> : Maya ne sait pas quelle règle métier appliquer.</li>
+  <li><strong>Aucune valeur</strong> : si l'audit dit X et la VT dit Y, Maya ne sait toujours pas pourquoi c'est conforme malgré la différence.</li>
+  <li><strong>Risque inverse</strong> : si Maya est conservatrice et passe en VERT à tort, le contrôle qualité s'effondre.</li>
+</ul>
+</div>
+<div class="reformulation"><strong>Ce qu'il fallait écrire :</strong> sélectionner <strong>VERT</strong> dans le dropdown + « Les valeurs sont sémantiquement équivalentes : 1,56 × 1,85 m (Audit) vs 1,56 + 1,845 m (VT). La VT décompose largeur + hauteur, l'écart de 5 mm sur la hauteur (1,845 vs 1,85) est dans la tolérance d'arrondi pour une menuiserie. »</div>
+</div>
+
+<div class="example bad no-break">
+<div class="label-line">Exemple #7 — La frustration sans règle</div>
+<div class="quote">« Tu as refais la même erreur, il me faut une valeur numérique. »</div>
+<div class="analysis">
+<strong>Pourquoi c'est mauvais :</strong>
+<ul>
+  <li><strong>Émotionnel, non actionnable</strong> : « tu as refais la même erreur » exprime de la frustration mais ne dit pas QUELLE erreur.</li>
+  <li><strong>Champ non identifié</strong> : « valeur numérique » pour quel champ ? Année ? Surface ? Coefficient ?</li>
+  <li><strong>Pas de règle de fallback</strong> : si la VT donne une plage (« 2012-2020 »), que faire ? Médiane ? Borne basse ? MANQUANT ?</li>
+  <li><strong>Pas de portée</strong> : règle pour ce dossier seulement, ou pour tous ?</li>
+</ul>
+</div>
+<div class="reformulation"><strong>Ce qu'il fallait écrire :</strong> « Statut : ROUGE. Pour le champ <em>année de construction</em>, la sortie doit toujours être un <strong>entier sur 4 chiffres</strong>. Si la VT donne une plage (ex : "2012-2020"), prendre la médiane arrondie. Si la VT donne uniquement une décennie, flagger MANQUANT. » + cocher <strong>🌐 Règle générale</strong>.</div>
+</div>
+
+<div class="example bad no-break">
+<div class="label-line">Exemple #8 — Typo + valeur sans contexte</div>
+<div class="quote">« Valeutr en page 3 de la VT 25,78 »</div>
+<div class="analysis">
+<strong>Pourquoi c'est mauvais :</strong>
+<ul>
+  <li><strong>Typo (« Valeutr »)</strong> — pas grave en soi, mais signe d'un feedback envoyé sans relecture.</li>
+  <li><strong>Page absolue (« page 3 »)</strong> — instable d'un dossier à l'autre.</li>
+  <li><strong>Valeur isolée (« 25,78 »)</strong> — m² ? cm ? coefficient U ? Année ?</li>
+  <li><strong>Champ inconnu</strong> : on ne sait même pas de quelle ligne du rapport il s'agit (heureusement le système attache le feedback à la ligne, mais Maya devra deviner pourquoi).</li>
+</ul>
+</div>
+<div class="reformulation"><strong>Ce qu'il fallait écrire :</strong> via le bouton 💬 de la ligne concernée → dropdown statut <strong>VERT</strong> + champ valeur <strong>25,78 m²</strong> + explication : « La VT donne 25,78 m² dans la <em>fiche caractéristiques générales du logement</em>. Maya a lu à tort le tableau de surfaces des parois. Règle : pour <em>surface habitable</em>, toujours prendre la valeur de la fiche caractéristiques générales, pas du tableau parois. »</div>
+</div>
+
+<div class="checklist no-break">
 <h3>📝 Check-list avant d'envoyer un feedback</h3>
 <ul>
-  <li><strong>Le statut attendu</strong> est-il sélectionné dans le dropdown ? (VERT / ORANGE / ROUGE / MANQUANT)</li>
-  <li><strong>La valeur attendue</strong> est-elle renseignée dans le champ dédié si applicable ?</li>
-  <li><strong>L'explication</strong> donne-t-elle une règle métier que Maya pourra réappliquer ?</li>
-  <li>Ai-je évité les <strong>références à des numéros de page absolus</strong> (préférer "section X" ou "tableau Y") ?</li>
-  <li>La règle est-elle <strong>généralisable à tous les dossiers</strong> ? Si oui, cocher 🌐 « Règle générale ».</li>
-  <li>Le feedback fait-il <strong>au moins une phrase complète</strong> avec un sujet et un verbe ?</li>
+  <li>Ai-je choisi le <strong>bon type</strong> ? Feedback ligne (💬 sur la ligne) si cas spécifique ; feedback global (FAB 💬) si règle métier transverse.</li>
+  <li>Le <strong>statut attendu</strong> est-il sélectionné dans le dropdown ? (VERT / ORANGE / ROUGE / MANQUANT)</li>
+  <li>La <strong>valeur attendue</strong> est-elle renseignée dans le champ dédié si applicable ?</li>
+  <li>L'explication donne-t-elle une <strong>règle métier</strong> que Maya pourra réappliquer ?</li>
+  <li>Ai-je évité les <strong>références à des numéros de page absolus</strong> (préférer "section X" ou "fiche descriptive") ?</li>
+  <li>La règle est-elle généralisable ? Si oui, cocher <strong>🌐 Règle générale</strong>.</li>
+  <li>Ai-je <strong>relu</strong> avant d'envoyer ? (typos, ambiguïtés, valeur correcte ?)</li>
 </ul>
 </div>
 
-<h2><span class="icon">🌐</span>Quand cocher « Règle générale » ?</h2>
-
-<p>La case <strong>« Règle générale »</strong> transforme votre feedback en règle réutilisable sur <strong>tous les futurs dossiers</strong> (pas seulement la ligne corrigée). Elle est particulièrement utile pour :</p>
-
-<ul>
-  <li>Les <strong>règles métier transverses</strong> (ex : « ITI ne s'applique qu'aux murs »)</li>
-  <li>Les <strong>conventions de format</strong> (ex : « année de construction = entier »)</li>
-  <li>Les <strong>équivalences sémantiques</strong> (ex : « "RDC" équivaut à 1 niveau »)</li>
-</ul>
-
-<p>À <strong>NE PAS cocher</strong> pour :</p>
-<ul>
-  <li>Une valeur spécifique à ce dossier</li>
-  <li>Une référence à une page précise d'un PDF</li>
-  <li>Un cas d'erreur ponctuel sans règle généralisable</li>
-</ul>
-
 <div class="footer">
 Document généré pour les utilisateurs du comparateur Audit / VT — Mai 2026<br>
-Version 1.0 — basé sur l'analyse de 49 feedbacks réels en base
+Version 1.1 — basé sur l'analyse de 49 feedbacks réels en base
 </div>
 
 </body>
