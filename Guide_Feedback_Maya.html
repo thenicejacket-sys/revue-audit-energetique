@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Guide — Bien écrire un feedback à Maya</title>
+<style>
+  @page { size: A4; margin: 14mm 14mm 16mm 14mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    color: #2C2C2C;
+    font-size: 10.5pt;
+    line-height: 1.4;
+    margin: 0;
+    padding: 0;
+  }
+  h1 {
+    font-size: 22pt;
+    color: #4A1F5E;
+    margin: 0 0 4px 0;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+  }
+  .subtitle {
+    color: #7B2D8E;
+    font-size: 11pt;
+    margin-bottom: 18px;
+    font-weight: 600;
+  }
+  .intro {
+    background: linear-gradient(135deg, #F8F4FA 0%, #F0E6F5 100%);
+    border-left: 4px solid #7B2D8E;
+    padding: 12px 14px;
+    border-radius: 5px;
+    margin-bottom: 22px;
+    font-size: 10.5pt;
+  }
+  h2 {
+    font-size: 14pt;
+    color: #4A1F5E;
+    margin: 22px 0 10px 0;
+    padding-bottom: 5px;
+    border-bottom: 2px solid #7B2D8E;
+  }
+  h2.green { color: #1B5E20; border-bottom-color: #2E7D32; }
+  h2.orange { color: #E65100; border-bottom-color: #FB8C00; }
+  h2.red { color: #B71C1C; border-bottom-color: #E53935; }
+  .example {
+    border-left: 4px solid #ccc;
+    padding: 10px 12px;
+    margin: 8px 0 10px 0;
+    background: #FAFAFA;
+    border-radius: 3px;
+    font-size: 10pt;
+  }
+  .example.good { border-left-color: #2E7D32; background: #F1F8E9; }
+  .example.medium { border-left-color: #FB8C00; background: #FFF8E1; }
+  .example.bad { border-left-color: #E53935; background: #FFEBEE; }
+  .example .quote {
+    font-style: italic;
+    color: #1B1B1B;
+    background: #fff;
+    padding: 6px 10px;
+    border-radius: 3px;
+    margin: 4px 0 6px 0;
+    border: 1px solid #E0E0E0;
+    font-size: 10pt;
+  }
+  .example .why {
+    font-size: 9.5pt;
+    color: #555;
+  }
+  .example .why strong { color: #2C2C2C; }
+  .icon { font-size: 13pt; margin-right: 5px; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8px 0 14px 0;
+    font-size: 9.5pt;
+  }
+  th, td {
+    border: 1px solid #DADADA;
+    padding: 7px 9px;
+    vertical-align: top;
+    text-align: left;
+  }
+  th {
+    background: #F0E6F5;
+    color: #4A1F5E;
+    font-weight: 700;
+  }
+  tr.good td:first-child { background: #E8F5E9; color: #1B5E20; font-weight: 600; }
+  tr.bad td:first-child { background: #FFEBEE; color: #B71C1C; font-weight: 600; }
+  .checklist {
+    background: #F8F4FA;
+    border: 2px solid #7B2D8E;
+    border-radius: 6px;
+    padding: 14px 16px;
+    margin: 16px 0 8px 0;
+  }
+  .checklist h3 {
+    margin: 0 0 8px 0;
+    font-size: 12pt;
+    color: #4A1F5E;
+  }
+  .checklist ul {
+    margin: 0;
+    padding-left: 22px;
+    line-height: 1.55;
+  }
+  .checklist li { margin-bottom: 4px; }
+  .footer {
+    margin-top: 24px;
+    padding-top: 10px;
+    border-top: 1px solid #DDD;
+    font-size: 8.5pt;
+    color: #888;
+    text-align: center;
+  }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 9pt;
+    font-weight: 700;
+    margin-right: 4px;
+  }
+  .badge.good { background: #C8E6C9; color: #1B5E20; }
+  .badge.medium { background: #FFE0B2; color: #7F3D00; }
+  .badge.bad { background: #FFCDD2; color: #B71C1C; }
+  .page-break { page-break-before: always; }
+</style>
+</head>
+<body>
+
+<h1>Bien écrire un feedback à Maya</h1>
+<div class="subtitle">Guide rapide pour les utilisateurs du comparateur Audit / VT</div>
+
+<div class="intro">
+<strong>Pourquoi ce guide ?</strong> Maya s'améliore grâce à vos feedbacks — mais seulement s'ils sont <strong>clairs, généralisables et sans ambiguïté</strong>. Un commentaire vague comme « conforme » ne lui apprend rien. Ce guide montre des <strong>vrais exemples</strong> tirés de la base et explique comment passer d'un feedback faible à un feedback efficace.
+</div>
+
+<h2 class="green"><span class="icon">✅</span>Les BONS feedbacks (à reproduire)</h2>
+
+<div class="example good">
+<div class="quote">« Maya, l'année de construction est forcément une valeur numérique, pas un champ mètre carré. »</div>
+<div class="why"><strong>Pourquoi c'est bon :</strong> énonce une <strong>règle métier claire</strong>, dit ce qui est attendu (valeur numérique), et corrige une erreur de type. Maya peut l'appliquer à tous les futurs dossiers.</div>
+</div>
+
+<div class="example good">
+<div class="quote">« Non conforme : ITI correspond aux murs et non aux planchers. »</div>
+<div class="why"><strong>Pourquoi c'est bon :</strong> donne le <strong>statut attendu</strong> (non conforme = ROUGE), précise une <strong>règle sémantique</strong> précise et généralisable. Reproductible sur tous les dossiers où un plancher est annoté ITI.</div>
+</div>
+
+<div class="example good">
+<div class="quote">« Inscris "RDC" dans le champ VT, noté comme exception aux valeurs numériques attendues pour le champ "nombre de niveaux". »</div>
+<div class="why"><strong>Pourquoi c'est bon :</strong> donne une <strong>règle d'exception nominative</strong>, indique le champ concerné, donne la sortie attendue. Maya saura quoi faire pour les futurs RDC.</div>
+</div>
+
+<h2 class="orange"><span class="icon">🟠</span>Les feedbacks MOYENS (info utile mais cas unique)</h2>
+
+<div class="example medium">
+<div class="quote">« Ici la valeur VT est de 70,65 m². »</div>
+<div class="why"><strong>Pourquoi c'est moyen :</strong> donne la bonne valeur pour CE dossier, mais <strong>aucune règle</strong> exploitable ailleurs. Le prochain dossier aura une autre surface.<br>
+<strong>Mieux :</strong> « Pour le champ "surface plancher mitoyen", chercher dans la fiche descriptive de la paroi de la VT (section caractéristiques) — souvent oubliée par Maya. »</div>
+</div>
+
+<div class="example medium">
+<div class="quote">« Info en page 14 de la VT : Aucun isolant. »</div>
+<div class="why"><strong>Pourquoi c'est moyen :</strong> référence à un <strong>numéro de page absolu</strong> qui ne sera plus valide pour un autre dossier.<br>
+<strong>Mieux :</strong> « Pour les planchers bas, la VT indique "Aucun isolant" dans la section "Caractéristiques techniques de la paroi". Toujours lire cette section avant de conclure. »</div>
+</div>
+
+<h2 class="red"><span class="icon">❌</span>Les MAUVAIS feedbacks (à éviter absolument)</h2>
+
+<div class="example bad">
+<div class="quote">« conforme »</div>
+<div class="why"><strong>Pourquoi c'est mauvais :</strong> un seul mot. Pas de statut explicite (VERT ?), pas d'explication, pas de règle. Maya ne peut rien apprendre. Cela confond plus qu'autre chose.<br>
+<strong>Mieux :</strong> indiquer le statut attendu via le dropdown + expliquer pourquoi : « Statut : VERT. Les valeurs sont équivalentes (1,56 × 1,85 m vs 1,56 + 1,845 m), différence de 5 mm acceptable pour une menuiserie. »</div>
+</div>
+
+<div class="example bad">
+<div class="quote">« Tu as refais la même erreur, il me faut une valeur numérique. »</div>
+<div class="why"><strong>Pourquoi c'est mauvais :</strong> exprime de la frustration mais ne dit pas QUELLE erreur, ni POUR QUEL CHAMP, ni POURQUOI. Maya ne sait pas comment se corriger.<br>
+<strong>Mieux :</strong> « Pour le champ "année de construction", la sortie doit être un nombre entier (ex : 1985). Si la VT donne une plage ("2012-2020"), prendre la médiane ou flagger MANQUANT. »</div>
+</div>
+
+<div class="example bad">
+<div class="quote">« Valeutr en page 3 de la VT 25,78 »</div>
+<div class="why"><strong>Pourquoi c'est mauvais :</strong> typo, valeur spécifique au dossier, page absolue, pas de règle. Maya ne sait même pas de quel champ on parle.<br>
+<strong>Mieux :</strong> utiliser le bouton 💬 sur la ligne du champ concerné, indiquer la valeur attendue dans le champ dédié, expliquer où chercher dans la VT.</div>
+</div>
+
+<div class="page-break"></div>
+
+<h2><span class="icon">📋</span>Récapitulatif — Avant / Après</h2>
+
+<table>
+<thead>
+  <tr>
+    <th style="width:50%">❌ Ne pas écrire</th>
+    <th style="width:50%">✅ Écrire à la place</th>
+  </tr>
+</thead>
+<tbody>
+  <tr class="bad"><td>« conforme »</td></tr>
+  <tr class="good"><td colspan="2">Sélectionner « VERT » dans le dropdown + « Les deux valeurs sont sémantiquement équivalentes ; <em>raison brève</em>. »</td></tr>
+  <tr class="bad"><td>« page 14 de la VT »</td></tr>
+  <tr class="good"><td colspan="2">« Section "Caractéristiques techniques de la paroi" de la VT » (repère sémantique stable d'un dossier à l'autre)</td></tr>
+  <tr class="bad"><td>« ici la valeur est 70,65 m² »</td></tr>
+  <tr class="good"><td colspan="2">Mettre la valeur dans le champ dédié + expliquer où la trouver et pourquoi Maya l'a ratée.</td></tr>
+  <tr class="bad"><td>« Tu as refais la même erreur »</td></tr>
+  <tr class="good"><td colspan="2">Énoncer la règle générique + cocher la case « 🌐 Règle générale » pour qu'elle s'applique à tous les dossiers.</td></tr>
+  <tr class="bad"><td>« non conforme »</td></tr>
+  <tr class="good"><td colspan="2">« Statut : ROUGE. Raison : ITI s'applique uniquement aux murs verticaux ; pour un plancher, c'est une erreur de classification. »</td></tr>
+</tbody>
+</table>
+
+<div class="checklist">
+<h3>📝 Check-list avant d'envoyer un feedback</h3>
+<ul>
+  <li><strong>Le statut attendu</strong> est-il sélectionné dans le dropdown ? (VERT / ORANGE / ROUGE / MANQUANT)</li>
+  <li><strong>La valeur attendue</strong> est-elle renseignée dans le champ dédié si applicable ?</li>
+  <li><strong>L'explication</strong> donne-t-elle une règle métier que Maya pourra réappliquer ?</li>
+  <li>Ai-je évité les <strong>références à des numéros de page absolus</strong> (préférer "section X" ou "tableau Y") ?</li>
+  <li>La règle est-elle <strong>généralisable à tous les dossiers</strong> ? Si oui, cocher 🌐 « Règle générale ».</li>
+  <li>Le feedback fait-il <strong>au moins une phrase complète</strong> avec un sujet et un verbe ?</li>
+</ul>
+</div>
+
+<h2><span class="icon">🌐</span>Quand cocher « Règle générale » ?</h2>
+
+<p>La case <strong>« Règle générale »</strong> transforme votre feedback en règle réutilisable sur <strong>tous les futurs dossiers</strong> (pas seulement la ligne corrigée). Elle est particulièrement utile pour :</p>
+
+<ul>
+  <li>Les <strong>règles métier transverses</strong> (ex : « ITI ne s'applique qu'aux murs »)</li>
+  <li>Les <strong>conventions de format</strong> (ex : « année de construction = entier »)</li>
+  <li>Les <strong>équivalences sémantiques</strong> (ex : « "RDC" équivaut à 1 niveau »)</li>
+</ul>
+
+<p>À <strong>NE PAS cocher</strong> pour :</p>
+<ul>
+  <li>Une valeur spécifique à ce dossier</li>
+  <li>Une référence à une page précise d'un PDF</li>
+  <li>Un cas d'erreur ponctuel sans règle généralisable</li>
+</ul>
+
+<div class="footer">
+Document généré pour les utilisateurs du comparateur Audit / VT — Mai 2026<br>
+Version 1.0 — basé sur l'analyse de 49 feedbacks réels en base
+</div>
+
+</body>
+</html>

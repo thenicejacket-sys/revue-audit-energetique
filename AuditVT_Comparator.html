@@ -6087,6 +6087,14 @@ ${vtShort}`;
     let mayaFeedbacks = {};
     let currentFeedbackKey = null;
 
+    // Normalise un timestamp ISO pour cohérence des IDs feedback.
+    // Supabase normalise '...Z' en '...+00:00' au retour : on inverse pour retomber en 'Z'.
+    // Sans ça, l'ID local diverge de l'ID distant après un round-trip → ré-upload en doublon.
+    function normTs(ts) {
+      if (!ts) return new Date().toISOString();
+      return String(ts).replace(/\+00:?00$/, 'Z');
+    }
+
     function feedbackKey(id_champ, instance_label) {
       return (id_champ || '') + (instance_label ? '|' + instance_label : '');
     }
@@ -6124,6 +6132,13 @@ ${vtShort}`;
       const conf = computeConfidence(r);
       document.getElementById('maya-fb-confidence').textContent = conf.icon + ' ' + conf.label;
       document.getElementById('maya-fb-textarea').value = '';
+      // Reset des nouveaux champs structurés
+      var elExpStatus = document.getElementById('maya-fb-expected-status');
+      var elExpValue  = document.getElementById('maya-fb-expected-value');
+      var elIsRule    = document.getElementById('maya-fb-is-rule');
+      if (elExpStatus) elExpStatus.value = '';
+      if (elExpValue)  elExpValue.value = '';
+      if (elIsRule)    elIsRule.checked = false;
 
       // Existing feedbacks history
       const list = mayaFeedbacks[key] || [];
@@ -6152,11 +6167,27 @@ ${vtShort}`;
 
     function submitMayaFeedback() {
       if (!currentFeedbackKey) return;
-      const txt = document.getElementById('maya-fb-textarea').value.trim();
-      if (!txt) {
-        showAlert('alerts-area', 'warning', 'Merci de saisir un feedback avant d\'envoyer.');
+      const userTxt = document.getElementById('maya-fb-textarea').value.trim();
+      if (!userTxt) {
+        showAlert('alerts-area', 'warning', 'Merci de saisir une explication avant d\'envoyer.');
         return;
       }
+      // Lecture des champs structurés
+      var elExpStatus = document.getElementById('maya-fb-expected-status');
+      var elExpValue  = document.getElementById('maya-fb-expected-value');
+      var elIsRule    = document.getElementById('maya-fb-is-rule');
+      var expectedStatus = elExpStatus ? (elExpStatus.value || '') : '';
+      var expectedValue  = elExpValue ? elExpValue.value.trim() : '';
+      var isRule         = !!(elIsRule && elIsRule.checked);
+
+      // Construit un texte enrichi structuré pour le prompt Maya (plus efficace que du texte libre)
+      var parts = [];
+      if (expectedStatus) parts.push('STATUT ATTENDU : ' + expectedStatus);
+      if (expectedValue)  parts.push('VALEUR ATTENDUE : ' + expectedValue);
+      parts.push('EXPLICATION : ' + userTxt);
+      if (isRule) parts.push('PORTÉE : règle générale, à appliquer à tous les futurs dossiers.');
+      var txt = parts.join(' | ');
+
       const r = findResultByFbKey(currentFeedbackKey);
       const snapshot = r ? {
         id_champ: r.id_champ,
@@ -6164,9 +6195,13 @@ ${vtShort}`;
         valeur_audit: r.valeur_audit || null,
         valeur_vt: r.valeur_vt || null,
         statut: r.statut || null,
-        commentaire: r.commentaire || null
+        commentaire: r.commentaire || null,
+        // Champs structurés du feedback (utiles pour exports / analyses)
+        expected_status: expectedStatus || null,
+        expected_value: expectedValue || null,
+        is_rule: isRule
       } : {};
-      var ts = new Date().toISOString();
+      var ts = normTs(new Date().toISOString());
       if (!mayaFeedbacks[currentFeedbackKey]) mayaFeedbacks[currentFeedbackKey] = [];
       mayaFeedbacks[currentFeedbackKey].push({
         timestamp: ts,
@@ -6192,8 +6227,38 @@ ${vtShort}`;
           created_at: ts
         });
       } catch(e) { console.warn('[MAYA-SYNC] push line feedback:', e.message); }
+
+      // Si "règle générale" coché → enregistre AUSSI un feedback global (catégorie 'rule')
+      // pour qu'il soit appliqué à tous les futurs dossiers, pas juste à cette ligne.
+      if (isRule) {
+        try {
+          var gfbId = 'gfb_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
+          var globalText = (expectedStatus ? '[Statut: ' + expectedStatus + '] ' : '') + userTxt;
+          mayaGlobalFeedbacks.push({
+            id: gfbId,
+            timestamp: ts,
+            category: 'rule',
+            text: globalText
+          });
+          persistMayaGlobalFeedbacks();
+          MayaSupabase.saveFeedback({
+            id: 'global:' + gfbId,
+            scope: 'global',
+            key_field: null,
+            category: 'rule',
+            feedback_text: globalText,
+            status: 'pending',
+            created_at: ts
+          });
+        } catch(e) { console.warn('[MAYA-SYNC] push rule globale:', e.message); }
+      }
+
       closeMayaFeedback();
-      showAlert('alerts-area', 'success', '✨ Feedback envoyé à Maya — merci ! Il sera pris en compte lors de la prochaine vérification.');
+      var msg = isRule
+        ? '✨ Feedback envoyé à Maya + 🌐 règle générale enregistrée pour tous les dossiers — merci !'
+        : '✨ Feedback envoyé à Maya — merci ! Il sera pris en compte lors de la prochaine vérification.';
+      showAlert('alerts-area', 'success', msg);
+      updateMayaFabBadges();
       renderTable(currentFilter);
     }
 
@@ -6272,11 +6337,12 @@ ${vtShort}`;
       var items = [];
       Object.keys(mayaFeedbacks || {}).forEach(function(k){
         (mayaFeedbacks[k] || []).forEach(function(fb, idx){
-          var fid = 'line:' + k + ':' + (fb.timestamp || idx);
+          var normalizedTs = normTs(fb.timestamp) || idx;
+          var fid = 'line:' + k + ':' + normalizedTs;
           if (typeof mayaTombstones !== 'undefined' && mayaTombstones && mayaTombstones[fid]) return;
           items.push({
             id: fid, scope: 'line', key: k,
-            timestamp: fb.timestamp, text: fb.text,
+            timestamp: normalizedTs, text: fb.text,
             snapshot: fb.snapshot || {},
             category: null,
             meta: mayaFeedbackMeta[fid] || { status: 'pending' }
@@ -6557,6 +6623,10 @@ ${vtShort}`;
           if (it.meta.status === 'pending') {
             html +=   '<button type="button" class="maya-drawer-item-action" onclick="mayaEditFeedback(\'' + it.id + '\')" title="Modifier le texte de ce feedback. Possible uniquement tant qu\'il est En attente (Maya ne l\'a pas encore traité).">✏️ Modifier</button>';
           }
+          // Bouton "promouvoir en règle globale" : transforme un feedback ligne en règle globale réutilisable sur tous dossiers
+          if (it.scope === 'line') {
+            html +=   '<button type="button" class="maya-drawer-item-action" style="border-color:#FFC107;color:#7F3D00;background:#FFF8E1" onclick="mayaPromoteToGlobal(\'' + it.id + '\')" title="Crée une copie de ce feedback comme règle globale (catégorie « Règle manquante ») applicable à TOUS les futurs dossiers, pas juste cette ligne. À utiliser quand la règle métier est généralisable.">🌐 Règle globale</button>';
+          }
           html +=     '<button type="button" class="maya-drawer-item-action danger" onclick="mayaDeleteFeedback(\'' + it.id + '\')" title="Retire définitivement ce feedback. Les statuts (En attente / Appliqué / Permanente) sont gérés automatiquement par le système et ne peuvent pas être modifiés manuellement.">🗑 Supprimer</button>'
                +   '</div>'
                + '</div>';
@@ -6571,6 +6641,50 @@ ${vtShort}`;
       persistMayaFeedbackMeta();
       try { MayaSupabase.updateFeedback(id, { status: 'applied' }); } catch(e) {}
       renderMayaDrawer(); updateMayaFabBadges();
+    }
+
+    // Promeut un feedback ligne en règle globale (copie en scope=global, catégorie='rule')
+    // Le feedback ligne d'origine reste intact — on duplique uniquement.
+    function mayaPromoteToGlobal(id) {
+      var all = collectAllFeedbacks();
+      var src = all.find(function(i){ return i.id === id; });
+      if (!src || src.scope !== 'line') return;
+      // Construit un libellé pour préfixer le texte avec le contexte du champ
+      var ctx = '';
+      if (src.key) {
+        var r = findResultByFbKey(src.key);
+        if (r) {
+          var nom = getFieldNom(r.id_champ) || r.id_champ;
+          ctx = '[Champ : ' + nom + (r.instance_label ? ' — ' + r.instance_label : '') + '] ';
+        }
+      }
+      var globalText = ctx + (src.text || '');
+      // Confirmation
+      if (!confirm('🌐 Promouvoir en règle globale ?\n\nUne copie de ce feedback sera enregistrée comme règle générale, applicable à TOUS les futurs dossiers (catégorie « Règle manquante »).\n\nLe feedback ligne actuel est conservé.\n\nTexte qui sera enregistré :\n\n' + globalText.substring(0, 300) + (globalText.length > 300 ? '…' : ''))) return;
+
+      var gfbId = 'gfb_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
+      var ts = normTs(new Date().toISOString());
+      mayaGlobalFeedbacks.push({
+        id: gfbId,
+        timestamp: ts,
+        category: 'rule',
+        text: globalText
+      });
+      persistMayaGlobalFeedbacks();
+      try {
+        MayaSupabase.saveFeedback({
+          id: 'global:' + gfbId,
+          scope: 'global',
+          key_field: null,
+          category: 'rule',
+          feedback_text: globalText,
+          status: 'pending',
+          created_at: ts
+        });
+      } catch(e) { console.warn('[MAYA-SYNC] promote to global:', e.message); }
+      showAlert('alerts-area', 'success', '🌐 Feedback promu en règle globale — Maya l\'appliquera à tous les futurs dossiers.');
+      renderMayaDrawer();
+      updateMayaFabBadges();
     }
     function mayaMarkPermanent(id) {
       mayaFeedbackMeta[id] = { status: 'permanent', at: new Date().toISOString() };
@@ -6697,11 +6811,46 @@ ${vtShort}`;
       showAlert('alerts-area', 'success', '🗑 Feedback supprimé.');
     }
 
+    // ---- Détection + suppression des doublons Supabase (Z vs +00:00) ----
+    async function cleanupSupabaseDuplicates(remote) {
+      if (!remote || !remote.length) return remote;
+      var byKey = {};
+      remote.forEach(function(row){
+        if (!row || !row.id) return;
+        // Signature = scope + clé + texte (insensible aux ms de timestamp)
+        var sig = (row.scope || '') + '||' + (row.key_field || '') + '||' + ((row.feedback_text || '').trim()) + '||' + ((row.category || ''));
+        if (!byKey[sig]) byKey[sig] = [];
+        byKey[sig].push(row);
+      });
+      var toDelete = [];
+      Object.keys(byKey).forEach(function(sig){
+        var arr = byKey[sig];
+        if (arr.length < 2) return;
+        // Préférence : ID se terminant par 'Z' (format normalisé local)
+        var keep = arr.find(function(r){ return /Z$/.test(r.id); }) || arr[0];
+        arr.forEach(function(r){
+          if (r.id !== keep.id) toDelete.push(r.id);
+        });
+      });
+      if (toDelete.length > 0) {
+        console.log('[MAYA-CLEANUP] ' + toDelete.length + ' doublon(s) Supabase à supprimer (Z vs +00:00)');
+        for (var i = 0; i < toDelete.length; i++) {
+          try { await MayaSupabase.deleteFeedback(toDelete[i]); } catch(e) {}
+        }
+        var deletedSet = {};
+        toDelete.forEach(function(id){ deletedSet[id] = true; });
+        return remote.filter(function(r){ return !deletedSet[r.id]; });
+      }
+      return remote;
+    }
+
     // ---- Sync initial des feedbacks depuis Supabase (au chargement) ----
     async function syncFeedbacksFromSupabase() {
       var remote;
       try { remote = await MayaSupabase.listFeedbacks(); } catch(e) { remote = null; }
       if (!remote) return; // indisponible → on reste en local uniquement
+      // Cleanup doublons Z vs +00:00 (one-shot par session)
+      try { remote = await cleanupSupabaseDuplicates(remote); } catch(e) { console.warn('[MAYA-CLEANUP] échec:', e.message); }
       // Reconstruit les 3 structures locales depuis la source partagée
       var rebuiltLine = {};
       var rebuiltGlobal = [];
@@ -6721,7 +6870,7 @@ ${vtShort}`;
           var key = row.key_field || (id.indexOf('line:') === 0 ? id.substring(5, id.lastIndexOf(':')) : '');
           if (!key) return;
           if (!rebuiltLine[key]) rebuiltLine[key] = [];
-          var ts = row.created_at || new Date().toISOString();
+          var ts = normTs(row.created_at);
           rebuiltLine[key].push({
             timestamp: ts,
             text: row.feedback_text || '',
@@ -6736,7 +6885,7 @@ ${vtShort}`;
           var gid = (id.indexOf('global:') === 0) ? id.substring(7) : id;
           rebuiltGlobal.push({
             id: gid,
-            timestamp: row.created_at || new Date().toISOString(),
+            timestamp: normTs(row.created_at),
             category: row.category || 'other',
             text: row.feedback_text || ''
           });
@@ -6749,7 +6898,10 @@ ${vtShort}`;
       // 1. Feedbacks par ligne locaux
       Object.keys(mayaFeedbacks || {}).forEach(function(key){
         (mayaFeedbacks[key] || []).forEach(function(fb){
-          var fbId = 'line:' + key + ':' + (fb.timestamp || '');
+          var normalizedTs = normTs(fb.timestamp || '');
+          var fbId = 'line:' + key + ':' + normalizedTs;
+          // Garde le timestamp normalisé en local pour rester en cohérence avec l'ID distant
+          fb.timestamp = normalizedTs;
           if (remoteIds.has(fbId)) return; // déjà en distant
           if (mayaTombstones && mayaTombstones[fbId]) return; // supprimé localement
           // Préserver dans la structure reconstruite
@@ -6768,7 +6920,7 @@ ${vtShort}`;
                 commentaire: fb.snapshot && fb.snapshot.commentaire,
                 snapshot: fb.snapshot || null,
                 status: (mayaFeedbackMeta && mayaFeedbackMeta[fbId] && mayaFeedbackMeta[fbId].status) || 'pending',
-                created_at: fb.timestamp || new Date().toISOString()
+                created_at: normalizedTs
               });
               uploadedLine++;
             } catch(e) { console.warn('[MAYA-SYNC] upload feedback line ' + fbId + ':', e.message); }
@@ -8936,15 +9088,48 @@ ${vtShort}`;
           <div class="maya-modal-context-row"><span class="maya-modal-context-label">Statut :</span><span class="maya-modal-context-value" id="maya-fb-status">—</span></div>
           <div class="maya-modal-context-row"><span class="maya-modal-context-label">Confiance :</span><span class="maya-modal-context-value" id="maya-fb-confidence">—</span></div>
         </div>
-        <label class="maya-modal-field-label" for="maya-fb-textarea">Qu'est-ce qui ne va pas dans le résultat de Maya ?</label>
-        <div class="maya-fb-coach" style="background:#F8F4FA;border-left:3px solid #7B2D8E;padding:8px 10px;margin-bottom:8px;border-radius:4px;font-size:11.5px;color:#4A1F5E;line-height:1.5;">
-          <strong>📝 Pour un feedback efficace, écris :</strong><br>
-          1️⃣ <strong>Le bon résultat attendu</strong> (la valeur, le statut)<br>
-          2️⃣ <strong>Pourquoi</strong> (où Maya a mal lu, ou règle métier qui s'applique)<br>
-          3️⃣ <strong>Quand le rappliquer</strong> (cas isolé OU règle générale à reproduire)
+        <!-- Coach pédagogique en haut, plus visible -->
+        <div class="maya-fb-coach" style="background:linear-gradient(135deg,#F8F4FA 0%,#F0E6F5 100%);border-left:4px solid #7B2D8E;padding:12px 14px;margin-bottom:14px;border-radius:6px;font-size:12.5px;color:#3A1547;line-height:1.55;">
+          <div style="font-size:13px;font-weight:700;margin-bottom:6px;color:#4A1F5E;">📝 Comment écrire un feedback efficace</div>
+          1️⃣ <strong>Indique le bon statut</strong> attendu (dropdown ci-dessous)<br>
+          2️⃣ <strong>Précise la valeur correcte</strong> et où Maya peut la trouver<br>
+          3️⃣ <strong>Coche "règle générale"</strong> si ça vaut pour tous les futurs dossiers<br>
+          <span style="display:inline-block;margin-top:4px;font-style:italic;font-size:11.5px;opacity:0.85;">Évite les références à des numéros de page absolus — préfère des repères sémantiques ("section X", "fiche descriptive paroi").</span>
         </div>
-        <textarea id="maya-fb-textarea" class="maya-modal-textarea" placeholder="Ex : Le bon statut est « Conforme ». Pour les voutains sur solives métalliques, la VT page 13 indique explicitement « pas d'isolant ». Règle générale : toujours considérer ce type de plancher comme non isolé sauf mention contraire dans la VT."></textarea>
-        <div id="maya-fb-existing" class="maya-modal-existing" style="display:none"></div>
+
+        <!-- Champs structurés -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+          <div>
+            <label class="maya-modal-field-label" for="maya-fb-expected-status" style="font-size:11.5px;">Statut attendu</label>
+            <select id="maya-fb-expected-status" class="form-select" style="width:100%;font-size:13px;">
+              <option value="">— inchangé —</option>
+              <option value="VERT">✅ VERT (conforme)</option>
+              <option value="ORANGE">🟠 ORANGE (à vérifier)</option>
+              <option value="ROUGE">🔴 ROUGE (non conforme)</option>
+              <option value="MANQUANT">⚪ MANQUANT (info absente)</option>
+            </select>
+          </div>
+          <div>
+            <label class="maya-modal-field-label" for="maya-fb-expected-value" style="font-size:11.5px;">Valeur correcte attendue (optionnel)</label>
+            <input type="text" id="maya-fb-expected-value" class="form-input" placeholder="ex : 25,78 m² — ou laisser vide" style="width:100%;font-size:13px;" />
+          </div>
+        </div>
+
+        <label class="maya-modal-field-label" for="maya-fb-textarea" style="margin-top:4px;">Explication / règle métier <span style="color:#7B2D8E;font-weight:600;">(obligatoire)</span></label>
+        <textarea id="maya-fb-textarea" class="maya-modal-textarea" placeholder="Ex : Pour les voutains sur solives métalliques, la VT indique explicitement « pas d'isolant » dans la fiche descriptive paroi. Règle générale : toujours considérer ce type de plancher comme non isolé sauf mention contraire."></textarea>
+
+        <!-- Checkbox règle générale -->
+        <div style="background:#FFF8E1;border:1.5px solid #FFC107;padding:10px 12px;margin-top:10px;border-radius:6px;">
+          <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:12.5px;color:#5D4037;line-height:1.5;">
+            <input type="checkbox" id="maya-fb-is-rule" style="margin-top:3px;accent-color:#7B2D8E;width:16px;height:16px;flex-shrink:0;" />
+            <span>
+              <strong>🌐 Règle générale — à appliquer à TOUS les futurs dossiers</strong><br>
+              <span style="font-size:11.5px;opacity:0.85;">Coche si cette règle métier est indépendante du dossier en cours (ex : "ITI ne s'applique qu'aux murs"). Une copie sera enregistrée comme feedback global et deviendra plus rapidement permanente.</span>
+            </span>
+          </label>
+        </div>
+
+        <div id="maya-fb-existing" class="maya-modal-existing" style="display:none;margin-top:12px;"></div>
       </div>
       <div class="maya-modal-footer">
         <button type="button" class="btn btn-outline" onclick="closeMayaFeedback()">Annuler</button>
