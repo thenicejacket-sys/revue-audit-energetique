@@ -2264,6 +2264,50 @@
     // =====================================================================
     var GLOBAL_FIELD_REGEX = /(?:^|\b)(?:hauteur(?:\s+(?:moyenne|libre|sous))?\s*(?:sous\s*plafond)?|nombre\s+de\s+niveaux?|surface\s+(?:de\s+r[eé]f[eé]rence|habitable|de\s+plancher|au\s*sol|tax[eé]e|totale|utile)|\bshab\b|\bsdp\b|type\s+de\s+bien|ann[eé]e\s+de\s+construction|adresse(?:\s+(?:compl[eè]te|du\s+logement))?|d[eé]partement|code\s+postal|\bville\b|commune|mitoyennet[eé](?!\s*(?:nord|sud|est|ouest))|zone\s+climatique|altitude)/i;
 
+    // =====================================================================
+    // POST_PIPELINE — ordre d'exécution des étapes après extraction LLM (documentation)
+    //
+    // Phase 1 — Pré-Maya (data brute) :
+    //   1. Batch normalization (recoverValuesFromComment, porteCoherenceCheck,
+    //      règles département/niveaux/tranche/oui-non)
+    //   2. _antiCrossTalkParois (resolve catByLabel + filtre cross-section
+    //      + harmonizeWallSurfaces + dedupGlobalFields)
+    //   3. mergeIdenticalChauffages
+    //
+    // Phase 2 — Maya (validation IA) :
+    //   4. callMaya (corrections, low_confidence, lexique_enrichment, paroi_reclassifications)
+    //
+    // Phase 3 — Post-Maya (transformations basées sur validation Maya) :
+    //   5. applyMayaParoiReclassifications (struct priorité 1, fallback texte priorité 2)
+    //
+    // Phase 4 — Rendu :
+    //   6. assertDomainInvariants (invariants Vague 1, console.error/warn si violation)
+    //   7. renderResults / renderRapport
+    //
+    // À FAIRE (Vague 3.2 reportée — refactor risqué) : sortir harmonizeWallSurfaces et
+    // dedupGlobalFields de _antiCrossTalkParois pour les exécuter en Phase 3 après callMaya.
+    // Cela permettrait à Maya de voir les données brutes (non encore harmonisées/dédupliquées).
+    // Nécessite extraction de 2 IIFE en fonctions nommées + recalcul de catByLabel — à confier
+    // à l'agent Engineer dans une session dédiée.
+    // =====================================================================
+
+    // =====================================================================
+    // COMMENT_PATTERNS — regex centralisées pour parser les commentaires Maya / extraits sources
+    // Référencées par : recoverValuesFromComment, NIVEAUX-RECOVERY (règle niveaux),
+    // fallback parsing dans la reclassification post-Maya.
+    //
+    // ⚠️ Modifier ICI uniquement. Avant cette centralisation (2026-05-06), les regex étaient
+    // dupliquées à 3 endroits du code → divergence garantie à terme.
+    // =====================================================================
+    var COMMENT_PATTERNS = {
+      niveau:                 /\b(RDC|R\s*\+\s*\d+|rez[\s-]?de[\s-]?chauss[ée]e?)\b/i,
+      audit_value:            /(?:audit|valeur\s+audit)[^\d]{0,15}([\d][\d\s.,]*\s*(?:m²|m2|m\b|cm|mm|%|kwh|kw|°c|°))/i,
+      vt_value:               /(?:VT|valeur\s+VT|VT\s+(?:indique|dit|donne))[^\d]{0,15}([\d][\d\s.,]*\s*(?:m²|m2|m\b|cm|mm|%|kwh|kw|°c|°))/i,
+      paroi_cat_explicit:     /Paroi\s*0*(\d+)\s*=\s*(MUR|PLANCHER|TOITURE|MENUISERIE)\b[^.\]]*page\s*6/i,
+      paroi_cat_inapplicable: /non\s+applicable\s+(?:à\s+)?(?:un[e]?\s+)?(plancher|toiture|mur|menuiserie)/i,
+      paroi_cat_page6:        /Paroi\s*0*(\d+)[^.\n]*page\s*6\s*=\s*(plancher|toiture|mur|menuiserie)/i
+    };
+
     var SEMANTIC_EQUIVALENCES = {
       niveaux: {
         label: "Nombre de niveaux",
@@ -3745,6 +3789,9 @@
             }
             // Pattern : valeur+unité associée au mot "audit"
             // Ex: "191,00 m² audit" / "audit 191,00 m²" / "valeur audit 191,00 m²"
+            // NOTE Vague 4.1 — combine 2 orientations (before+after du label), donc reste inline
+            // au lieu d'utiliser COMMENT_PATTERNS.audit_value/vt_value (qui ne couvrent que "after").
+            // À unifier dans une session future avec extension de COMMENT_PATTERNS.
             function extractFor(label) {
               var rxBefore = new RegExp('([\\d][\\d\\s.,]*\\s*(?:m²|m2|m\\b|cm|mm|%|kwh|kw|°c|°))[^\\d]{0,15}' + label, 'i');
               var rxAfter  = new RegExp('(?:' + label + ')(?:\\s+(?:indique|dit|donne|contient))?\\s*[:=]?\\s*([\\d][\\d\\s.,]*\\s*(?:m²|m2|m\\b|cm|mm|%|kwh|kw|°c|°))', 'i');
@@ -3851,7 +3898,7 @@
             if (!rv.valeur_vt || !String(rv.valeur_vt).trim()) {
               var sources = [rv.commentaire, rv.extrait_vt, rv._maya_source_vt].filter(Boolean);
               for (var _si = 0; _si < sources.length; _si++) {
-                var m = String(sources[_si]).match(/\b(RDC|R\s*\+\s*\d+|rez[\s-]?de[\s-]?chauss[\u00e9e]e?)\b/i);
+                var m = String(sources[_si]).match(COMMENT_PATTERNS.niveau);
                 if (m) {
                   rvFixed = Object.assign({}, rv, { valeur_vt: m[1] });
                   console.log('[NIVEAUX-RECOVERY] valeur_vt vide \u2192 extrait "' + m[1] + '" depuis le commentaire/source.');
@@ -6070,6 +6117,13 @@ Réponds UNIQUEMENT en JSON strict :
       "terme_vt": "le libellé EXACT utilisé dans la VT pour ce champ (ex: 'Surface utile', 'Composition', 'Aucun isolant')",
       "raison": "pourquoi ce terme est un bon synonyme pour le champ (max 100 chars)"
     }
+  ],
+  "paroi_reclassifications": [
+    {
+      "instance_label": "Paroi 2 — Dalle de béton non isolé",
+      "correct_category": "plancher",
+      "raison": "Page 6 audit indique cette paroi sous l'en-tête PLANCHERS"
+    }
   ]
 }
 IMPORTANT :
@@ -6084,7 +6138,15 @@ LEXIQUE_ENRICHMENT — règle d'enrichissement automatique du référentiel :
 - Maximum 1 entrée par champ par appel.
 - Si aucun enrichissement à proposer, renvoie lexique_enrichment: [].
 
-Si tout est correct ET certain, retourne {"corrections": [], "low_confidence_flags": [], "lexique_enrichment": []}` + (learningsBlock ? '\n' + learningsBlock : '') + (drawerInjection.block || '');
+PAROI_RECLASSIFICATIONS — règle de reclassification structurée des parois :
+Si tu détectes qu'une paroi est mal classée (ex: figurant dans la section "Mur" mais qui appartient à PLANCHER selon page 6 audit), retourne UNE entrée par paroi mal classée dans paroi_reclassifications.
+- correct_category : EXACTEMENT l'une de "mur", "plancher", "toiture", "menuiserie" (singulier, minuscules).
+- instance_label : copie EXACTE du label tel qu'il apparaît dans les résultats fournis.
+- raison : courte (max 120 chars) — typiquement « Page 6 audit indique cette paroi sous l'en-tête X ».
+- N'utilise ce mécanisme QUE si tu es certaine à 100% (page 6 audit = source de vérité absolue).
+- Le système JS appliquera automatiquement ces reclassifications au state.detectedInstances.
+
+Si tout est correct ET certain, retourne {"corrections": [], "low_confidence_flags": [], "lexique_enrichment": [], "paroi_reclassifications": []}` + (learningsBlock ? '\n' + learningsBlock : '') + (drawerInjection.block || '');
 
       var suspectsCompact = suspects.map(function(r) {
         var o = {
@@ -6393,28 +6455,51 @@ ${vtShort}`;
           }
         } catch (e) { console.warn('[LEXIQUE-AUTO] Application enrichissement échouée:', e.message); }
 
-        // ─── Override de catégorie de paroi basé sur les commentaires Maya ───
-        // Maya, quand elle voit une incohérence, écrit dans son commentaire des indications
-        // explicites du type « Paroi 2 = PLANCHER (page 6 audit) ». Ces indications sont la
-        // source de vérité finale (Maya a effectivement lu la page 6). On les utilise pour
-        // mettre à jour state.detectedInstances et reclasser les parois mal placées dans le rapport.
+        // ─── Override de catégorie de paroi : structuré (priorité 1) puis fallback texte ───
+        // PRIORITÉ 1 : Maya retourne désormais un champ structuré paroi_reclassifications.
+        // PRIORITÉ 2 (rétrocompatibilité) : si absent ou vide, on parse les commentaires Maya
+        // qui contiennent des indications type « Paroi 2 = PLANCHER (page 6 audit) ».
         try {
           var paroiCategoryFromMaya = {}; // normalizedLabel → 'mur' | 'plancher' | 'toiture' | 'menuiserie'
           var movedCount = 0;
-          results.forEach(function(rv){
-            var c = String(rv.commentaire || '');
-            if (!c || !rv.instance_label) return;
-            // Pattern 1 : « Paroi N = MUR/PLANCHER/TOITURE (page 6 ... ) »
-            var m1 = c.match(/Paroi\s*0*(\d+)\s*=\s*(MUR|PLANCHER|TOITURE|MENUISERIE)\b[^.\]]*page\s*6/i);
-            // Pattern 2 : « Champ Matériau mur non applicable à un plancher » → la paroi est un plancher
-            var m2 = c.match(/non\s+applicable\s+(?:à\s+)?(?:un[e]?\s+)?(plancher|toiture|mur|menuiserie)/i);
-            // Pattern 3 : « Paroi N (page 6 = plancher) »
-            var m3 = c.match(/Paroi\s*0*(\d+)[^.\n]*page\s*6\s*=\s*(plancher|toiture|mur|menuiserie)/i);
-            var detectedCat = null;
-            if (m1) detectedCat = m1[2].toLowerCase();
-            else if (m3) detectedCat = m3[2].toLowerCase();
-            else if (m2) detectedCat = m2[1].toLowerCase();
-            if (!detectedCat) return;
+          var structuredCount = 0;
+          var fallbackCount = 0;
+
+          // PRIORITÉ 1 — bloc structuré paroi_reclassifications
+          if (mayaResult && Array.isArray(mayaResult.paroi_reclassifications) && mayaResult.paroi_reclassifications.length > 0) {
+            mayaResult.paroi_reclassifications.forEach(function(entry){
+              if (!entry || !entry.instance_label || !entry.correct_category) return;
+              var cat = String(entry.correct_category).toLowerCase().trim();
+              if (!/^(mur|plancher|toiture|menuiserie)$/.test(cat)) return;
+              var normLbl = String(entry.instance_label).toLowerCase()
+                .replace(/\bparoi\s+0*(\d+)/g, 'paroi $1')
+                .replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim()
+                .split(/\s*(?:—|–)\s*/)[0].trim();
+              if (!paroiCategoryFromMaya[normLbl]) {
+                paroiCategoryFromMaya[normLbl] = cat;
+                structuredCount++;
+              }
+            });
+            if (structuredCount > 0) console.log('[PAROI-RECLASSIF] ' + structuredCount + ' reclassification(s) structurée(s) (priorité 1)');
+          }
+
+          // PRIORITÉ 2 — fallback parsing des commentaires (uniquement si rien en priorité 1)
+          if (structuredCount === 0) {
+            results.forEach(function(rv){
+              var c = String(rv.commentaire || '');
+              if (!c || !rv.instance_label) return;
+              // Pattern 1 : « Paroi N = MUR/PLANCHER/TOITURE (page 6 ... ) »
+              var m1 = c.match(COMMENT_PATTERNS.paroi_cat_explicit);
+              // Pattern 2 : « Champ Matériau mur non applicable à un plancher » → la paroi est un plancher
+              var m2 = c.match(COMMENT_PATTERNS.paroi_cat_inapplicable);
+              // Pattern 3 : « Paroi N (page 6 = plancher) »
+              var m3 = c.match(COMMENT_PATTERNS.paroi_cat_page6);
+              var detectedCat = null;
+              if (m1) detectedCat = m1[2].toLowerCase();
+              else if (m3) detectedCat = m3[2].toLowerCase();
+              else if (m2) detectedCat = m2[1].toLowerCase();
+              if (!detectedCat) return;
+              fallbackCount++;
             // Normaliser au singulier sans accent
             detectedCat = detectedCat.replace(/s$/i, '');
             var normLbl = String(rv.instance_label).toLowerCase()
@@ -6427,6 +6512,9 @@ ${vtShort}`;
             }
             paroiCategoryFromMaya[normLbl] = detectedCat;
           });
+            if (fallbackCount > 0) console.log('[PAROI-RECLASSIF] ' + fallbackCount + ' reclassification(s) via fallback parsing commentaires (priorité 2)');
+          } // fin if (structuredCount === 0)
+
           if (Object.keys(paroiCategoryFromMaya).length > 0) {
             console.log('[PAROI-RECLASSIF] Indications Maya détectées :', paroiCategoryFromMaya);
             // Met à jour state.detectedInstances : déplace les labels concernés
@@ -10209,6 +10297,54 @@ ${vtShort}`;
       document.body.appendChild(modal);
       modal.addEventListener('click', function(e){ if(e.target===modal) modal.remove(); });
     }
+
+    // =====================================================================
+    // SNAPSHOT TESTS — outils de validation manuelle des modifications du pipeline
+    // Usage en console navigateur :
+    //   1. Charger un dossier de test, lancer une analyse
+    //   2. var snap = window.__captureSnapshot__()  → string JSON à copier
+    //   3. Modifier le code, recharger, refaire l'analyse sur le même dossier
+    //   4. window.__compareSnapshot__(snap)  → diff lisible des changements
+    //
+    // Capture par défaut les 30 premiers résultats (id, instance, audit, vt, statut, brut_total).
+    // Permet de détecter rapidement si une modification du pipeline change le rendu d'un dossier.
+    // =====================================================================
+    window.__captureSnapshot__ = function(limit) {
+      var n = limit || 30;
+      var subset = (state.analysisResults || []).slice(0, n).map(function(rv) {
+        return {
+          id: rv.id_champ,
+          instance: rv.instance_label || null,
+          audit: rv.valeur_audit || null,
+          vt: rv.valeur_vt || null,
+          statut: rv.statut,
+          brut_total: rv.valeur_vt_detail && rv.valeur_vt_detail.brut_total
+        };
+      });
+      var snap = JSON.stringify(subset);
+      console.log('[SNAPSHOT] ' + n + ' résultats capturés. Copier la string ci-dessous :');
+      console.log(snap);
+      return snap;
+    };
+    window.__compareSnapshot__ = function(savedJson) {
+      if (!savedJson) { console.warn('[SNAPSHOT] Aucun snapshot fourni en argument.'); return; }
+      var before, after;
+      try { before = JSON.parse(savedJson); } catch(e) { console.error('[SNAPSHOT] JSON invalide :', e.message); return; }
+      after = JSON.parse(window.__captureSnapshot__(before.length));
+      var changes = [];
+      before.forEach(function(b, i) {
+        var a = after[i];
+        if (!a) { changes.push('[' + i + '] ' + b.id + (b.instance ? '/' + b.instance : '') + ' DISPARU'); return; }
+        ['audit','vt','statut','brut_total'].forEach(function(k) {
+          if (String(b[k]) !== String(a[k])) {
+            changes.push('[' + i + '] ' + b.id + (b.instance ? '/' + b.instance : '') + ' ' + k + ' : ' + JSON.stringify(b[k]) + ' → ' + JSON.stringify(a[k]));
+          }
+        });
+      });
+      if (changes.length === 0) console.log('[SNAPSHOT] ✓ Aucun changement détecté entre snapshots.');
+      else console.warn('[SNAPSHOT] ' + changes.length + ' changement(s) :\n  - ' + changes.join('\n  - '));
+      return changes;
+    };
   </script>
 
   <!-- ================ MAYA FEEDBACK MODAL (Vague 1) ================ -->
