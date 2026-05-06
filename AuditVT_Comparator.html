@@ -6974,6 +6974,76 @@ ${vtShort}`;
       return out;
     }
 
+    // ─────────────────────────────────────────────────────────────────
+    // Évaluation heuristique de la qualité d'un feedback (du point de vue Maya)
+    // Retourne : { level: 'good'|'medium'|'poor', icon, label, color, comment }
+    // ─────────────────────────────────────────────────────────────────
+    function evaluateFeedbackQuality(item) {
+      var txt = String(item.text || '').trim();
+      var snap = item.snapshot || {};
+      var isLine = item.scope === 'line';
+      var score = 0;
+      var tips = [];
+
+      // 1. Statut attendu explicite ?
+      var hasStatus = !!snap.expected_status
+        || /\b(VERT|ORANGE|ROUGE|MANQUANT|conforme|non[\s-]?conforme|à\s*v[ée]rifier)\b/i.test(txt);
+      if (hasStatus) score++;
+      else tips.push('préciser le statut attendu (VERT, ORANGE, ROUGE ou MANQUANT)');
+
+      // 2. Valeur attendue ?
+      var hasValue = !!snap.expected_value
+        || /\d+[,\.]?\d*\s*(?:m²|m2|m\b|cm|mm|%|€|kWh|°C|W\/m|R\s*=|Uw\s*=|kg|°)/i.test(txt);
+      if (hasValue) score++;
+      else if (snap.statut !== 'VERT') tips.push('indiquer la valeur correcte attendue si applicable');
+
+      // 3. Règle métier (phrase complète avec verbe, longueur min)
+      var hasRule = txt.length >= 40 && /\b(?:est|sont|doit|peut|n'est|s'applique|correspond|signifie|indique|considérer|toujours|jamais|si|quand|car|parce que)\b/i.test(txt);
+      if (hasRule) score++;
+      else tips.push('formuler une règle métier en phrase complète');
+
+      // 4. Repère stable ou (sur ligne) page valide
+      var hasPage = /\bpage\s+\d+|\bp\.?\s*\d+/i.test(txt);
+      var hasSemRef = /\b(?:section|fiche|tableau|partie|colonne|bloc|rubrique|paragraphe)\b/i.test(txt);
+      if (isLine && (hasPage || hasSemRef)) score++;
+      else if (!isLine && hasSemRef) score++;
+      else if (!isLine && hasPage) {
+        tips.push('éviter les pages absolues sur un feedback global, préférer un repère sémantique');
+      } else {
+        tips.push('ajouter un repère pour orienter Maya (section, fiche, tableau ou page)');
+      }
+
+      // 5. Longueur globale
+      if (txt.length >= 30) score++;
+      else tips.push('détailler davantage (au moins une phrase complète)');
+
+      // Mapping score → niveau
+      var level, icon, label, color, baseComment;
+      if (score >= 4) {
+        level = 'good'; icon = '✓'; label = 'Bon'; color = '#2E7D32';
+        baseComment = 'Feedback structuré et exploitable. Maya pourra l\'appliquer.';
+      } else if (score >= 2) {
+        level = 'medium'; icon = '~'; label = 'Moyen'; color = '#E65100';
+        baseComment = 'Feedback partiellement exploitable.';
+      } else {
+        level = 'poor'; icon = '!'; label = 'À améliorer'; color = '#C62828';
+        baseComment = 'Feedback peu exploitable par Maya en l\'état.';
+      }
+      var comment = baseComment;
+      if (tips.length > 0 && level !== 'good') {
+        comment += ' Suggestion : ' + tips[0] + '.';
+      }
+      return { level: level, score: score, icon: icon, label: label, color: color, comment: comment, tips: tips };
+    }
+
+    // Marque l'évaluation qualité comme acquittée par l'utilisateur (le bloc disparaît)
+    function mayaAckQuality(id) {
+      if (!mayaFeedbackMeta[id]) mayaFeedbackMeta[id] = { status: 'pending' };
+      mayaFeedbackMeta[id].qualityAcked = true;
+      persistMayaFeedbackMeta();
+      renderMayaDrawer();
+    }
+
     function renderMayaDrawer() {
       // Promotion automatique avant render (pour refléter les règles récurrentes)
       try { promoteRecurringToPermanent(); } catch(e) {}
@@ -7030,6 +7100,20 @@ ${vtShort}`;
 
           var scopeBadge = (it.scope === 'global') ? '<span class="maya-drawer-item-badge global">Global</span>' : '';
 
+          // Évaluation qualité du feedback (heuristique). Affichée seulement si non acquittée.
+          var qualityHtml = '';
+          if (!it.meta.qualityAcked) {
+            var q = evaluateFeedbackQuality(it);
+            var qBg = q.level === 'good' ? '#E8F5E9' : (q.level === 'medium' ? '#FFF3E0' : '#FFEBEE');
+            var qBorder = q.level === 'good' ? '#A5D6A7' : (q.level === 'medium' ? '#FFB74D' : '#EF9A9A');
+            qualityHtml =
+              '<div style="margin-top:6px;padding:6px 8px;background:' + qBg + ';border:1px solid ' + qBorder + ';border-left:3px solid ' + q.color + ';border-radius:4px;font-size:11px;color:#333;line-height:1.4;display:flex;align-items:flex-start;gap:6px;">' +
+                '<span style="background:' + q.color + ';color:#fff;padding:1px 6px;border-radius:8px;font-weight:700;font-size:10px;flex-shrink:0;">' + q.icon + ' ' + escHtml(q.label) + '</span>' +
+                '<span style="flex:1;">' + escHtml(q.comment) + '</span>' +
+                '<button type="button" onclick="mayaAckQuality(\'' + it.id + '\')" title="Marquer comme vu, masque cette évaluation" style="border:none;background:#fff;border:1px solid #ccc;color:#333;font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;cursor:pointer;flex-shrink:0;">OK</button>' +
+              '</div>';
+          }
+
           html += '<div class="' + classes.join(' ') + '">'
                +   '<div class="maya-drawer-item-head">'
                +     '<span class="maya-drawer-item-field">' + escHtml(fieldLabel) + '</span>'
@@ -7037,6 +7121,7 @@ ${vtShort}`;
                +   '</div>'
                +   '<div class="maya-drawer-item-badges">' + statusBadge + scopeBadge + '</div>'
                +   '<div class="maya-drawer-item-text">' + escHtml(it.text || '') + '</div>'
+               +   qualityHtml
                +   '<div class="maya-drawer-item-actions">';
           if (it.meta.status === 'pending') {
             html +=   '<button type="button" class="maya-drawer-item-action" onclick="mayaEditFeedback(\'' + it.id + '\')" title="Modifier le texte de ce feedback. Possible uniquement tant qu\'il est En attente (Maya ne l\'a pas encore traité).">✏️ Modifier</button>';
