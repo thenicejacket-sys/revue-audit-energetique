@@ -3729,21 +3729,37 @@
 
           // ---- Règle niveaux : RDC = 1, R+1 = 2, etc. ----
           if (fieldNom.includes('niveau') || fieldNom.includes('\u00e9tage') || fieldNom.includes('etage')) {
-            var nAudit = toNiveaux(rv.valeur_audit);
-            var nVT    = toNiveaux(rv.valeur_vt);
+            // Filet de s\u00e9curit\u00e9 : si valeur_vt est vide mais qu'un libell\u00e9 \u00e9quivalent (RDC, R+N)
+            // appara\u00eet dans le commentaire ou l'extrait source VT, on l'extrait pour l'afficher.
+            // Sans \u00e7a, l'utilisateur voit \u00ab 1 vs \u2014 \u00bb alors que la VT contient bien \u00ab RDC \u00bb.
+            var rvFixed = rv;
+            if (!rv.valeur_vt || !String(rv.valeur_vt).trim()) {
+              var sources = [rv.commentaire, rv.extrait_vt, rv._maya_source_vt].filter(Boolean);
+              for (var _si = 0; _si < sources.length; _si++) {
+                var m = String(sources[_si]).match(/\b(RDC|R\s*\+\s*\d+|rez[\s-]?de[\s-]?chauss[\u00e9e]e?)\b/i);
+                if (m) {
+                  rvFixed = Object.assign({}, rv, { valeur_vt: m[1] });
+                  console.log('[NIVEAUX-RECOVERY] valeur_vt vide \u2192 extrait "' + m[1] + '" depuis le commentaire/source.');
+                  break;
+                }
+              }
+            }
+            var nAudit = toNiveaux(rvFixed.valeur_audit);
+            var nVT    = toNiveaux(rvFixed.valeur_vt);
             if (nAudit !== null && nVT !== null) {
               if (nAudit === nVT) {
-                return Object.assign({}, rv, {
+                return Object.assign({}, rvFixed, {
                   statut: 'VERT',
-                  commentaire: 'Niveaux \u00e9quivalents : "' + (rv.valeur_audit||'') + '" = "' + (rv.valeur_vt||'') + '" (' + nAudit + ' niveau(x)).'
+                  commentaire: 'Niveaux \u00e9quivalents : "' + (rvFixed.valeur_audit||'') + '" = "' + (rvFixed.valeur_vt||'') + '" (' + nAudit + ' niveau(x)).'
                 });
               } else {
-                return Object.assign({}, rv, {
+                return Object.assign({}, rvFixed, {
                   statut: 'ROUGE',
                   commentaire: 'Niveaux diff\u00e9rents : audit=' + nAudit + ' niveau(x), VT=' + nVT + ' niveau(x).'
                 });
               }
             }
+            if (rvFixed !== rv) return rvFixed;
           }
 
           // ---- Règle tranche : si valeur_audit est une plage et valeur_vt est dedans → VERT ----
@@ -4954,6 +4970,13 @@ Les valeurs dans l'audit sont au format : [Label]  Observé/Mesuré  [Valeur]
 - "Nombre de niveaux Observé/Mesuré 1,0" → valeur = "1,0"
 Le mot "Observé/Mesuré" est un SÉPARATEUR entre le label et la valeur — ce n'est PAS la valeur.
 Les décimales utilisent la virgule française : "2,75" = 2.75, "36,00" = 36.
+
+RÈGLE VALEUR_VT JAMAIS VIDE SI INFO PRÉSENTE (CRITIQUE) :
+Si tu trouves dans la VT une valeur équivalente à celle de l'audit sous un libellé différent (ex: audit dit « 1 niveau », VT dit « RDC » ; audit dit « 1985 », VT dit « avant 1948 » ; audit dit « ITI », VT dit « Polystyrène »), tu DOIS remplir valeur_vt avec le LIBELLÉ EXACT trouvé dans la VT — pas null, pas vide, pas la valeur audit recopiée.
+→ valeur_vt = ce que la VT écrit littéralement, dans les termes de la VT.
+→ Le statut VERT/ORANGE/ROUGE peut quand même tenir compte de l'équivalence sémantique, mais valeur_vt doit refléter ce que l'utilisateur peut effectivement lire dans son document VT.
+→ Exemple : Audit « 1 », VT « RDC » → valeur_vt = "RDC", statut = VERT, commentaire = "RDC équivaut à 1 niveau".
+→ Ne jamais retourner valeur_vt null/vide quand la VT contient bien l'information sous un autre format.
 
 RÈGLE LEXIQUE VT — COMPOSITION ET SYNONYMES (CRITIQUE — PRIORITÉ MAXIMALE) :
 Le champ "lexique_vt" fourni pour chaque champ indique EXACTEMENT comment trouver et composer la valeur dans la VT.
