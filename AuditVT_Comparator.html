@@ -2302,7 +2302,7 @@
       niveau:                 /\b(RDC|R\s*\+\s*\d+|rez[\s-]?de[\s-]?chauss[ée]e?)\b/i,
       audit_value:            /(?:audit|valeur\s+audit)[^\d]{0,15}([\d][\d\s.,]*\s*(?:m²|m2|m\b|cm|mm|%|kwh|kw|°c|°))/i,
       vt_value:               /(?:VT|valeur\s+VT|VT\s+(?:indique|dit|donne))[^\d]{0,15}([\d][\d\s.,]*\s*(?:m²|m2|m\b|cm|mm|%|kwh|kw|°c|°))/i,
-      paroi_cat_explicit:     /Paroi\s*0*(\d+)\s*=\s*(MUR|PLANCHER|TOITURE|MENUISERIE)\b[^.\]]*page\s*6/i,
+      paroi_cat_explicit:     /Paroi\s*0*(\d+)\s*=\s*(MUR|PLANCHER|TOITURE|MENUISERIE)\b/i,
       paroi_cat_inapplicable: /non\s+applicable\s+(?:à\s+)?(?:un[e]?\s+)?(plancher|toiture|mur|menuiserie)/i,
       paroi_cat_page6:        /Paroi\s*0*(\d+)[^.\n]*page\s*6\s*=\s*(plancher|toiture|mur|menuiserie)/i
     };
@@ -4839,29 +4839,24 @@
         halluRemoved.forEach(function(r){ console.warn('  - ' + r); });
       }
 
-      // Etape B -- force la categorie : reconstruit state.detectedInstances depuis byNumber
-      // Les listes murs/planchers/toitures sont remises au strict des parois listees page 6
-      var di = state.detectedInstances;
-      var newCats = { murs: [], planchers: [], toitures: [] };
-      var allLabels = [].concat(di.murs || [], di.planchers || [], di.toitures || []);
-      var seenLabels = {};
-      allLabels.forEach(function(label) {
-        var m = String(label).match(/\bParoi\s+0*(\d+)/i);
-        if (!m) return;
-        var num = String(parseInt(m[1], 10));
-        var cat = byNumber[num];
-        if (!cat) return; // paroi non listee page 6 -> pas reintegree
-        var key = num + '|' + label.toLowerCase();
-        if (seenLabels[key]) return;
-        seenLabels[key] = true;
-        var pluralKey = cat + 's'; // mur -> murs, plancher -> planchers, toiture -> toitures
-        if (newCats[pluralKey].indexOf(label) < 0) newCats[pluralKey].push(label);
-      });
-      state.detectedInstances.murs      = newCats.murs;
-      state.detectedInstances.planchers = newCats.planchers;
-      state.detectedInstances.toitures  = newCats.toitures;
-      console.log('[PAGE6-ENFORCE] state.detectedInstances reconstruit depuis page 6 :',
-        { murs: newCats.murs.length, planchers: newCats.planchers.length, toitures: newCats.toitures.length });
+      // ⚠️ FIX 2026-05-06 : NE PLUS reconstruire state.detectedInstances depuis byNumber.
+      //
+      // Raison : la regex JS PASS 0 lit parfois la page 6 incorrectement (ex: "Paroi 2 — Dalle de
+      // béton non isolé" lue comme MUR alors que la VRAIE page 6 dit PLANCHER). Maya, qui lit le
+      // texte via le LLM, fait la bonne lecture et corrige via reclassif post-Maya. Si on
+      // reconstruit depuis byNumber FAUX, on écrase la correction Maya et on remet la paroi
+      // dans la mauvaise catégorie.
+      //
+      // NOUVEAU comportement : enforcePage6Classification se limite à l'anti-hallucination
+      // (suppression des parois inventées non listées page 6). La classification finale est
+      // déterminée par le combo : PASS 0 → reclassif Maya (priorité). On NE TOUCHE PLUS à
+      // state.detectedInstances ici — Maya est plus fiable que notre regex.
+      console.log('[PAGE6-ENFORCE] state.detectedInstances laissé tel quel (Maya plus fiable que la regex PASS 0) :',
+        {
+          murs:      ((state.detectedInstances || {}).murs      || []).length,
+          planchers: ((state.detectedInstances || {}).planchers || []).length,
+          toitures:  ((state.detectedInstances || {}).toitures  || []).length
+        });
     }
 
     // =====================================================================
