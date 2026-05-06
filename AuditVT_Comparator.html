@@ -3447,7 +3447,19 @@
       var _instBuckets = {}; // lbl → [champs]
       var _instOrderList = []; // ordre de découverte des instances
       var _nonExpandedFields = [];
+      // Champs GLOBAUX du logement : ne JAMAIS multiplier par instance, même si la section les
+      // contient ambigüement. Liste fermée de noms reconnus + exclusion explicite.
+      var GLOBAL_FIELD_NAMES = /(?:^|\b)(?:hauteur(?:\s+(?:moyenne|libre|sous))?\s*(?:sous\s*plafond)?|nombre\s+de\s+niveaux?|surface\s+(?:de\s+r[eé]f[eé]rence|habitable|de\s+plancher|au\s*sol|tax[eé]e|totale|utile)|\bshab\b|\bsdp\b|type\s+de\s+bien|ann[eé]e\s+de\s+construction|adresse(?:\s+(?:compl[eè]te|du\s+logement))?|d[eé]partement|code\s+postal|\bville\b|commune)/i;
       refFields.forEach(function(f) {
+        // ⚠️ Exclusion préventive : un champ global du logement (HSP, niveaux, adresse, etc.)
+        // ne doit JAMAIS être expandé par instance, même si sa section référentiel matche
+        // ambigüement une catégorie de paroi (ex: section "Caractéristiques générales" contenant
+        // le mot "plancher"). Sans cette garde, "Hauteur sous plafond" se retrouvait répétée
+        // pour chaque paroi et chaque menuiserie (régression observée le 2026-05-06).
+        if (GLOBAL_FIELD_NAMES.test(f.nom || '')) {
+          _nonExpandedFields.push(f);
+          return;
+        }
         var ctx = (f.section || '') + ' ' + (f.categorie || '') + ' ' + (f.parentSection || '');
         var matched = null;
         for (var _si=0; _si<_instSectionMap.length; _si++) {
@@ -4102,6 +4114,43 @@
           console.log('[SURFACE-MUR-HARMONIZE] ' + wallSurfaceResults.length + ' paroi(s)-mur harmonisée(s) — NET total = '
             + totalNet.toFixed(2) + ' m² (' + uniqueNet.length + ' façade(s)), BRUT total = '
             + totalBrut.toFixed(2) + ' m² (' + uniqueBrut.length + ' façade(s))');
+        })();
+
+        // ───────────────────────────────────────────────────────────────────
+        // Étape 4 — Dédup champs GLOBAUX du logement multipliés à tort par instance
+        // Filet de sécurité : si pour une raison quelconque le LLM ou l'expansion a quand
+        // même multiplié un champ global (HSP, surface habitable, adresse...), on regroupe
+        // toutes les copies en une seule entrée sans instance_label.
+        // ───────────────────────────────────────────────────────────────────
+        (function dedupGlobalFields(){
+          var GLOBAL_FIELD_NAMES = /(?:^|\b)(?:hauteur(?:\s+(?:moyenne|libre|sous))?\s*(?:sous\s*plafond)?|nombre\s+de\s+niveaux?|surface\s+(?:de\s+r[eé]f[eé]rence|habitable|de\s+plancher|au\s*sol|tax[eé]e|totale|utile)|\bshab\b|\bsdp\b|type\s+de\s+bien|ann[eé]e\s+de\s+construction|adresse(?:\s+(?:compl[eè]te|du\s+logement))?|d[eé]partement|code\s+postal|\bville\b|commune)/i;
+          var byChamp = {};
+          state.analysisResults.forEach(function(rv){
+            if (!byChamp[rv.id_champ]) byChamp[rv.id_champ] = [];
+            byChamp[rv.id_champ].push(rv);
+          });
+          var totalRemoved = 0, fusedChamps = 0;
+          Object.keys(byChamp).forEach(function(idChamp){
+            var arr = byChamp[idChamp];
+            if (arr.length < 2) return;
+            var champNom = (getFieldNom(idChamp) || '');
+            if (!GLOBAL_FIELD_NAMES.test(champNom)) return;
+            // Garde le premier résultat qui a une valeur audit (sinon le premier tout court)
+            var keep = arr.find(function(r){ return r.valeur_audit && String(r.valeur_audit).trim().length > 0; }) || arr[0];
+            keep.instance_label = null;
+            var beforeCount = state.analysisResults.length;
+            state.analysisResults = state.analysisResults.filter(function(rv){
+              if (rv.id_champ !== idChamp) return true;
+              return rv === keep;
+            });
+            var deleted = beforeCount - state.analysisResults.length;
+            totalRemoved += deleted;
+            fusedChamps++;
+            console.log('[CHAMP-GLOBAL-DEDUP] "' + champNom + '" : ' + arr.length + ' instances multipliées à tort → 1 (label retiré). ' + deleted + ' doublon(s) supprimé(s).');
+          });
+          if (totalRemoved > 0) {
+            console.log('[CHAMP-GLOBAL-DEDUP] Bilan : ' + fusedChamps + ' champ(s) global(aux) restauré(s), ' + totalRemoved + ' résultat(s) supprimé(s).');
+          }
         })();
       })();
 
