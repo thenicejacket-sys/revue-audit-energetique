@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Nouveautés — Historique des feedbacks Maya</title>
+<style>
+  @page { size: A4; margin: 14mm 14mm 16mm 14mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    color: #2C2C2C;
+    font-size: 10.5pt;
+    line-height: 1.45;
+    margin: 0;
+    padding: 0;
+  }
+  h1 {
+    font-size: 22pt;
+    color: #4A1F5E;
+    margin: 0 0 4px 0;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+  }
+  .subtitle {
+    color: #7B2D8E;
+    font-size: 11pt;
+    margin-bottom: 16px;
+    font-weight: 600;
+  }
+  .intro {
+    background: linear-gradient(135deg, #F8F4FA 0%, #F0E6F5 100%);
+    border-left: 4px solid #7B2D8E;
+    padding: 12px 14px;
+    border-radius: 5px;
+    margin-bottom: 18px;
+    font-size: 10.5pt;
+  }
+  h2 {
+    font-size: 14pt;
+    color: #4A1F5E;
+    margin: 18px 0 10px 0;
+    padding-bottom: 5px;
+    border-bottom: 2px solid #7B2D8E;
+    page-break-after: avoid;
+    break-after: avoid-page;
+    page-break-inside: avoid;
+  }
+  h3 {
+    font-size: 11.5pt;
+    color: #4A1F5E;
+    margin: 14px 0 6px 0;
+    page-break-after: avoid;
+  }
+  p { margin: 4px 0 8px 0; }
+  /* === Mockups d'interface === */
+  .mockup {
+    background: #FAFAFA;
+    border: 1px solid #DDD;
+    border-radius: 8px;
+    padding: 12px;
+    margin: 8px 0 14px 0;
+    page-break-inside: avoid;
+  }
+  .mockup-label {
+    font-size: 9pt;
+    color: #888;
+    font-style: italic;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  /* Carte feedback (reproduit le rendu du drawer) */
+  .fb-card {
+    background: #fff;
+    border-left: 4px solid #ccc;
+    border: 1px solid #E0E0E0;
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+  }
+  .fb-card.applied { border-left-color: #2E7D32; background: #F6FBF6; }
+  .fb-card.pending-blue { border-left-color: #FB8C00; background: #FFF8E1; }
+  .fb-card.permanent { border-left-color: #7B2D8E; background: #F5EFF8; }
+  .fb-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 4px;
+  }
+  .fb-field { font-weight: 700; color: #333; font-size: 11pt; }
+  .fb-date { font-size: 9pt; color: #888; }
+  .fb-badges { margin-bottom: 5px; }
+  .fb-badge {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 8px;
+    font-size: 9pt;
+    font-weight: 700;
+    margin-right: 4px;
+  }
+  .fb-badge.pending { background: #FFE0B2; color: #7F3D00; }
+  .fb-badge.applied { background: #C8E6C9; color: #1B5E20; }
+  .fb-badge.permanent { background: #E1BEE7; color: #4A148C; }
+  .fb-badge.global { background: #FFCC80; color: #7F3D00; }
+  .fb-text {
+    font-size: 10pt;
+    color: #333;
+    margin: 4px 0 6px 0;
+    font-style: italic;
+  }
+  /* Bandeau qualité */
+  .fb-quality {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 7px 9px;
+    border-left: 3px solid;
+    border-radius: 4px;
+    font-size: 10pt;
+    line-height: 1.4;
+    margin-top: 6px;
+  }
+  .fb-quality.good { background: #E8F5E9; border-color: #2E7D32; }
+  .fb-quality.medium { background: #FFF3E0; border-color: #E65100; }
+  .fb-quality.poor { background: #FFEBEE; border-color: #C62828; }
+  .fb-quality-tag {
+    color: #fff;
+    padding: 2px 7px;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 9pt;
+    flex-shrink: 0;
+  }
+  .fb-quality.good .fb-quality-tag { background: #2E7D32; }
+  .fb-quality.medium .fb-quality-tag { background: #E65100; }
+  .fb-quality.poor .fb-quality-tag { background: #C62828; }
+  .fb-quality-text { flex: 1; color: #333; }
+  .fb-ok-btn {
+    border: 1px solid #ccc;
+    background: #fff;
+    color: #333;
+    font-size: 9pt;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 4px;
+    flex-shrink: 0;
+  }
+  /* Barre de filtres période */
+  .filters-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    background: #fff;
+    border: 1px solid #E0E0E0;
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin: 8px 0 12px 0;
+  }
+  .filter-label { font-size: 10pt; color: #555; font-weight: 600; }
+  .filter-pill {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 12px;
+    border: 1px solid #B39DDB;
+    background: #fff;
+    color: #4A1F5E;
+    font-size: 9.5pt;
+    font-weight: 600;
+  }
+  .filter-pill.active {
+    background: #7B2D8E;
+    color: #fff;
+    border-color: #7B2D8E;
+  }
+  .filter-date {
+    font-size: 9.5pt;
+    border: 1px solid #ccc;
+    padding: 3px 6px;
+    border-radius: 4px;
+    background: #FAFAFA;
+    color: #555;
+  }
+  .tip-box {
+    background: #FFF8E1;
+    border: 2px solid #FFC107;
+    border-radius: 6px;
+    padding: 11px 13px;
+    margin: 12px 0;
+    font-size: 10pt;
+  }
+  .tip-box strong { color: #5D4037; }
+  .footer {
+    margin-top: 22px;
+    padding-top: 10px;
+    border-top: 1px solid #DDD;
+    font-size: 9pt;
+    color: #888;
+    text-align: center;
+  }
+  ul { padding-left: 20px; margin: 4px 0 8px 0; }
+  ul li { margin-bottom: 3px; }
+</style>
+</head>
+<body>
+
+<h1>Nouveautés — Historique des feedbacks Maya</h1>
+<div class="subtitle">Évaluation qualité, commentaire automatique de Maya, filtre par période</div>
+
+<div class="intro">
+Trois nouveautés viennent d'être ajoutées dans l'onglet <strong>Historique des feedbacks Maya</strong> (icône presse-papier en bas à droite de l'application). Elles vous aident à voir d'un coup d'œil comment Maya a perçu chacun de vos feedbacks et à filtrer l'historique pour vous concentrer sur la période qui vous intéresse.
+</div>
+
+<h2>1. Évaluation qualité de chaque feedback</h2>
+
+<p>Chaque feedback affiche maintenant un bandeau coloré sous son texte, qui résume sa qualité perçue par Maya :</p>
+
+<ul>
+  <li><strong>Vert (Bon)</strong> : feedback structuré et exploitable, Maya l'applique pleinement.</li>
+  <li><strong>Orange (Moyen)</strong> : feedback partiellement exploitable, peut être renforcé.</li>
+  <li><strong>Rouge (À améliorer)</strong> : feedback peu exploitable, à reformuler.</li>
+</ul>
+
+<p>Voici les trois cas concrets que vous verrez dans le drawer :</p>
+
+<div class="mockup">
+  <div class="mockup-label">Aperçu — Feedback bien rédigé</div>
+  <div class="fb-card permanent">
+    <div class="fb-head">
+      <span class="fb-field">Paroi 4 — Plafond bois — Type isolation</span>
+      <span class="fb-date">06/05/2026</span>
+    </div>
+    <div class="fb-badges">
+      <span class="fb-badge permanent">🧠 Règle permanente</span>
+    </div>
+    <div class="fb-text">« Statut attendu ROUGE. ITI s'applique aux murs uniquement, jamais aux planchers. Règle générale. »</div>
+    <div class="fb-quality good">
+      <span class="fb-quality-tag">✓ Bon</span>
+      <span class="fb-quality-text">Intégré au prompt de Maya. La règle est appliquée automatiquement. Appliqué à toutes les analyses futures, en tant qu'exemple de cas similaire.</span>
+      <span class="fb-ok-btn">OK</span>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Aperçu — Feedback à renforcer</div>
+  <div class="fb-card pending-blue">
+    <div class="fb-head">
+      <span class="fb-field">Paroi 3 — Plancher mitoyen — Surface</span>
+      <span class="fb-date">06/05/2026</span>
+    </div>
+    <div class="fb-badges">
+      <span class="fb-badge pending">En attente</span>
+    </div>
+    <div class="fb-text">« Info en page 14 de la VT, aucun isolant »</div>
+    <div class="fb-quality medium">
+      <span class="fb-quality-tag">~ Moyen</span>
+      <span class="fb-quality-text">Sera intégré à la prochaine analyse, mais peut être renforcé. Suggestion : préciser le statut attendu (VERT, ORANGE, ROUGE ou MANQUANT). Appliqué à toutes les analyses futures, en tant qu'exemple de cas similaire.</span>
+      <span class="fb-ok-btn">OK</span>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Aperçu — Feedback peu exploitable</div>
+  <div class="fb-card">
+    <div class="fb-head">
+      <span class="fb-field">Fenêtre 2 — Statut</span>
+      <span class="fb-date">06/05/2026</span>
+    </div>
+    <div class="fb-badges">
+      <span class="fb-badge pending">En attente</span>
+    </div>
+    <div class="fb-text">« conforme »</div>
+    <div class="fb-quality poor">
+      <span class="fb-quality-tag">! À améliorer</span>
+      <span class="fb-quality-text">Maya ne pourra pas en tirer grand-chose dans son état actuel. À reformuler avant la prochaine analyse. Suggestion : préciser le statut attendu (VERT, ORANGE, ROUGE ou MANQUANT). Appliqué à toutes les analyses futures, en tant qu'exemple de cas similaire.</span>
+      <span class="fb-ok-btn">OK</span>
+    </div>
+  </div>
+</div>
+
+<h2>2. Commentaire automatique de Maya sur chaque feedback</h2>
+
+<p>Le bandeau qualité contient un commentaire qui explique <strong>concrètement ce que Maya a fait du feedback</strong> :</p>
+
+<ul>
+  <li>Si le feedback est <strong>déjà intégré</strong> au prompt (statut Appliqué ou Règle permanente), Maya l'applique automatiquement à chaque analyse future.</li>
+  <li>Si le feedback est <strong>en attente</strong>, il sera intégré à la prochaine analyse. Le commentaire indique si la qualité permet une exploitation pleine ou si une reformulation serait préférable.</li>
+  <li>Si la qualité est <strong>moyenne ou faible</strong>, une suggestion d'amélioration prioritaire est proposée (par exemple, préciser le statut attendu, formuler une règle métier en phrase complète, ajouter un repère pour orienter Maya).</li>
+</ul>
+
+<div class="tip-box">
+<strong>Important :</strong> tous les feedbacks (ligne ET global) sont réinjectés dans le prompt Maya à chaque analyse future, peu importe le dossier. La distinction ligne/global est une question de forme (cas précis vs règle transverse), pas de portée. Vos feedbacks servent à toutes les analyses à venir.
+</div>
+
+<h2>3. Bouton OK pour acquitter une évaluation</h2>
+
+<p>Une fois que vous avez lu et compris l'évaluation d'un feedback, vous pouvez cliquer sur le bouton <strong>OK</strong> à droite du bandeau. Le bandeau qualité disparaît pour ce feedback, ce qui vous permet de garder le drawer aéré et de vous concentrer sur les feedbacks qui méritent encore votre attention.</p>
+
+<p>Cet acquittement est mémorisé localement dans votre navigateur, donc même si vous fermez et rouvrez l'application, le feedback restera marqué comme vu.</p>
+
+<h2>4. Filtre par plage de date</h2>
+
+<p>Une nouvelle barre de filtres est apparue sous celle des statuts. Elle permet de filtrer les feedbacks affichés selon leur date d'envoi :</p>
+
+<div class="mockup">
+  <div class="mockup-label">Aperçu — Barre de filtres période</div>
+  <div class="filters-bar">
+    <span class="filter-label">Période :</span>
+    <span class="filter-pill active">Tous</span>
+    <span class="filter-pill">1 jour</span>
+    <span class="filter-pill">15 jours</span>
+    <span class="filter-pill">30 jours</span>
+    <span class="filter-label" style="margin-left:6px;">Du</span>
+    <span class="filter-date">06/04/2026</span>
+    <span class="filter-label">au</span>
+    <span class="filter-date">06/05/2026</span>
+  </div>
+</div>
+
+<p>Quatre boutons rapides sont disponibles : <strong>Tous</strong>, <strong>1 jour</strong>, <strong>15 jours</strong>, <strong>30 jours</strong>. Vous pouvez aussi sélectionner une plage personnalisée via les deux champs <em>Du</em> et <em>au</em>. Le filtre date se cumule avec le filtre statut existant (En attente, Appliqués, Permanentes, Archivés), pour un ciblage précis.</p>
+
+<h2>En résumé</h2>
+
+<ul>
+  <li>Chaque feedback affiche un bandeau qualité <strong>vert / orange / rouge</strong> selon son exploitabilité par Maya.</li>
+  <li>Un commentaire automatique précise <strong>ce que Maya a fait du feedback</strong> et propose une amélioration si nécessaire.</li>
+  <li>Un bouton <strong>OK</strong> permet de masquer un bandeau lu, pour aérer la vue.</li>
+  <li>Un filtre <strong>par plage de date</strong> permet de cibler les feedbacks d'une période précise.</li>
+  <li>Tous les feedbacks (ligne ET global) <strong>servent à toutes les analyses futures</strong>, pas seulement au dossier en cours.</li>
+</ul>
+
+<p style="margin-top:14px;">Pour rappel, le guide complet pour bien rédiger un feedback à Maya reste disponible via l'icône livre en bas à droite de l'application, ou directement à cette adresse :</p>
+
+<p style="font-size:10pt;color:#0D47A1;">https://revue-audit-energetique.vercel.app/Guide_Feedback_Maya.pdf</p>
+
+<div class="footer">
+Document généré pour les utilisateurs du comparateur Audit / VT — Mai 2026<br>
+Version 1.0 — nouveautés du drawer historique Maya
+</div>
+
+</body>
+</html>
