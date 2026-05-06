@@ -4796,36 +4796,41 @@
       if (detail.type === 'paroi_multi') {
         var lines = [];
 
+        // RÈGLE STRICTE : les totaux NET et BRUT sont TOUJOURS recalculés depuis les parts.
+        // Le LLM peut se tromper dans son addition (ex: 5,74 + 8,77 + … donné comme 105,68
+        // alors que la vraie somme est 116,58). On ignore detail.net_total / detail.brut_total
+        // et on recalcule en JS pour garantir l'exactitude arithmétique.
+
         // NET — compatibilité descendante : net_parts (nouveau) ou net (ancien nombre unique)
         var netParts = detail.net_parts && detail.net_parts.length > 0
-          ? detail.net_parts.filter(function(p){ return p != null && !isNaN(p); })
-          : (detail.net != null && !isNaN(detail.net) ? [detail.net] : null);
+          ? detail.net_parts.filter(function(p){ return p != null && !isNaN(p); }).map(Number)
+          : (detail.net != null && !isNaN(detail.net) ? [Number(detail.net)] : null);
         if (netParts && netParts.length > 0) {
-          var netTotal = detail.net_total != null && !isNaN(detail.net_total)
-            ? detail.net_total
-            : netParts.reduce(function(a, b){ return a + b; }, 0);
+          // Recalcul forcé depuis les parts — ne jamais faire confiance à detail.net_total
+          var netTotalRecalc = netParts.reduce(function(a, b){ return a + b; }, 0);
           var netLine = 'NET  : ';
           if (netParts.length === 1) {
             netLine += _frNum(netParts[0]) + ' ' + unit + ' (surface à isoler)';
           } else {
-            netLine += netParts.map(_frNum).join(' + ') + ' = ' + _frNum(netTotal) + ' ' + unit + ' (surface à isoler)';
+            netLine += netParts.map(_frNum).join(' + ') + ' = ' + _frNum(netTotalRecalc) + ' ' + unit + ' (surface à isoler)';
           }
+          // Mettre à jour le detail.net_total pour cohérence avec l'affichage et les autres logiques
+          detail.net_total = Math.round(netTotalRecalc * 100) / 100;
           lines.push(netLine);
         }
 
-        // BRUT — inchangé
+        // BRUT — recalcul forcé depuis les parts
         if (detail.brut_parts && detail.brut_parts.length > 0) {
-          var validParts = detail.brut_parts.filter(function(p){ return p != null && !isNaN(p); });
+          var validParts = detail.brut_parts.filter(function(p){ return p != null && !isNaN(p); }).map(Number);
           if (validParts.length > 0) {
-            var brutTotal = detail.brut_total != null && !isNaN(detail.brut_total)
-              ? detail.brut_total
-              : validParts.reduce(function(a, b){ return a + b; }, 0);
+            var brutTotalRecalc = validParts.reduce(function(a, b){ return a + b; }, 0);
             var brutLine = 'BRUT : ';
             if (validParts.length === 1) {
               brutLine += _frNum(validParts[0]) + ' ' + unit;
             } else {
-              brutLine += validParts.map(_frNum).join(' + ') + ' = ' + _frNum(brutTotal) + ' ' + unit;
+              brutLine += validParts.map(_frNum).join(' + ') + ' = ' + _frNum(brutTotalRecalc) + ' ' + unit;
             }
+            detail.brut_total = Math.round(brutTotalRecalc * 100) / 100;
             lines.push(brutLine);
           }
         }
@@ -5137,6 +5142,13 @@ RÈGLE STATUT pour les surfaces multi-façades :
 - Compare TOUJOURS le brut_total (ou la valeur unique si single) avec valeur_audit pour déterminer VERT/ORANGE/ROUGE.
 - Si brut_total ≈ valeur_audit (±5%) → VERT même si le net seul diffère.
 - INTERDIT de mettre ORANGE/ROUGE si le total brut VT correspond à l'audit — c'est seulement la décomposition qui diffère.
+
+RÈGLE ARITHMÉTIQUE — ADDITION DES PARTS (CRITIQUE) :
+Pour les champs paroi_multi, le système JS RECALCULE systématiquement net_total et brut_total à partir des parts (net_parts, brut_parts). Donc :
+→ Tu peux remplir net_total / brut_total avec ton meilleur calcul, mais c'est le JS qui aura le dernier mot.
+→ FOCUS PRIORITAIRE sur l'exhaustivité et l'exactitude des PARTS individuelles : chaque façade/orientation extraite doit être un nombre fidèle au document VT, sans omission ni doublon.
+→ Vérifie aussi que tu n'as pas extrait deux fois la même surface (pas de doublons dans net_parts ou brut_parts).
+→ Une part fausse ou manquante propage l'erreur sur le total final.
 
 RÈGLE CHAUFFAGE — FUSION INSTANCES IDENTIQUES :
 L'audit sépare parfois un même chauffage en plusieurs instances ("Chauffage 1" / "Chauffage 2"…) uniquement pour répartir la surface chauffée. Les caractéristiques techniques (type, énergie, puissance, marque, année, ECS, régulation, etc.) sont alors identiques entre les instances — seule la SURFACE diffère.
