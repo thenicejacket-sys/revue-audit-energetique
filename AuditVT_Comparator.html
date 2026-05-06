@@ -6779,7 +6779,23 @@ ${vtShort}`;
         });
       });
       items.sort(function(a,b){ return String(b.timestamp||'').localeCompare(String(a.timestamp||'')); });
-      return items;
+
+      // ── Déduplication agressive en local ──
+      // Même si la base Supabase contient des doublons (ancien bug), on n'affiche jamais 2x le même feedback.
+      // Signature : scope + key + texte normalisé (espaces multiples écrasés, casse ignorée, accents conservés).
+      // En cas de doublon, on garde la version la PLUS RÉCENTE (items est déjà trié desc par timestamp, donc le premier croisé).
+      var seenSig = {};
+      var deduped = [];
+      var dropped = 0;
+      items.forEach(function(it){
+        var normText = String(it.text || '').replace(/\s+/g, ' ').trim().toLowerCase();
+        var sig = (it.scope || '') + '||' + (it.key || '') + '||' + normText + '||' + (it.category || '');
+        if (seenSig[sig]) { dropped++; return; }
+        seenSig[sig] = true;
+        deduped.push(it);
+      });
+      if (dropped > 0) console.log('[MAYA-DEDUP-RENDER] ' + dropped + ' doublon(s) masqué(s) à l\'affichage (le plus récent est conservé).');
+      return deduped;
     }
 
     // ---- Promotion automatique des feedbacks récurrents en règle permanente ----
@@ -7418,14 +7434,16 @@ ${vtShort}`;
       showAlert('alerts-area', 'success', '🗑 Feedback supprimé.');
     }
 
-    // ---- Détection + suppression des doublons Supabase (Z vs +00:00) ----
+    // ---- Détection + suppression des doublons Supabase ----
+    // Signature normalisée pour détecter doublons et triplons même avec espaces/casse différents
     async function cleanupSupabaseDuplicates(remote) {
       if (!remote || !remote.length) return remote;
       var byKey = {};
       remote.forEach(function(row){
         if (!row || !row.id) return;
-        // Signature = scope + clé + texte (insensible aux ms de timestamp)
-        var sig = (row.scope || '') + '||' + (row.key_field || '') + '||' + ((row.feedback_text || '').trim()) + '||' + ((row.category || ''));
+        // Texte normalisé : espaces multiples écrasés, casse ignorée pour matcher tous les variants
+        var normText = String(row.feedback_text || '').replace(/\s+/g, ' ').trim().toLowerCase();
+        var sig = (row.scope || '') + '||' + (row.key_field || '') + '||' + normText + '||' + (row.category || '');
         if (!byKey[sig]) byKey[sig] = [];
         byKey[sig].push(row);
       });
@@ -7433,14 +7451,19 @@ ${vtShort}`;
       Object.keys(byKey).forEach(function(sig){
         var arr = byKey[sig];
         if (arr.length < 2) return;
-        // Préférence : ID se terminant par 'Z' (format normalisé local)
+        // Tri par updated_at desc (le plus récent en premier) puis préférence ID terminant par Z
+        arr.sort(function(a, b){
+          var ta = a.updated_at || a.created_at || '';
+          var tb = b.updated_at || b.created_at || '';
+          return tb.localeCompare(ta);
+        });
         var keep = arr.find(function(r){ return /Z$/.test(r.id); }) || arr[0];
         arr.forEach(function(r){
           if (r.id !== keep.id) toDelete.push(r.id);
         });
       });
       if (toDelete.length > 0) {
-        console.log('[MAYA-CLEANUP] ' + toDelete.length + ' doublon(s) Supabase à supprimer (Z vs +00:00)');
+        console.log('[MAYA-CLEANUP] ' + toDelete.length + ' doublon(s)/triplon(s) Supabase à supprimer (signature scope+key+texte+catégorie)');
         for (var i = 0; i < toDelete.length; i++) {
           try { await MayaSupabase.deleteFeedback(toDelete[i]); } catch(e) {}
         }

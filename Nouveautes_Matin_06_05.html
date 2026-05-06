@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Nouveautés du 6 mai — Audit Comparateur</title>
+<style>
+  @page { size: A4; margin: 14mm 14mm 16mm 14mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    color: #2C2C2C;
+    font-size: 10.5pt;
+    line-height: 1.45;
+    margin: 0;
+    padding: 0;
+  }
+  h1 {
+    font-size: 20pt;
+    color: #4A1F5E;
+    margin: 0 0 4px 0;
+    font-weight: 700;
+  }
+  .subtitle {
+    color: #7B2D8E;
+    font-size: 11pt;
+    margin-bottom: 16px;
+    font-weight: 600;
+  }
+  h2 {
+    font-size: 13pt;
+    color: #4A1F5E;
+    margin: 16px 0 6px 0;
+    padding-bottom: 4px;
+    border-bottom: 2px solid #7B2D8E;
+    page-break-after: avoid;
+    page-break-inside: avoid;
+  }
+  p { margin: 4px 0 8px 0; }
+  ul { padding-left: 20px; margin: 4px 0 8px 0; }
+  ul li { margin-bottom: 3px; }
+  .box {
+    background: #F8F4FA;
+    border-left: 3px solid #7B2D8E;
+    padding: 8px 12px;
+    margin: 6px 0 10px 0;
+    font-size: 10pt;
+    border-radius: 3px;
+  }
+  .footer {
+    margin-top: 18px;
+    padding-top: 8px;
+    border-top: 1px solid #DDD;
+    font-size: 9pt;
+    color: #888;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<h1>Nouveautés du 6 mai 2026</h1>
+<div class="subtitle">Comparateur Audit / VT — Améliorations de l'historique des feedbacks Maya</div>
+
+<h2>Évaluation qualité de chaque feedback</h2>
+<p>Chaque feedback dans l'historique Maya affiche désormais un bandeau coloré qui indique sa qualité perçue par Maya : vert (validé), orange (moyen), rouge (à améliorer). L'évaluation est calculée automatiquement, sans coût supplémentaire.</p>
+
+<h2>Commentaire structuré en trois parties</h2>
+<p>Sous chaque feedback, un commentaire détaillé apparaît en trois blocs :</p>
+<ul>
+  <li><strong>Action de Maya</strong> : ce qu'elle a fait ou fera concrètement du feedback (intégré au prompt, à intégrer à la prochaine analyse, règle permanente, ou archivé).</li>
+  <li><strong>Commentaire sur le feedback</strong> : analyse contextuelle du texte écrit, avec un diagnostic ciblé (par exemple « le commentaire exprime une frustration mais Maya ne sait pas quelle règle reproduire »).</li>
+  <li><strong>Pour le prochain rapport</strong> : suggestion d'amélioration accompagnée d'un exemple précis de reformulation.</li>
+</ul>
+<p>Si le feedback est bien construit : message court « Commentaire validé », sans suggestion superflue.</p>
+
+<h2>Bouton OK pour acquitter une évaluation</h2>
+<p>Une fois le bandeau qualité lu et intégré, un clic sur le bouton OK fait disparaître l'évaluation pour ce feedback. La vue reste aérée, l'attention se concentre sur les feedbacks qui en ont encore besoin.</p>
+
+<h2>Filtre par plage de date</h2>
+<p>Une nouvelle barre de filtres période est disponible sous celle des statuts. Boutons rapides Tous, 1 jour, 15 jours, 30 jours, ou plage personnalisée via deux champs Du et au. Le filtre date se cumule avec le filtre statut existant.</p>
+
+<h2>Déduplication automatique des feedbacks</h2>
+<p>Les éventuels doublons ou triplons de feedbacks (issus d'anciennes synchronisations) sont désormais supprimés automatiquement, à la base de données et à l'affichage. Vous ne verrez plus la même règle deux ou trois fois dans le drawer.</p>
+
+<h2>Rappel important</h2>
+<div class="box">
+Tous les feedbacks (que ce soit un commentaire de ligne ou un feedback global) sont réinjectés dans le prompt de Maya à chaque analyse future, peu importe le dossier en cours. La distinction ligne / global est une question de forme, pas de portée. Vos commentaires servent à toutes les analyses à venir.
+</div>
+
+<h2>Accès</h2>
+<p>Application : <strong>https://revue-audit-energetique.vercel.app</strong></p>
+<p>Guide complet feedback : <strong>https://revue-audit-energetique.vercel.app/Guide_Feedback_Maya.pdf</strong></p>
+
+<div class="footer">
+Document généré pour les utilisateurs du comparateur Audit / VT — 6 mai 2026
+</div>
+
+</body>
+</html>
