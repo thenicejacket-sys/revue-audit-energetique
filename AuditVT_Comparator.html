@@ -7144,10 +7144,11 @@ ${vtShort}`;
       };
     }
 
-    // Marque l'évaluation qualité comme acquittée par l'utilisateur (le bloc disparaît)
+    // Bascule l'affichage de l'évaluation qualité (toggle plié / déplié).
+    // Cliquer OK plie le bandeau ; cliquer le bouton compact « Voir l'évaluation » le déplie.
     function mayaAckQuality(id) {
       if (!mayaFeedbackMeta[id]) mayaFeedbackMeta[id] = { status: 'pending' };
-      mayaFeedbackMeta[id].qualityAcked = true;
+      mayaFeedbackMeta[id].qualityAcked = !mayaFeedbackMeta[id].qualityAcked;
       persistMayaFeedbackMeta();
       renderMayaDrawer();
     }
@@ -7209,15 +7210,21 @@ ${vtShort}`;
 
           var scopeBadge = (it.scope === 'global') ? '<span class="maya-drawer-item-badge global">Global</span>' : '';
 
-          // Évaluation qualité du feedback (analyse contextuelle). Affichée seulement si non acquittée.
+          // Évaluation qualité du feedback (analyse contextuelle). Toggle plié / déplié.
           var qualityHtml = '';
-          if (!it.meta.qualityAcked) {
-            var q = evaluateFeedbackQuality(it);
-            var qBg     = q.level === 'good' ? '#E8F5E9' : (q.level === 'medium' ? '#FFF3E0' : '#FFEBEE');
-            var qBorder = q.level === 'good' ? '#A5D6A7' : (q.level === 'medium' ? '#FFB74D' : '#EF9A9A');
-            // Bloc 1 : action de Maya (toujours affiché)
+          var q = evaluateFeedbackQuality(it);
+          var qBg     = q.level === 'good' ? '#E8F5E9' : (q.level === 'medium' ? '#FFF3E0' : '#FFEBEE');
+          var qBorder = q.level === 'good' ? '#A5D6A7' : (q.level === 'medium' ? '#FFB74D' : '#EF9A9A');
+          if (it.meta.qualityAcked) {
+            // ─── État plié : juste un mini-bouton compact pour rouvrir l'évaluation ───
+            qualityHtml =
+              '<div style="margin-top:6px;display:flex;align-items:center;gap:6px;">' +
+                '<span style="background:' + q.color + ';color:#fff;padding:1px 6px;border-radius:8px;font-weight:700;font-size:9pt;">' + q.icon + ' ' + escHtml(q.label) + '</span>' +
+                '<button type="button" onclick="mayaAckQuality(\'' + it.id + '\')" title="Afficher à nouveau l\'évaluation détaillée de ce feedback" style="border:1px dashed #aaa;background:#fff;color:#666;font-size:9pt;padding:1px 8px;border-radius:4px;cursor:pointer;">Voir l\'évaluation</button>' +
+              '</div>';
+          } else {
+            // ─── État déplié : bandeau complet en 3 parties ───
             var actionLine = '<div style="margin-bottom:5px;line-height:1.4;"><strong style="color:#0D47A1;font-size:9.5pt;">Action de Maya : </strong><span style="color:#333;">' + escHtml(q.action) + '</span></div>';
-            // Bloc 2 + 3 : commentaire sur le feedback + amélioration (uniquement si non validé)
             var contentBlocks = '';
             if (q.validated) {
               contentBlocks =
@@ -7233,7 +7240,7 @@ ${vtShort}`;
               '<div style="margin-top:8px;padding:8px 10px;background:' + qBg + ';border:1px solid ' + qBorder + ';border-left:3px solid ' + q.color + ';border-radius:4px;font-size:11px;color:#333;">' +
                 '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:6px;">' +
                   '<span style="background:' + q.color + ';color:#fff;padding:2px 8px;border-radius:8px;font-weight:700;font-size:10px;">' + q.icon + ' ' + escHtml(q.label) + '</span>' +
-                  '<button type="button" onclick="mayaAckQuality(\'' + it.id + '\')" title="Marquer comme vu, masque cette évaluation" style="border:1px solid #ccc;background:#fff;color:#333;font-size:10px;font-weight:700;padding:2px 10px;border-radius:4px;cursor:pointer;">OK</button>' +
+                  '<button type="button" onclick="mayaAckQuality(\'' + it.id + '\')" title="Plier le bandeau, restera accessible via Voir l\'évaluation" style="border:1px solid #ccc;background:#fff;color:#333;font-size:10px;font-weight:700;padding:2px 10px;border-radius:4px;cursor:pointer;">OK</button>' +
                 '</div>' +
                 actionLine +
                 contentBlocks +
