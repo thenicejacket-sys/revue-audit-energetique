@@ -2249,6 +2249,21 @@
     // Pour ajouter une équivalence : éditer ICI uniquement.
     // Vérifié le 2026-04-30 lors du refactor DRY synonymes.
     // =====================================================================
+
+    // =====================================================================
+    // GLOBAL_FIELD_REGEX — constante UNIQUE pour identifier les champs globaux du logement
+    // (HSP, SHAB, niveaux, adresse, département, code postal, ville, type de bien, année).
+    // Ces champs ne doivent JAMAIS être multipliés par instance de paroi/menuiserie.
+    //
+    // Référencée à 2 endroits : (a) à l'expansion par instance (préventif),
+    // (b) dans dedupGlobalFields (correctif post-traitement).
+    //
+    // ⚠️ IMPORTANT : pour ajouter un champ global, modifier UNIQUEMENT cette constante.
+    // Avant cette refactorisation (2026-05-06), la regex était dupliquée → divergence
+    // garantie à terme. La duplication a causé une régression sur la HSP.
+    // =====================================================================
+    var GLOBAL_FIELD_REGEX = /(?:^|\b)(?:hauteur(?:\s+(?:moyenne|libre|sous))?\s*(?:sous\s*plafond)?|nombre\s+de\s+niveaux?|surface\s+(?:de\s+r[eé]f[eé]rence|habitable|de\s+plancher|au\s*sol|tax[eé]e|totale|utile)|\bshab\b|\bsdp\b|type\s+de\s+bien|ann[eé]e\s+de\s+construction|adresse(?:\s+(?:compl[eè]te|du\s+logement))?|d[eé]partement|code\s+postal|\bville\b|commune|mitoyennet[eé](?!\s*(?:nord|sud|est|ouest))|zone\s+climatique|altitude)/i;
+
     var SEMANTIC_EQUIVALENCES = {
       niveaux: {
         label: "Nombre de niveaux",
@@ -3448,15 +3463,14 @@
       var _instOrderList = []; // ordre de découverte des instances
       var _nonExpandedFields = [];
       // Champs GLOBAUX du logement : ne JAMAIS multiplier par instance, même si la section les
-      // contient ambigüement. Liste fermée de noms reconnus + exclusion explicite.
-      var GLOBAL_FIELD_NAMES = /(?:^|\b)(?:hauteur(?:\s+(?:moyenne|libre|sous))?\s*(?:sous\s*plafond)?|nombre\s+de\s+niveaux?|surface\s+(?:de\s+r[eé]f[eé]rence|habitable|de\s+plancher|au\s*sol|tax[eé]e|totale|utile)|\bshab\b|\bsdp\b|type\s+de\s+bien|ann[eé]e\s+de\s+construction|adresse(?:\s+(?:compl[eè]te|du\s+logement))?|d[eé]partement|code\s+postal|\bville\b|commune)/i;
+      // contient ambigüement. Voir GLOBAL_FIELD_REGEX (constante unique en haut du script).
       refFields.forEach(function(f) {
         // ⚠️ Exclusion préventive : un champ global du logement (HSP, niveaux, adresse, etc.)
         // ne doit JAMAIS être expandé par instance, même si sa section référentiel matche
         // ambigüement une catégorie de paroi (ex: section "Caractéristiques générales" contenant
         // le mot "plancher"). Sans cette garde, "Hauteur sous plafond" se retrouvait répétée
         // pour chaque paroi et chaque menuiserie (régression observée le 2026-05-06).
-        if (GLOBAL_FIELD_NAMES.test(f.nom || '')) {
+        if (GLOBAL_FIELD_REGEX.test(f.nom || '')) {
           _nonExpandedFields.push(f);
           return;
         }
@@ -4240,7 +4254,7 @@
         // toutes les copies en une seule entrée sans instance_label.
         // ───────────────────────────────────────────────────────────────────
         (function dedupGlobalFields(){
-          var GLOBAL_FIELD_NAMES = /(?:^|\b)(?:hauteur(?:\s+(?:moyenne|libre|sous))?\s*(?:sous\s*plafond)?|nombre\s+de\s+niveaux?|surface\s+(?:de\s+r[eé]f[eé]rence|habitable|de\s+plancher|au\s*sol|tax[eé]e|totale|utile)|\bshab\b|\bsdp\b|type\s+de\s+bien|ann[eé]e\s+de\s+construction|adresse(?:\s+(?:compl[eè]te|du\s+logement))?|d[eé]partement|code\s+postal|\bville\b|commune)/i;
+          // Utilise GLOBAL_FIELD_REGEX (constante unique, voir haut du script)
           var byChamp = {};
           state.analysisResults.forEach(function(rv){
             if (!byChamp[rv.id_champ]) byChamp[rv.id_champ] = [];
@@ -4251,7 +4265,7 @@
             var arr = byChamp[idChamp];
             if (arr.length < 2) return;
             var champNom = (getFieldNom(idChamp) || '');
-            if (!GLOBAL_FIELD_NAMES.test(champNom)) return;
+            if (!GLOBAL_FIELD_REGEX.test(champNom)) return;
             // Garde le premier résultat qui a une valeur audit (sinon le premier tout court)
             var keep = arr.find(function(r){ return r.valeur_audit && String(r.valeur_audit).trim().length > 0; }) || arr[0];
             keep.instance_label = null;
@@ -4667,6 +4681,12 @@
       updateProgress(100, 'Analyse terminée !', 'Rapport prêt.');
       await sleep(400);
 
+      // ─── Assertions d'invariants de domaine (anti-régression) ───
+      // Vérifie 7 invariants juste avant le rendu : ne bloque jamais l'affichage,
+      // mais émet des console.error/warn dès qu'un cas connu défaillant ressurgit.
+      // Mémorisé dans window._lastInvariantErrors / _lastInvariantWarnings pour inspection.
+      try { assertDomainInvariants(state.analysisResults); } catch (e) { console.warn('[INVARIANTS] erreur assertion :', e.message); }
+
       showProgress(false);
       renderResults();
       renderRapport();
@@ -4675,6 +4695,122 @@
       playCompletionBell();
       state.analysisRunning = false;
       document.getElementById('btn-analyze').disabled = false;
+    }
+
+    // =====================================================================
+    // assertDomainInvariants — vérification post-analyse de 7 invariants métier
+    // Source de vérité : règles physiques universelles (R, Uw, surfaces, années) + invariants
+    // structurels (un champ global n'a pas d'instance_label, VERT implique non-vide, etc.).
+    //
+    // Comportement : ne JAMAIS bloquer l'affichage. Émet console.error pour les violations
+    // critiques, console.warn pour les avertissements. Stocke les résultats dans
+    // window._lastInvariantErrors / window._lastInvariantWarnings pour inspection manuelle.
+    //
+    // Permet de détecter au plus tôt les régressions silencieuses (un cas qu'on a corrigé
+    // qui ressurgit avec un autre dossier).
+    // =====================================================================
+    function assertDomainInvariants(results) {
+      if (!Array.isArray(results)) return;
+      var errors = [];
+      var warnings = [];
+
+      // INV 1 — Une paroi n'a qu'une seule catégorie (pas de doublon cross-section)
+      var paroiCats = {};
+      results.forEach(function(rv) {
+        if (!rv.instance_label) return;
+        var nomLC = (getFieldNom(rv.id_champ) || '').toLowerCase();
+        var cat = null;
+        if (/menuiserie|ouvrant|fen[eê]tre|baie|porte|vitrage/.test(nomLC)) cat = 'menuiserie';
+        else if (/toiture|comble|plafond/.test(nomLC)) cat = 'toiture';
+        else if (/plancher/.test(nomLC)) cat = 'plancher';
+        else if (/\bmur\b|fa[çc]ade|paroi\s*opaque/.test(nomLC)) cat = 'mur';
+        if (!cat) return;
+        var key = String(rv.instance_label).trim().toLowerCase();
+        if (!paroiCats[key]) paroiCats[key] = {};
+        paroiCats[key][cat] = true;
+      });
+      Object.keys(paroiCats).forEach(function(k) {
+        var cats = Object.keys(paroiCats[k]);
+        if (cats.length > 1) errors.push('INV-1 paroi "' + k + '" présente dans ' + cats.length + ' catégories : ' + cats.join(', '));
+      });
+
+      // INV 2 — Un champ GLOBAL ne doit pas avoir d'instance_label (régression HSP du 6 mai)
+      results.forEach(function(rv) {
+        if (!rv.instance_label) return;
+        var nom = getFieldNom(rv.id_champ) || '';
+        if (GLOBAL_FIELD_REGEX.test(nom)) warnings.push('INV-2 champ global "' + nom + '" a encore instance_label="' + rv.instance_label + '"');
+      });
+
+      // INV 3 — Statut VERT implique au moins une valeur non-vide
+      results.forEach(function(rv) {
+        if (rv.statut !== 'VERT') return;
+        var hasA = rv.valeur_audit && String(rv.valeur_audit).trim() && rv.valeur_audit !== 'MANQUANT';
+        var hasV = rv.valeur_vt    && String(rv.valeur_vt).trim()    && rv.valeur_vt    !== 'MANQUANT';
+        if (!hasA && !hasV) errors.push('INV-3 VERT sans aucune valeur — id=' + rv.id_champ + ' instance=' + (rv.instance_label || '—'));
+        else if (hasA && !hasV) warnings.push('INV-3b VERT avec valeur audit mais sans valeur VT — id=' + rv.id_champ);
+      });
+
+      // INV 4 — Aucune valeur ne doit être réduite à une unité seule
+      var UNIT_ONLY = /^(?:m[²2]|m\b|cm|mm|%|kwh|kw|°c|°|w\/m²?|kg)\s*$/i;
+      results.forEach(function(rv) {
+        if (rv.valeur_audit && UNIT_ONLY.test(String(rv.valeur_audit).trim())) errors.push('INV-4 valeur_audit = unité seule "' + rv.valeur_audit + '" — id=' + rv.id_champ);
+        if (rv.valeur_vt    && UNIT_ONLY.test(String(rv.valeur_vt).trim()))    errors.push('INV-4 valeur_vt = unité seule "' + rv.valeur_vt + '" — id=' + rv.id_champ);
+      });
+
+      // INV 5 — Plages physiques sur les valeurs numériques (R, Uw, surface, année, HSP)
+      var PHYS_RANGES = [
+        { re: /\buw?\b|coefficient.*(?:vitrage|menuis)/i,  min: 0.3, max: 8,    label: 'Uw' },
+        { re: /r[eé]sistance.*thermique|r\s*=|coefficient\s*r/i, min: 0,   max: 12,   label: 'R' },
+        { re: /facteur.*sol|\bsw\b/i,                       min: 0,   max: 1,    label: 'Sw' },
+        { re: /transmission.*lum|\btl\b/i,                  min: 0,   max: 1,    label: 'TL' },
+        { re: /ann[eé]e\s+(?:de\s+)?construction/i,         min: 1850,max: new Date().getFullYear(), label: 'Année' },
+        { re: /hauteur.*plafond/i,                          min: 1.5, max: 6,    label: 'HSP' },
+        { re: /\bshab\b|surface.*habit|surface.*r[eé]f/i,   min: 5,   max: 500,  label: 'SHAB' }
+      ];
+      function _toNum(s) { var n = parseFloat(String(s||'').replace(',','.').replace(/[^\d.\-]/g,'')); return isNaN(n) ? null : n; }
+      results.forEach(function(rv) {
+        var nom = (getFieldNom(rv.id_champ) || '').toLowerCase();
+        PHYS_RANGES.forEach(function(p) {
+          if (!p.re.test(nom)) return;
+          [['valeur_audit', rv.valeur_audit], ['valeur_vt', rv.valeur_vt]].forEach(function(pair) {
+            var n = _toNum(pair[1]);
+            if (n == null) return;
+            if (n < p.min || n > p.max) warnings.push('INV-5 ' + p.label + ' hors plage [' + p.min + '–' + p.max + '] : ' + pair[0] + '="' + pair[1] + '" id=' + rv.id_champ);
+          });
+        });
+      });
+
+      // INV 6 — harmonizeWallSurfaces cohérent : toutes les parois-mur d'un même champ Surface
+      // doivent avoir le même brut_total VT (puisqu'on applique la somme totale partout)
+      var wallSurfBrut = {};
+      results.forEach(function(rv) {
+        if (!rv.instance_label || !rv.valeur_vt_detail || rv.valeur_vt_detail.type !== 'paroi_multi') return;
+        var nom = (getFieldNom(rv.id_champ) || '').toLowerCase();
+        if (!/surface/.test(nom) || /r[eé]f[eé]rence|habit|shab|au\s*sol|totale/.test(nom)) return;
+        // Filtre : uniquement les parois mur
+        var lblLC = String(rv.instance_label).toLowerCase();
+        if (!/\bmur\b|fa[çc]ade/.test(lblLC) && !/^paroi\s+\d+\s*[—-].{0,40}mur/.test(lblLC)) return;
+        var brut = rv.valeur_vt_detail.brut_total;
+        if (brut == null) return;
+        var key = rv.id_champ;
+        if (wallSurfBrut[key] === undefined) wallSurfBrut[key] = brut;
+        else if (Math.abs(wallSurfBrut[key] - brut) > 0.05) warnings.push('INV-6 harmonisation surface mur incohérente : champ ' + key + ' brut_total=' + brut + ' ≠ ' + wallSurfBrut[key]);
+      });
+
+      // INV 7 — Aucun doublon (même id_champ + même instance_label)
+      var seen = {};
+      results.forEach(function(rv) {
+        var k = (rv.id_champ || '') + '||' + (rv.instance_label || '__null__');
+        if (seen[k]) errors.push('INV-7 doublon (id_champ + instance) : ' + k);
+        seen[k] = true;
+      });
+
+      // Rapport
+      if (errors.length > 0) console.error('[INVARIANTS] ' + errors.length + ' VIOLATION(S) critique(s) :\n  - ' + errors.join('\n  - '));
+      if (warnings.length > 0) console.warn('[INVARIANTS] ' + warnings.length + ' avertissement(s) :\n  - ' + warnings.join('\n  - '));
+      if (errors.length === 0 && warnings.length === 0) console.info('[INVARIANTS] ✓ Tous les invariants de domaine sont respectés.');
+      window._lastInvariantErrors = errors;
+      window._lastInvariantWarnings = warnings;
     }
 
     // Extrait une valeur numérique (m², m2) après un terme dans le texte VT — pour SHAB et surfaces générales
@@ -5863,10 +5999,23 @@ CONTRÔLES À EFFECTUER SUR CHAQUE RÉSULTAT :
    → Cherche le marqueur [--- PAGE X ---] correspondant au page_audit / page_vt et vérifie dans cette zone.
    → Si non → hallucination_detectee
 2. COHÉRENCE : la valeur extraite correspond-elle bien au champ demandé (pas de confusion entre champs) ?
-3. RÉALISME : la valeur est-elle physiquement plausible ?
-   - Surface d'un ouvrant : 0,3 à 6 m² (> 10 m² = confusion avec SHAB)
-   - Hauteur sous plafond : 2,0 à 3,5 m
-   - Résistance thermique R : 0 à 12 m².K/W
+3. RÉALISME : la valeur est-elle physiquement plausible ? Plages strictes à appliquer :
+   - Surface d'un ouvrant (fenêtre, porte) : 0,3 à 6 m² — au-delà de 10 m² = confusion avec SHAB → hallucination_detectee
+   - Surface d'une paroi opaque (mur, plancher, toiture) : 1 à 500 m² — hors plage = hallucination
+   - Surface habitable (SHAB / SDP / Surface utile) : 5 à 500 m² par logement
+   - Hauteur sous plafond : 2,0 à 3,5 m typique, hors [1,5–6] m = hallucination
+   - Résistance thermique R : 0 à 12 m².K/W — au-delà = confusion avec autre grandeur
+   - Coefficient Uw (vitrage / menuiserie) : 0,5 à 6,0 W/m².K — hors plage physique impossible
+   - Conductivité λ (lambda) d'isolant : 0,02 à 0,45 W/m.K — au-delà = confusion d'unité
+   - Facteur solaire Sw : 0 à 1 — > 1 impossible
+   - Transmission lumineuse TL : 0 à 1 — > 1 impossible
+   - Année de construction : 1850 à année courante — hors plage = erreur de saisie / mauvais champ
+   - Épaisseur d'isolant : 1 à 400 mm — > 500 mm suspect
+   COHÉRENCE PHYSIQUE :
+   - Audit dit "non isolé" mais R extrait > 0,3 m².K/W → incohérence à flagger ROUGE
+   - Audit dit "isolé R=X" mais aucun isolant mentionné dans VT → incohérence ROUGE
+   - Surface qui change de plus de 50% entre audit et VT → hallucination probable
+   - Type d'énergie chauffage différent (gaz vs électrique) → ROUGE systématique
 4. COPIE AUDIT→VT : si valeur_vt = valeur_audit et citation_vt non vérifiée → probable copie → hallucination_detectee
    - Les VT ne contiennent PAS de surfaces individuelles par paroi. Si une surface VT = surface audit → hallucination.
 5. ÉQUIVALENCES SÉMANTIQUES (pour les ROUGE) :
@@ -6183,10 +6332,23 @@ ${vtShort}`;
         try {
           if (mayaResult && Array.isArray(mayaResult.lexique_enrichment) && mayaResult.lexique_enrichment.length > 0) {
             var enrichCount = 0, enrichSkipped = 0;
+            // Liste de termes génériques à exclure (trop courts ou trop ambigus pour enrichir)
+            var GENERIC_TERMS_BLACKLIST = /^(?:oui|non|n\/a|na|null|nul|m²|m2|m|cm|mm|%|kw|kwh|°c|°|w|r|u|tl|sw|ug)\s*$/i;
             mayaResult.lexique_enrichment.forEach(function(entry) {
               if (!entry || !entry.id_champ || !entry.terme_vt) { enrichSkipped++; return; }
               var terme = String(entry.terme_vt).trim();
-              if (terme.length < 2 || terme.length > 80) { enrichSkipped++; return; }
+              // GUARD 1 — longueur stricte (4-80 chars). Avant : 2-80, on filtrait pas "oui"/"non"
+              if (terme.length < 4 || terme.length > 80) { enrichSkipped++; return; }
+              // GUARD 2 — termes génériques bannis (trop ambigus pour matcher dans une VT)
+              if (GENERIC_TERMS_BLACKLIST.test(terme)) {
+                console.warn('[LEXIQUE-AUTO] Terme générique rejeté : "' + terme + '" (champ ' + entry.id_champ + ')');
+                enrichSkipped++; return;
+              }
+              // GUARD 3 — espaces multiples (signe de concaténation involontaire de colonnes)
+              if (/\s{2,}/.test(terme)) {
+                console.warn('[LEXIQUE-AUTO] Terme avec espaces multiples rejeté (probable concaténation) : "' + terme + '"');
+                enrichSkipped++; return;
+              }
               var refField = state.referentiel.find(function(r){ return r.id === entry.id_champ; });
               if (!refField) { enrichSkipped++; return; }
               // Vérifie que le terme n'est PAS déjà dans le lexique existant ou auto
@@ -6195,6 +6357,16 @@ ${vtShort}`;
               var termeLC = terme.toLowerCase();
               var alreadyPresent = existing.split(/[;,|]/).map(function(s){ return s.trim(); }).some(function(s){ return s === termeLC; });
               if (alreadyPresent) { enrichSkipped++; return; }
+              // GUARD 4 — plafond à 5 termes auto par champ. Au-delà, on retire le plus ancien (FIFO).
+              // Empêche un mauvais terme accumulé d'inonder le lexique d'un champ.
+              var existingAuto = (refField.lexAuto || '').split(';').map(function(s){ return s.trim(); }).filter(Boolean);
+              if (existingAuto.length >= 5) {
+                var oldestTerm = existingAuto[0];
+                console.warn('[LEXIQUE-AUTO] Plafond 5 termes auto atteint pour "' + (refField.nom || refField.id) + '" — retrait du plus ancien : "' + oldestTerm + '"');
+                existingAuto.shift();
+                if (refField.lexAutoMeta) delete refField.lexAutoMeta[oldestTerm];
+                refField.lexAuto = existingAuto.join(';');
+              }
               // Ajoute au champ lexAuto (séparé pour distinguer auto vs manuel)
               refField.lexAuto = (refField.lexAuto ? refField.lexAuto + ';' : '') + terme;
               // Mémorise la raison pour l'UI Paramètres (badge avec tooltip)
