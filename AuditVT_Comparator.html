@@ -3710,6 +3710,49 @@
           }
           const fieldNom = (getFieldNom(rv.id_champ) || '').toLowerCase();
 
+          // ─── Filet de sécurité — Récupération valeurs depuis le commentaire ───
+          // Si valeur_audit ou valeur_vt est vide ou juste une unité (« m² » seul),
+          // on essaie d'extraire la valeur réelle depuis le commentaire avant de continuer.
+          // Bug observé : commentaire « Surface VT 191,38 m² proche de 191,00 m² audit »
+          // mais valeur_audit = "m²" et valeur_vt = vide. L'utilisateur ne voyait rien.
+          (function recoverValuesFromComment(){
+            var comment = String(rv.commentaire || '');
+            if (!comment || comment.length < 10) return;
+            // Marqueurs explicites de manquant : ne pas extraire si le commentaire dit
+            // explicitement que la valeur est absente
+            var explicitMissingAudit = /valeur[\s_]?audit\s*[=:]?\s*[«"']?\s*(?:manquant|absent|non[\s-]?renseign|vide|pas\s+de\s+valeur)/i.test(comment);
+            var explicitMissingVT    = /valeur[\s_]?vt\s*[=:]?\s*[«"']?\s*(?:manquant|absent|non[\s-]?renseign|vide|pas\s+de\s+valeur)/i.test(comment);
+            // Détecte si la valeur est juste une unité (« m² ») ou vide
+            function isUnitOnlyOrEmpty(v) {
+              if (v == null) return true;
+              var t = String(v).trim();
+              if (!t) return true;
+              return /^(?:m²|m2|m|cm|mm|%|kwh|kw|°c|°|w\/m|kg|wc?\b)\s*$/i.test(t);
+            }
+            // Pattern : valeur+unité associée au mot "audit"
+            // Ex: "191,00 m² audit" / "audit 191,00 m²" / "valeur audit 191,00 m²"
+            function extractFor(label) {
+              var rxBefore = new RegExp('([\\d][\\d\\s.,]*\\s*(?:m²|m2|m\\b|cm|mm|%|kwh|kw|°c|°))[^\\d]{0,15}' + label, 'i');
+              var rxAfter  = new RegExp('(?:' + label + ')(?:\\s+(?:indique|dit|donne|contient))?\\s*[:=]?\\s*([\\d][\\d\\s.,]*\\s*(?:m²|m2|m\\b|cm|mm|%|kwh|kw|°c|°))', 'i');
+              var m = comment.match(rxAfter) || comment.match(rxBefore);
+              return m && m[1] ? m[1].replace(/\s+/g, ' ').trim() : null;
+            }
+            if (!explicitMissingAudit && isUnitOnlyOrEmpty(rv.valeur_audit)) {
+              var foundAudit = extractFor('audit');
+              if (foundAudit) {
+                rv = Object.assign({}, rv, { valeur_audit: foundAudit });
+                console.log('[VALEUR-RECOVERY] valeur_audit récupérée depuis commentaire : "' + foundAudit + '" (champ ' + (rv.id_champ || '') + (rv.instance_label ? ' / ' + rv.instance_label : '') + ')');
+              }
+            }
+            if (!explicitMissingVT && isUnitOnlyOrEmpty(rv.valeur_vt)) {
+              var foundVT = extractFor('vt');
+              if (foundVT) {
+                rv = Object.assign({}, rv, { valeur_vt: foundVT });
+                console.log('[VALEUR-RECOVERY] valeur_vt récupérée depuis commentaire : "' + foundVT + '" (champ ' + (rv.id_champ || '') + (rv.instance_label ? ' / ' + rv.instance_label : '') + ')');
+              }
+            }
+          })();
+
           // ---- Règle département ----
           // Délègue au registre SEMANTIC_EQUIVALENCES["departement"] — éditer là-haut uniquement.
           if (fieldNom.includes('d\u00e9partement') || fieldNom.includes('departement')) {
@@ -4970,6 +5013,13 @@ Les valeurs dans l'audit sont au format : [Label]  Observé/Mesuré  [Valeur]
 - "Nombre de niveaux Observé/Mesuré 1,0" → valeur = "1,0"
 Le mot "Observé/Mesuré" est un SÉPARATEUR entre le label et la valeur — ce n'est PAS la valeur.
 Les décimales utilisent la virgule française : "2,75" = 2.75, "36,00" = 36.
+
+RÈGLE VALEUR JAMAIS RÉDUITE À UNE UNITÉ SEULE (CRITIQUE) :
+Une « valeur » sans nombre n'a pas de sens : « m² », « m », « % », « kWh » seuls ne sont PAS des valeurs.
+→ Si tu trouves un nombre suivi d'une unité (ex: « 191,00 m² »), retourne le tout : valeur_audit = "191,00 m²".
+→ Si tu trouves seulement l'unité sans nombre dans le document → retourne MANQUANT (valeur_audit = null), pas l'unité seule.
+→ INTERDIT de mettre valeur_audit = "m²" ou valeur_vt = "m²" : c'est un signal qu'aucune valeur n'a été trouvée → MANQUANT à la place.
+→ Si dans ton commentaire tu écris « X m² audit » ou « VT Y m² », alors valeur_audit DOIT contenir « X m² » et valeur_vt DOIT contenir « Y m² ». Pas d'incohérence entre commentaire et valeurs.
 
 RÈGLE VALEUR_VT JAMAIS VIDE SI INFO PRÉSENTE (CRITIQUE) :
 Si tu trouves dans la VT une valeur équivalente à celle de l'audit sous un libellé différent (ex: audit dit « 1 niveau », VT dit « RDC » ; audit dit « 1985 », VT dit « avant 1948 » ; audit dit « ITI », VT dit « Polystyrène »), tu DOIS remplir valeur_vt avec le LIBELLÉ EXACT trouvé dans la VT — pas null, pas vide, pas la valeur audit recopiée.
