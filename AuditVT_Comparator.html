@@ -6924,10 +6924,44 @@ ${vtShort}`;
     }
     function setMayaDrawerFilter(f) {
       mayaDrawerFilter = f;
-      document.querySelectorAll('.maya-drawer-filter-btn').forEach(function(b){
+      document.querySelectorAll('.maya-drawer-filter-btn[data-filter]').forEach(function(b){
         b.classList.toggle('active', b.getAttribute('data-filter') === f);
       });
       renderMayaDrawer();
+    }
+
+    // Filtre par plage de date dans le drawer
+    let mayaDrawerDateFilter = 'all';   // 'all' | '1' | '15' | '30' | 'custom'
+    function setMayaDrawerDateFilter(f) {
+      mayaDrawerDateFilter = f;
+      document.querySelectorAll('.maya-drawer-filter-btn[data-datefilter]').forEach(function(b){
+        b.classList.toggle('active', b.getAttribute('data-datefilter') === f);
+      });
+      // Si on clique sur un bouton rapide, vider les dates custom pour clarté
+      if (f !== 'custom') {
+        var fromEl = document.getElementById('maya-drawer-date-from');
+        var toEl   = document.getElementById('maya-drawer-date-to');
+        if (fromEl) fromEl.value = '';
+        if (toEl)   toEl.value = '';
+      }
+      renderMayaDrawer();
+    }
+    // Renvoie true si le timestamp de l'item passe le filtre date courant
+    function passesDateFilter(timestamp) {
+      if (!timestamp || mayaDrawerDateFilter === 'all') return true;
+      var t = new Date(timestamp).getTime();
+      if (isNaN(t)) return true;
+      if (mayaDrawerDateFilter === 'custom') {
+        var fromEl = document.getElementById('maya-drawer-date-from');
+        var toEl   = document.getElementById('maya-drawer-date-to');
+        var fromTs = fromEl && fromEl.value ? new Date(fromEl.value + 'T00:00:00').getTime() : -Infinity;
+        var toTs   = toEl   && toEl.value   ? new Date(toEl.value   + 'T23:59:59').getTime() :  Infinity;
+        return t >= fromTs && t <= toTs;
+      }
+      var days = parseInt(mayaDrawerDateFilter, 10);
+      if (isNaN(days) || days <= 0) return true;
+      var cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+      return t >= cutoff;
     }
     function toggleMayaHelp() {
       var el = document.getElementById('maya-drawer-help');
@@ -7017,22 +7051,62 @@ ${vtShort}`;
       if (txt.length >= 30) score++;
       else tips.push('détailler davantage (au moins une phrase complète)');
 
-      // Mapping score → niveau
-      var level, icon, label, color, baseComment;
-      if (score >= 4) {
-        level = 'good'; icon = '✓'; label = 'Bon'; color = '#2E7D32';
-        baseComment = 'Feedback structuré et exploitable. Maya pourra l\'appliquer.';
-      } else if (score >= 2) {
-        level = 'medium'; icon = '~'; label = 'Moyen'; color = '#E65100';
-        baseComment = 'Feedback partiellement exploitable.';
+      // Mapping score → niveau qualité
+      var level, icon, label, color;
+      if (score >= 4)      { level = 'good';   icon = '✓'; label = 'Bon';          color = '#2E7D32'; }
+      else if (score >= 2) { level = 'medium'; icon = '~'; label = 'Moyen';        color = '#E65100'; }
+      else                 { level = 'poor';   icon = '!'; label = 'À améliorer';  color = '#C62828'; }
+
+      // ── Composition du commentaire selon : (statut technique) × (qualité) × (scope) ──
+      var status = (item.meta && item.meta.status) || 'pending';
+      var partA = ''; // ce que Maya a fait
+      var partB = ''; // suggestion d'amélioration
+      var partC = ''; // portée (effet)
+      var firstTip = tips[0] || '';
+
+      // Partie A — ce que Maya a fait du feedback
+      if (status === 'applied' || status === 'permanent') {
+        if (level === 'good') {
+          partA = 'Intégré au prompt de Maya. La règle est appliquée automatiquement.';
+        } else if (level === 'medium') {
+          partA = 'Intégré au prompt de Maya, mais elle pourrait mieux l\'exploiter avec un peu plus de précision.';
+        } else {
+          partA = 'Intégré au prompt mais probablement peu exploité par Maya à cause du manque de précision.';
+        }
+      } else if (status === 'archived') {
+        partA = 'Archivé manuellement. Maya ne l\'utilise plus.';
       } else {
-        level = 'poor'; icon = '!'; label = 'À améliorer'; color = '#C62828';
-        baseComment = 'Feedback peu exploitable par Maya en l\'état.';
+        // pending
+        if (level === 'good') {
+          partA = 'Sera intégré au prompt de Maya à la prochaine analyse.';
+        } else if (level === 'medium') {
+          partA = 'Sera intégré à la prochaine analyse, mais peut être renforcé.';
+        } else {
+          partA = 'Maya ne pourra pas en tirer grand-chose dans son état actuel. À reformuler avant la prochaine analyse.';
+        }
       }
-      var comment = baseComment;
-      if (tips.length > 0 && level !== 'good') {
-        comment += ' Suggestion : ' + tips[0] + '.';
+
+      // Partie B — suggestion d'amélioration (uniquement si la qualité n'est pas bonne)
+      if (level !== 'good' && firstTip && status !== 'archived') {
+        partB = ' Suggestion : ' + firstTip + '.';
       }
+
+      // Partie C — portée selon le scope
+      if (status !== 'archived') {
+        if (item.scope === 'global') {
+          partC = ' Effet sur tous les futurs dossiers.';
+        } else if (item.scope === 'line') {
+          // Si c'est une règle ligne avec mention is_rule cochée, ne pas répéter (déjà devenu global aussi)
+          var isRule = !!(item.snapshot && item.snapshot.is_rule);
+          if (!isRule) {
+            partC = ' Effet limité au dossier actuel. Pour étendre à tous les futurs dossiers, utilise le bouton « Règle globale ».';
+          } else {
+            partC = ' Effet étendu à tous les futurs dossiers via la case « Règle générale ».';
+          }
+        }
+      }
+
+      var comment = (partA + partB + partC).trim();
       return { level: level, score: score, icon: icon, label: label, color: color, comment: comment, tips: tips };
     }
 
@@ -7050,10 +7124,11 @@ ${vtShort}`;
       var items = collectAllFeedbacks();
       var learnings = detectMayaRecurringLearnings(items);
 
-      // Filtre
+      // Filtre statut + filtre date
       var filtered = items.filter(function(i){
-        if (mayaDrawerFilter === 'all') return true;
-        return i.meta.status === mayaDrawerFilter;
+        if (mayaDrawerFilter !== 'all' && i.meta.status !== mayaDrawerFilter) return false;
+        if (!passesDateFilter(i.timestamp)) return false;
+        return true;
       });
 
       var body = document.getElementById('maya-drawer-body');
@@ -9756,6 +9831,17 @@ ${vtShort}`;
       <button type="button" class="maya-drawer-filter-btn" data-filter="permanent" onclick="setMayaDrawerFilter('permanent')" title="Règles ré-injectées dans Maya à CHAQUE analyse future. Promotion automatique après 3 feedbacks similaires sur la même ligne ou catégorie.">🧠 Permanentes</button>
       <button type="button" class="maya-drawer-filter-btn" data-filter="archived" onclick="setMayaDrawerFilter('archived')" title="Feedbacks anciens archivés (historique). Ignorés par Maya.">Archivés</button>
       <button type="button" class="maya-drawer-export" onclick="exportMayaFeedbacksExcel()">📥 Exporter Excel</button>
+    </div>
+    <div class="maya-drawer-filters" style="margin-top:6px;align-items:center;flex-wrap:wrap;gap:6px;">
+      <span style="font-size:11px;color:#666;font-weight:600;margin-right:4px;">Période :</span>
+      <button type="button" class="maya-drawer-filter-btn active" data-datefilter="all" onclick="setMayaDrawerDateFilter('all')" title="Tous les feedbacks, sans filtre de date.">Tous</button>
+      <button type="button" class="maya-drawer-filter-btn" data-datefilter="1" onclick="setMayaDrawerDateFilter('1')" title="Feedbacks des dernières 24 heures.">1 jour</button>
+      <button type="button" class="maya-drawer-filter-btn" data-datefilter="15" onclick="setMayaDrawerDateFilter('15')" title="Feedbacks des 15 derniers jours.">15 jours</button>
+      <button type="button" class="maya-drawer-filter-btn" data-datefilter="30" onclick="setMayaDrawerDateFilter('30')" title="Feedbacks des 30 derniers jours.">30 jours</button>
+      <span style="font-size:11px;color:#666;margin-left:4px;">Du</span>
+      <input type="date" id="maya-drawer-date-from" onchange="setMayaDrawerDateFilter('custom')" style="font-size:11px;padding:2px 4px;border:1px solid #ccc;border-radius:4px;" />
+      <span style="font-size:11px;color:#666;">au</span>
+      <input type="date" id="maya-drawer-date-to" onchange="setMayaDrawerDateFilter('custom')" style="font-size:11px;padding:2px 4px;border:1px solid #ccc;border-radius:4px;" />
     </div>
     <div class="maya-drawer-help-bar">
       <button type="button" class="maya-drawer-help-toggle" onclick="toggleMayaHelp()" aria-expanded="false" aria-controls="maya-drawer-help">
