@@ -7053,23 +7053,29 @@ ${vtShort}`;
         };
       }
 
-      // Pattern 3 — Page citée mais sans repère sémantique stable
+      // Pattern 3 — Page citée
+      // Pour un feedback ligne : la page aide Maya à localiser immédiatement l'erreur sur ce dossier,
+      // ET le système extrait automatiquement les termes VT trouvés à cette page pour enrichir
+      // le lexique du champ (visible dans Paramètres avec un badge auto). Donc Maya APPREND vraiment
+      // pour les prochains rapports, à condition que le libellé VT exact soit mentionné.
       var hasPage = /\bpage\s+\d+|\bp\.?\s*\d+\b/i.test(txt);
       var hasSemRef = /\b(?:section|fiche\s*descriptive|tableau|partie|colonne|bloc|rubrique|paragraphe|ligne|chapitre)\b/i.test(txt);
-      if (hasPage && !hasSemRef) {
-        if (scope === 'global') {
-          return {
-            level: 'poor',
-            diagnosis: 'Tu cites une page, mais c\'est un feedback global qui s\'applique à tous les dossiers. La pagination change d\'un dossier à l\'autre, donc Maya ne pourra pas réutiliser ce repère ailleurs.',
-            suggestion: 'Remplace la page par un repère sémantique stable.',
-            example: '« Pour la surface habitable, la VT utilise le terme Surface utile, dans la section Caractéristiques générales du logement. »'
-          };
-        }
+      // Détecte si l'utilisateur a précisé le libellé VT exact (entre guillemets ou via formule explicite)
+      var hasVtLabel = /["«»][^"«»\n]{2,40}["«»]|libell[ée]\s+(?:est|exact|"|«)|le\s+terme\s+(?:est|dans\s+la\s+vt)|maya\s+(?:devrait|aurait\s+d[uû])\s+(?:lire|trouver)|la\s+vt\s+(?:indique|utilise|dit)/i.test(txt);
+      if (hasPage && scope === 'global' && !hasSemRef) {
         return {
           level: 'medium',
-          diagnosis: 'La page est utile pour ce dossier, Maya s\'en sert directement. Mais sur les futurs dossiers, la pagination change : ce repère seul ne lui servira plus.',
-          suggestion: 'Ajoute un repère stable à côté de la page pour que Maya retienne le pattern sur les autres rapports.',
-          example: '« page 14, dans la fiche descriptive de la paroi, ligne Isolation. » Maya saura ainsi chercher la fiche descriptive sur tous les futurs dossiers.'
+          diagnosis: 'Tu cites une page sur un feedback global. Comme la pagination change d\'un dossier à l\'autre, c\'est plus le LIBELLÉ exact que tu pointes à cette page qui sera retenu par Maya (pour enrichir son lexique), pas la page elle-même.',
+          suggestion: 'Indique explicitement le libellé exact que Maya doit chercher dans la VT.',
+          example: '« Pour la surface habitable, la VT utilise le terme « Surface utile », dans la section Caractéristiques générales du logement. »'
+        };
+      }
+      if (hasPage && scope === 'line' && !hasVtLabel) {
+        return {
+          level: 'medium',
+          diagnosis: 'Bien joué d\'avoir mentionné la page : Maya l\'utilise pour corriger ce dossier immédiatement. Pour qu\'elle apprenne durablement, le système enrichit automatiquement son lexique à partir des termes VT que tu pointes à cette page. Plus tu précises CE QUE elle aurait dû lire (le libellé exact), mieux elle saura le retrouver sur les prochains rapports.',
+          suggestion: 'Ajoute le libellé exact de la VT que Maya doit chercher.',
+          example: '« page 14 de la VT, le libellé est « Aucun isolant » dans la fiche descriptive. » Le terme « Aucun isolant » sera ajouté au lexique du champ, Maya le cherchera sur tous les prochains dossiers.'
         };
       }
 
