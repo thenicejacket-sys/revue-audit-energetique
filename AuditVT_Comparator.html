@@ -3794,17 +3794,19 @@
               }
             }
 
-            // 3. Matériau PVC sur porte → flag suspect (sans effacer, mais alerte)
+            // 3. Matériau PVC sur porte simple → MANQUANT (durci selon retour utilisateur)
+            // Le PVC sur porte d'entrée standard est très rare. Quasi toujours un transfert
+            // depuis une fenêtre voisine. On efface, on flag comme MANQUANT.
             if (/mat[ée]riau|menuiserie|composition/.test(champNom) && !/vitrage/.test(champNom)) {
               var isPVC = function(v){ return v && /^pvc\b|\bpvc\s*$|\bpvc\b(?!.*(?:rev[êe]tu|enrob))/i.test(String(v).trim()); };
               if (isPVC(rv.valeur_audit) || isPVC(rv.valeur_vt)) {
-                var flagNote = '[Cohérence porte] Matériau PVC inhabituel pour une porte simple, vérifier qu\'il ne s\'agit pas d\'un transfert depuis une fenêtre voisine.';
-                if ((rv.commentaire || '').indexOf(flagNote) === -1) {
-                  rv = Object.assign({}, rv, {
-                    commentaire: flagNote + ' ' + (rv.commentaire || '')
-                  });
-                  console.warn('[PORTE-COHERENCE] "' + lbl + '" — matériau PVC suspect (flag, pas effacé)');
-                }
+                rv = Object.assign({}, rv, {
+                  valeur_audit: isPVC(rv.valeur_audit) ? null : rv.valeur_audit,
+                  valeur_vt:    isPVC(rv.valeur_vt)    ? null : rv.valeur_vt,
+                  statut: 'MANQUANT',
+                  commentaire: '[Cohérence porte] Matériau PVC quasi-impossible sur porte simple (cas rarissime). Probable transfert depuis une fenêtre voisine. ' + (rv.commentaire || '')
+                });
+                console.warn('[PORTE-COHERENCE] "' + lbl + '" — matériau PVC effacé → MANQUANT (durci)');
               }
             }
           })();
@@ -6218,6 +6220,85 @@ ${vtShort}`;
             }
           }
         } catch (e) { console.warn('[LEXIQUE-AUTO] Application enrichissement échouée:', e.message); }
+
+        // ─── Override de catégorie de paroi basé sur les commentaires Maya ───
+        // Maya, quand elle voit une incohérence, écrit dans son commentaire des indications
+        // explicites du type « Paroi 2 = PLANCHER (page 6 audit) ». Ces indications sont la
+        // source de vérité finale (Maya a effectivement lu la page 6). On les utilise pour
+        // mettre à jour state.detectedInstances et reclasser les parois mal placées dans le rapport.
+        try {
+          var paroiCategoryFromMaya = {}; // normalizedLabel → 'mur' | 'plancher' | 'toiture' | 'menuiserie'
+          var movedCount = 0;
+          results.forEach(function(rv){
+            var c = String(rv.commentaire || '');
+            if (!c || !rv.instance_label) return;
+            // Pattern 1 : « Paroi N = MUR/PLANCHER/TOITURE (page 6 ... ) »
+            var m1 = c.match(/Paroi\s*0*(\d+)\s*=\s*(MUR|PLANCHER|TOITURE|MENUISERIE)\b[^.\]]*page\s*6/i);
+            // Pattern 2 : « Champ Matériau mur non applicable à un plancher » → la paroi est un plancher
+            var m2 = c.match(/non\s+applicable\s+(?:à\s+)?(?:un[e]?\s+)?(plancher|toiture|mur|menuiserie)/i);
+            // Pattern 3 : « Paroi N (page 6 = plancher) »
+            var m3 = c.match(/Paroi\s*0*(\d+)[^.\n]*page\s*6\s*=\s*(plancher|toiture|mur|menuiserie)/i);
+            var detectedCat = null;
+            if (m1) detectedCat = m1[2].toLowerCase();
+            else if (m3) detectedCat = m3[2].toLowerCase();
+            else if (m2) detectedCat = m2[1].toLowerCase();
+            if (!detectedCat) return;
+            // Normaliser au singulier sans accent
+            detectedCat = detectedCat.replace(/s$/i, '');
+            var normLbl = String(rv.instance_label).toLowerCase()
+              .replace(/\bparoi\s+0*(\d+)/g, 'paroi $1')
+              .replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim()
+              .split(/\s*(?:—|–)\s*/)[0].trim();
+            if (paroiCategoryFromMaya[normLbl] && paroiCategoryFromMaya[normLbl] !== detectedCat) {
+              console.warn('[PAROI-RECLASSIF] Conflit pour "' + normLbl + '" : déjà ' + paroiCategoryFromMaya[normLbl] + ', ignoré ' + detectedCat);
+              return;
+            }
+            paroiCategoryFromMaya[normLbl] = detectedCat;
+          });
+          if (Object.keys(paroiCategoryFromMaya).length > 0) {
+            console.log('[PAROI-RECLASSIF] Indications Maya détectées :', paroiCategoryFromMaya);
+            // Met à jour state.detectedInstances : déplace les labels concernés
+            if (!state.detectedInstances) state.detectedInstances = {};
+            ['murs','planchers','toitures','menuiseries'].forEach(function(k){
+              if (!state.detectedInstances[k]) state.detectedInstances[k] = [];
+            });
+            var catKeyMap = { mur: 'murs', plancher: 'planchers', toiture: 'toitures', menuiserie: 'menuiseries' };
+            function _norm(l) {
+              return String(l).toLowerCase()
+                .replace(/\bparoi\s+0*(\d+)/g, 'paroi $1')
+                .replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim()
+                .split(/\s*(?:—|–)\s*/)[0].trim();
+            }
+            Object.keys(paroiCategoryFromMaya).forEach(function(normLbl){
+              var targetCat = paroiCategoryFromMaya[normLbl];
+              var targetKey = catKeyMap[targetCat];
+              if (!targetKey) return;
+              var foundLabel = null;
+              ['murs','planchers','toitures','menuiseries'].forEach(function(k){
+                state.detectedInstances[k] = state.detectedInstances[k].filter(function(l){
+                  if (_norm(l) === normLbl) {
+                    if (k !== targetKey) {
+                      if (!foundLabel) foundLabel = l;
+                      console.log('[PAROI-RECLASSIF] "' + l + '" déplacée de ' + k + ' → ' + targetKey);
+                      movedCount++;
+                      return false;
+                    }
+                  }
+                  return true;
+                });
+              });
+              // Si la paroi n'était nulle part, on la retrouve dans les résultats et on l'ajoute à la bonne catégorie
+              if (!foundLabel) {
+                var rvMatch = results.find(function(r){ return r.instance_label && _norm(r.instance_label) === normLbl; });
+                if (rvMatch) foundLabel = rvMatch.instance_label;
+              }
+              if (foundLabel && state.detectedInstances[targetKey].indexOf(foundLabel) < 0) {
+                state.detectedInstances[targetKey].push(foundLabel);
+              }
+            });
+            if (movedCount > 0) console.log('[PAROI-RECLASSIF] ✓ ' + movedCount + ' paroi(s) reclassée(s) selon les indications Maya.');
+          }
+        } catch (e) { console.warn('[PAROI-RECLASSIF] Erreur :', e.message); }
 
         return results;
 
