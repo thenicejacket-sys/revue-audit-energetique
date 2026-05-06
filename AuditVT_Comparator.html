@@ -7009,103 +7009,117 @@ ${vtShort}`;
     }
 
     // ─────────────────────────────────────────────────────────────────
-    // Évaluation heuristique de la qualité d'un feedback (du point de vue Maya)
-    // Retourne : { level: 'good'|'medium'|'poor', icon, label, color, comment }
+    // Diagnostic CONTEXTUEL d'un feedback (analyse du contenu écrit, pas checklist)
+    // Détecte le pattern dominant et renvoie diagnosis + suggestion + exemple précis.
     // ─────────────────────────────────────────────────────────────────
-    function evaluateFeedbackQuality(item) {
+    function diagnoseFeedbackContent(item) {
       var txt = String(item.text || '').trim();
-      var snap = item.snapshot || {};
-      var isLine = item.scope === 'line';
-      var score = 0;
-      var tips = [];
+      var scope = item.scope || 'line';
 
-      // 1. Statut attendu explicite ?
-      var hasStatus = !!snap.expected_status
-        || /\b(VERT|ORANGE|ROUGE|MANQUANT|conforme|non[\s-]?conforme|à\s*v[ée]rifier)\b/i.test(txt);
-      if (hasStatus) score++;
-      else tips.push('préciser le statut attendu (VERT, ORANGE, ROUGE ou MANQUANT)');
-
-      // 2. Valeur attendue ?
-      var hasValue = !!snap.expected_value
-        || /\d+[,\.]?\d*\s*(?:m²|m2|m\b|cm|mm|%|€|kWh|°C|W\/m|R\s*=|Uw\s*=|kg|°)/i.test(txt);
-      if (hasValue) score++;
-      else if (snap.statut !== 'VERT') tips.push('indiquer la valeur correcte attendue si applicable');
-
-      // 3. Règle métier (phrase complète avec verbe, longueur min)
-      var hasRule = txt.length >= 40 && /\b(?:est|sont|doit|peut|n'est|s'applique|correspond|signifie|indique|considérer|toujours|jamais|si|quand|car|parce que)\b/i.test(txt);
-      if (hasRule) score++;
-      else tips.push('formuler une règle métier en phrase complète');
-
-      // 4. Repère stable ou (sur ligne) page valide
-      var hasPage = /\bpage\s+\d+|\bp\.?\s*\d+/i.test(txt);
-      var hasSemRef = /\b(?:section|fiche|tableau|partie|colonne|bloc|rubrique|paragraphe)\b/i.test(txt);
-      if (isLine && (hasPage || hasSemRef)) score++;
-      else if (!isLine && hasSemRef) score++;
-      else if (!isLine && hasPage) {
-        tips.push('éviter les pages absolues sur un feedback global, préférer un repère sémantique');
-      } else {
-        tips.push('ajouter un repère pour orienter Maya (section, fiche, tableau ou page)');
+      // Pattern 1 — Commentaire ultra-court ou mot unique
+      // (« conforme », « ok », « oui », « non », < 10 chars sans contexte)
+      if (txt.length < 12 || /^(?:conforme|ok|oui|non|nul|faux|vrai|bon|mauvais|à\s*revoir)\.?$/i.test(txt)) {
+        return {
+          level: 'poor',
+          diagnosis: 'Le commentaire est trop court pour aider Maya à comprendre ce qu\'elle aurait dû faire. Un verdict seul (« conforme », « ok ») ne dit ni pourquoi, ni où chercher.',
+          suggestion: 'Décris ce que Maya aurait dû trouver et pourquoi.',
+          example: '« Statut VERT car les deux valeurs sont équivalentes à 5 mm près, écart d\'arrondi normal pour une menuiserie. »'
+        };
       }
 
-      // 5. Longueur globale
-      if (txt.length >= 30) score++;
-      else tips.push('détailler davantage (au moins une phrase complète)');
+      // Pattern 2 — Frustration ou récurrence sans règle nette
+      if (/\b(?:tu\s+as\s+(?:refais|refait)|encore\s+(?:fait|une\s+fois)|toujours\s+pas|m[êe]me\s+erreur|à\s+nouveau|n'?as\s+pas\s+compris|c'est\s+pas\s+(?:bon|ça)|j'en\s+ai\s+(?:marre|assez))\b/i.test(txt)) {
+        return {
+          level: 'medium',
+          diagnosis: 'Le commentaire exprime une récurrence ou une frustration, mais Maya ne sait pas explicitement quelle règle reproduire. Sans formulation positive, elle peut refaire la même erreur.',
+          suggestion: 'Transforme la frustration en règle nette et constructive.',
+          example: '« Pour ce champ, la sortie doit toujours être un nombre entier sur 4 chiffres. Si la VT donne une plage (ex: 2012-2020), prendre la médiane. »'
+        };
+      }
 
-      // Mapping score → niveau qualité
-      var level, icon, label, color;
-      if (score >= 4)      { level = 'good';   icon = '✓'; label = 'Bon';          color = '#2E7D32'; }
-      else if (score >= 2) { level = 'medium'; icon = '~'; label = 'Moyen';        color = '#E65100'; }
-      else                 { level = 'poor';   icon = '!'; label = 'À améliorer';  color = '#C62828'; }
+      // Pattern 3 — Page citée mais sans repère sémantique stable
+      var hasPage = /\bpage\s+\d+|\bp\.?\s*\d+\b/i.test(txt);
+      var hasSemRef = /\b(?:section|fiche\s*descriptive|tableau|partie|colonne|bloc|rubrique|paragraphe|ligne|chapitre)\b/i.test(txt);
+      if (hasPage && !hasSemRef) {
+        if (scope === 'global') {
+          return {
+            level: 'poor',
+            diagnosis: 'Tu cites une page, mais c\'est un feedback global qui s\'applique à tous les dossiers. La pagination change d\'un dossier à l\'autre, donc Maya ne pourra pas réutiliser ce repère ailleurs.',
+            suggestion: 'Remplace la page par un repère sémantique stable.',
+            example: '« Pour la surface habitable, la VT utilise le terme Surface utile, dans la section Caractéristiques générales du logement. »'
+          };
+        }
+        return {
+          level: 'medium',
+          diagnosis: 'La page est utile pour ce dossier, Maya s\'en sert directement. Mais sur les futurs dossiers, la pagination change : ce repère seul ne lui servira plus.',
+          suggestion: 'Ajoute un repère stable à côté de la page pour que Maya retienne le pattern sur les autres rapports.',
+          example: '« page 14, dans la fiche descriptive de la paroi, ligne Isolation. » Maya saura ainsi chercher la fiche descriptive sur tous les futurs dossiers.'
+        };
+      }
 
-      // ── Composition du commentaire selon : (statut technique) × (qualité) × (scope) ──
+      // Pattern 4 — Donne une info juste sans pointer l'erreur de Maya ni formuler de règle
+      var hasErrorDiag = /\b(?:à\s+tort|alors\s+qu'?[ie]?l?l?e?|au\s+lieu\s+de|ce\s+n'?est\s+pas|maya\s+a|elle\s+a\s+(?:sorti|confondu|pris|lu|compris)|hallucin)/i.test(txt);
+      var hasRuleVerb = /\b(?:s'?applique|signifie|indique|consid[èe]rer|correspond\s+(?:à|au)|doit\s+toujours|jamais|toujours|r[èe]gle|exception)\b/i.test(txt);
+      var hasContextRef = hasSemRef || hasPage;
+      if (!hasErrorDiag && !hasRuleVerb && txt.length < 90 && hasContextRef) {
+        return {
+          level: 'medium',
+          diagnosis: 'L\'info que tu donnes est correcte, mais tu ne dis pas où Maya s\'est trompée. Sans ce diagnostic, elle ne peut qu\'apprendre l\'info pour ce dossier, pas la logique d\'erreur à éviter ailleurs.',
+          suggestion: 'Ajoute ce que Maya a sorti à tort et pourquoi.',
+          example: '« Maya a sorti ITI en lisant la rubrique des façades. Pour un plancher, ITI ne s\'applique pas car c\'est une isolation murale uniquement. »'
+        };
+      }
+
+      // Pattern 5 — Pas de règle métier formulée et commentaire moyen
+      if (!hasRuleVerb && txt.length < 60) {
+        return {
+          level: 'medium',
+          diagnosis: 'Le commentaire pointe un fait mais ne formule pas la règle métier que Maya devrait retenir. Sans règle générale exprimée, elle aura du mal à transposer sur d\'autres dossiers.',
+          suggestion: 'Termine par une règle générale en phrase complète.',
+          example: '« … . Règle générale : pour ce type de plancher, toujours considérer comme non isolé sauf mention explicite du contraire dans la VT. »'
+        };
+      }
+
+      // Pattern 6 — Commentaire bien construit (validé)
+      return {
+        level: 'good',
+        diagnosis: null,
+        suggestion: null,
+        example: null
+      };
+    }
+
+    // Renvoie l'objet complet utilisé par le rendu : action de Maya + diagnostic + suggestion
+    function evaluateFeedbackQuality(item) {
+      var diag = diagnoseFeedbackContent(item);
       var status = (item.meta && item.meta.status) || 'pending';
-      var partA = ''; // ce que Maya a fait
-      var partB = ''; // suggestion d'amélioration
-      var partC = ''; // portée (effet)
-      var firstTip = tips[0] || '';
+      var level = diag.level;
+      var color = level === 'good' ? '#2E7D32' : (level === 'medium' ? '#E65100' : '#C62828');
+      var icon  = level === 'good' ? '✓'       : (level === 'medium' ? '~'       : '!');
+      var label = level === 'good' ? 'Validé'  : (level === 'medium' ? 'Moyen'   : 'À améliorer');
 
-      // Partie A — ce que Maya a fait du feedback
+      // ── Action de Maya : ce qu'elle a fait (ou fera) du feedback ──
+      var action;
       if (status === 'applied' || status === 'permanent') {
-        if (level === 'good') {
-          partA = 'Intégré au prompt de Maya. La règle est appliquée automatiquement.';
-        } else if (level === 'medium') {
-          partA = 'Intégré au prompt de Maya, mais elle pourrait mieux l\'exploiter avec un peu plus de précision.';
-        } else {
-          partA = 'Intégré au prompt mais probablement peu exploité par Maya à cause du manque de précision.';
-        }
+        action = (status === 'permanent')
+          ? 'Maya l\'a intégré comme règle permanente, ré-injectée à chaque analyse future.'
+          : 'Maya a intégré ce feedback dans son prompt à la dernière analyse.';
       } else if (status === 'archived') {
-        partA = 'Archivé manuellement. Maya ne l\'utilise plus.';
+        action = 'Feedback archivé, Maya ne l\'utilise plus.';
       } else {
-        // pending
-        if (level === 'good') {
-          partA = 'Sera intégré au prompt de Maya à la prochaine analyse.';
-        } else if (level === 'medium') {
-          partA = 'Sera intégré à la prochaine analyse, mais peut être renforcé.';
-        } else {
-          partA = 'Maya ne pourra pas en tirer grand-chose dans son état actuel. À reformuler avant la prochaine analyse.';
-        }
+        action = 'Maya intégrera ce feedback à son prompt dès la prochaine analyse.';
       }
 
-      // Partie B — suggestion d'amélioration (uniquement si la qualité n'est pas bonne)
-      if (level !== 'good' && firstTip && status !== 'archived') {
-        partB = ' Suggestion : ' + firstTip + '.';
-      }
-
-      // Partie C — portée selon le scope
-      // IMPORTANT : tous les feedbacks (ligne et global) avec statut pending ou permanent sont
-      // réinjectés dans le prompt Maya à CHAQUE analyse future, peu importe le dossier en cours.
-      // La distinction ligne vs global est une distinction de FORME (cas précis vs règle transverse),
-      // pas de portée. Les deux servent à toutes les analyses futures.
-      if (status !== 'archived') {
-        if (item.scope === 'global') {
-          partC = ' Appliqué à toutes les analyses futures, comme règle transverse.';
-        } else {
-          partC = ' Appliqué à toutes les analyses futures, en tant qu\'exemple de cas similaire.';
-        }
-      }
-
-      var comment = (partA + partB + partC).trim();
-      return { level: level, score: score, icon: icon, label: label, color: color, comment: comment, tips: tips };
+      // ── Commentaire sur le feedback : diagnostic ou validation ──
+      // ── Proposition d'amélioration : suggestion + exemple précis ──
+      return {
+        level: level, color: color, icon: icon, label: label,
+        action: action,
+        diagnosis: diag.diagnosis,        // null si validé
+        suggestion: diag.suggestion,      // null si validé
+        example: diag.example,            // null si validé
+        validated: level === 'good'
+      };
     }
 
     // Marque l'évaluation qualité comme acquittée par l'utilisateur (le bloc disparaît)
@@ -7173,17 +7187,34 @@ ${vtShort}`;
 
           var scopeBadge = (it.scope === 'global') ? '<span class="maya-drawer-item-badge global">Global</span>' : '';
 
-          // Évaluation qualité du feedback (heuristique). Affichée seulement si non acquittée.
+          // Évaluation qualité du feedback (analyse contextuelle). Affichée seulement si non acquittée.
           var qualityHtml = '';
           if (!it.meta.qualityAcked) {
             var q = evaluateFeedbackQuality(it);
-            var qBg = q.level === 'good' ? '#E8F5E9' : (q.level === 'medium' ? '#FFF3E0' : '#FFEBEE');
+            var qBg     = q.level === 'good' ? '#E8F5E9' : (q.level === 'medium' ? '#FFF3E0' : '#FFEBEE');
             var qBorder = q.level === 'good' ? '#A5D6A7' : (q.level === 'medium' ? '#FFB74D' : '#EF9A9A');
+            // Bloc 1 : action de Maya (toujours affiché)
+            var actionLine = '<div style="margin-bottom:5px;line-height:1.4;"><strong style="color:#0D47A1;font-size:9.5pt;">Action de Maya : </strong><span style="color:#333;">' + escHtml(q.action) + '</span></div>';
+            // Bloc 2 + 3 : commentaire sur le feedback + amélioration (uniquement si non validé)
+            var contentBlocks = '';
+            if (q.validated) {
+              contentBlocks =
+                '<div style="line-height:1.4;color:#1B5E20;"><strong>Commentaire validé.</strong> Le feedback est clair et exploitable, Maya en tirera tout le bénéfice.</div>';
+            } else {
+              contentBlocks =
+                '<div style="margin-bottom:5px;line-height:1.4;"><strong style="color:' + q.color + ';font-size:9.5pt;">Commentaire sur le feedback : </strong><span style="color:#333;">' + escHtml(q.diagnosis || '') + '</span></div>' +
+                '<div style="line-height:1.4;"><strong style="color:#4A1F5E;font-size:9.5pt;">Pour le prochain rapport : </strong><span style="color:#333;">' + escHtml(q.suggestion || '') + '</span>' +
+                  (q.example ? '<div style="margin-top:3px;padding:5px 8px;background:#fff;border-left:3px solid ' + q.color + ';border-radius:0 3px 3px 0;font-style:italic;color:#555;font-size:10px;">Exemple : ' + escHtml(q.example) + '</div>' : '') +
+                '</div>';
+            }
             qualityHtml =
-              '<div style="margin-top:6px;padding:6px 8px;background:' + qBg + ';border:1px solid ' + qBorder + ';border-left:3px solid ' + q.color + ';border-radius:4px;font-size:11px;color:#333;line-height:1.4;display:flex;align-items:flex-start;gap:6px;">' +
-                '<span style="background:' + q.color + ';color:#fff;padding:1px 6px;border-radius:8px;font-weight:700;font-size:10px;flex-shrink:0;">' + q.icon + ' ' + escHtml(q.label) + '</span>' +
-                '<span style="flex:1;">' + escHtml(q.comment) + '</span>' +
-                '<button type="button" onclick="mayaAckQuality(\'' + it.id + '\')" title="Marquer comme vu, masque cette évaluation" style="border:none;background:#fff;border:1px solid #ccc;color:#333;font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;cursor:pointer;flex-shrink:0;">OK</button>' +
+              '<div style="margin-top:8px;padding:8px 10px;background:' + qBg + ';border:1px solid ' + qBorder + ';border-left:3px solid ' + q.color + ';border-radius:4px;font-size:11px;color:#333;">' +
+                '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:6px;">' +
+                  '<span style="background:' + q.color + ';color:#fff;padding:2px 8px;border-radius:8px;font-weight:700;font-size:10px;">' + q.icon + ' ' + escHtml(q.label) + '</span>' +
+                  '<button type="button" onclick="mayaAckQuality(\'' + it.id + '\')" title="Marquer comme vu, masque cette évaluation" style="border:1px solid #ccc;background:#fff;color:#333;font-size:10px;font-weight:700;padding:2px 10px;border-radius:4px;cursor:pointer;">OK</button>' +
+                '</div>' +
+                actionLine +
+                contentBlocks +
               '</div>';
           }
 
