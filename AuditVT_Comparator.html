@@ -2270,8 +2270,7 @@
     // Phase 1 — Pré-Maya (data brute) :
     //   1. Batch normalization (recoverValuesFromComment, porteCoherenceCheck,
     //      règles département/niveaux/tranche/oui-non)
-    //   2. _antiCrossTalkParois (resolve catByLabel + filtre cross-section
-    //      + harmonizeWallSurfaces + dedupGlobalFields)
+    //   2. _antiCrossTalkParois (resolve catByLabel + filtre cross-section uniquement)
     //   3. mergeIdenticalChauffages
     //
     // Phase 2 — Maya (validation IA) :
@@ -2279,16 +2278,16 @@
     //
     // Phase 3 — Post-Maya (transformations basées sur validation Maya) :
     //   5. applyMayaParoiReclassifications (struct priorité 1, fallback texte priorité 2)
+    //   6. harmonizeWallSurfaces (désactivée — return en début, structure conservée)
+    //   7. dedupGlobalFields (active — filet de sécurité champs globaux multipliés)
     //
     // Phase 4 — Rendu :
-    //   6. assertDomainInvariants (invariants Vague 1, console.error/warn si violation)
-    //   7. renderResults / renderRapport
+    //   8. assertDomainInvariants (invariants Vague 1, console.error/warn si violation)
+    //   9. renderResults / renderRapport
     //
-    // À FAIRE (Vague 3.2 reportée — refactor risqué) : sortir harmonizeWallSurfaces et
-    // dedupGlobalFields de _antiCrossTalkParois pour les exécuter en Phase 3 après callMaya.
-    // Cela permettrait à Maya de voir les données brutes (non encore harmonisées/dédupliquées).
-    // Nécessite extraction de 2 IIFE en fonctions nommées + recalcul de catByLabel — à confier
-    // à l'agent Engineer dans une session dédiée.
+    // Vague 3.2 (2026-05-06) : harmonizeWallSurfaces et dedupGlobalFields sortis de
+    // _antiCrossTalkParois → fonctions nommées globales exécutées en Phase 3 après callMaya.
+    // Maya voit maintenant les données quasi-brutes (non encore harmonisées/dédupliquées).
     // =====================================================================
 
     // =====================================================================
@@ -3202,6 +3201,9 @@
         var PAROI_RE0 = /^[Pp]aroi\s+0*(\d+[a-z]?)\s*(?:\([^)]{0,12}\))?\s*(.*)/;
         var SECT_EXIT0 = /^(?:observations?|plan\s+ou|sc[eé]narios?|annexe|audit\s+[eé]nerg|\d+\s*\.\s*[A-Z\u00c0-\u00ff])/i;
         var curCat0=null, fenC0=0, porteC0=0, baieC0=0;
+        // byNumber : mapping strict numero paroi -> categorie singuliere, construit depuis page 6
+        // Sert a enforcePage6Classification() pour un override absolu independant du LLM.
+        var byNumber = {};
         for (var i0=0; i0<lines.length; i0++) {
           var l0 = lines[i0].trim();
           if (!l0) continue;
@@ -3243,9 +3245,10 @@
             var lblp0 = desc0 ? 'Paroi '+pm0[1]+' \u2014 '+desc0 : 'Paroi '+pm0[1];
             // La section PDF est l'AUTORITÉ — pas d'override sémantique.
             // Si le PDF met une paroi sous "Toitures", c'est une toiture.
-            if (curCat0==='murs') addUniq(murs, lblp0);
-            else if (curCat0==='planchers') addUniq(planchers, lblp0);
-            else if (curCat0==='toitures') addUniq(toitures, lblp0);
+            // byNumber capture ce mapping pour enforcePage6Classification() override absolu.
+            if (curCat0==='murs') { addUniq(murs, lblp0); byNumber[String(parseInt(pm0[1],10))] = 'mur'; }
+            else if (curCat0==='planchers') { addUniq(planchers, lblp0); byNumber[String(parseInt(pm0[1],10))] = 'plancher'; }
+            else if (curCat0==='toitures') { addUniq(toitures, lblp0); byNumber[String(parseInt(pm0[1],10))] = 'toiture'; }
           }
         }
 
@@ -3423,7 +3426,7 @@
           if (generic[gcat4].indexOf(glabel4) < 0) generic[gcat4].push(glabel4);
         }
 
-        return { murs:murs, planchers:planchers, toitures:toitures, menuiseries:menuiseries, generic:generic };
+        return { murs:murs, planchers:planchers, toitures:toitures, menuiseries:menuiseries, generic:generic, byNumber:byNumber };
       }
       // Vérifie qu'un extrait cité par l'IA existe réellement dans le texte source
       // Retourne : 'verifie' | 'partiel' | 'non_verifie' | 'non_cite' | 'court'
@@ -4111,6 +4114,10 @@
       // compléter pour les parois sans description. Elle NE doit JAMAIS contredire
       // detectedInstances. Cas typique : "Dalle de béton" est une TOITURE dans le PDF
       // (section Toitures), mais "dalle" matcherait naïvement la regex plancher → bug.
+      //
+      // Vague 3.2 (2026-05-06) : cette fonction ne gère plus que catByLabel + filtre cross-section.
+      // harmonizeWallSurfaces et dedupGlobalFields ont été extraites en fonctions nommées globales
+      // et sont appelées en Phase 3 (après callMaya).
       (function _antiCrossTalkParois(){
         // Normalise un label de paroi pour comparaison (retire préfixe "Paroi NN —")
         function _normLabel(lbl) {
@@ -4219,127 +4226,6 @@
           console.info('[ANTI-DOUBLON-PAROIS] Aucun résultat cross-section — toutes les parois sont dans leur bonne catégorie.');
         }
 
-        // ───────────────────────────────────────────────────────────────────
-        // Étape 3 — Harmonisation surfaces de MUR (NET + BRUT)
-        // L'audit groupe les murs en N parois (ex: 2-3 parois mur) ; la VT décompose en M façades (ex: 5).
-        // Tenter de matcher individuellement N audit ↔ M VT ne marche pas. Solution : pour CHAQUE
-        // paroi-mur de l'audit, afficher la SOMME TOTALE des façades VT (NET et BRUT). Identique partout.
-        // → l'utilisateur voit la même valeur VT sur toutes les lignes "Surface (m²) — Paroi N — Mur..."
-        // ───────────────────────────────────────────────────────────────────
-        (function harmonizeWallSurfaces(){
-          // ⚠️ DÉSACTIVÉE le 2026-05-06 par retour utilisateur :
-          // L'utilisateur préfère voir le DÉTAIL PAR PAROI (les façades VT extraites par le LLM
-          // pour cette paroi spécifique) plutôt que la somme totale harmonisée appliquée à toutes
-          // les parois-mur. Format attendu : "NET : 8,07 + 7,94 = 15,99 m² (surface à isoler)".
-          // Le recalcul forcé du total via reduce(+) reste actif dans formatParoiSurface() — il
-          // garantit que l'addition affichée est correcte même si le LLM se trompe dans son total.
-          // Pour réactiver l'harmonisation : supprimer la ligne return ci-dessous.
-          console.info('[SURFACE-MUR-HARMONIZE] Désactivée — détail par paroi conservé (recalcul total via reduce reste actif).');
-          return;
-          /* eslint-disable */ // code conservé pour référence
-          var wallSurfaceResults = state.analysisResults.filter(function(rv){
-            if (!rv.instance_label) return false;
-            var paroiCat = catByLabel[String(rv.instance_label).trim().toLowerCase()];
-            if (paroiCat !== 'mur') return false;
-            var champNom = (getFieldNom(rv.id_champ) || '').toLowerCase();
-            // Champ surface de paroi (mais pas SHAB / surface de référence — exclus)
-            if (!/surface/.test(champNom)) return false;
-            if (/r[eé]f[eé]rence|habit|shab|sdp|au\s*sol|totale|utile/.test(champNom)) return false;
-            return true;
-          });
-          if (wallSurfaceResults.length < 2) {
-            if (wallSurfaceResults.length === 1) console.info('[SURFACE-MUR-HARMONIZE] 1 seule paroi-mur — pas d\'harmonisation nécessaire.');
-            return;
-          }
-          // Collecte de toutes les valeurs NET et BRUT extraites par le LLM (toutes parois mur confondues)
-          var allNet = [], allBrut = [];
-          wallSurfaceResults.forEach(function(rv){
-            var d = rv.valeur_vt_detail;
-            if (!d) return;
-            if (d.type === 'paroi_multi') {
-              (d.net_parts || []).forEach(function(v){ if (v != null && !isNaN(v)) allNet.push(Number(v)); });
-              (d.brut_parts || []).forEach(function(v){ if (v != null && !isNaN(v)) allBrut.push(Number(v)); });
-            } else if (d.type === 'single') {
-              if (d.value != null && !isNaN(d.value)) {
-                if (d.is_net) allNet.push(Number(d.value));
-                else allBrut.push(Number(d.value));
-              }
-            }
-          });
-          // Déduplication par valeur arrondie au cm² près (évite double-comptage des façades vues plusieurs fois)
-          function dedup(arr) {
-            var seen = {}, out = [];
-            arr.forEach(function(v){
-              var k = Math.round(v * 100);
-              if (!seen[k]) { seen[k] = true; out.push(v); }
-            });
-            return out;
-          }
-          var uniqueNet = dedup(allNet);
-          var uniqueBrut = dedup(allBrut);
-          if (uniqueNet.length === 0 && uniqueBrut.length === 0) {
-            console.info('[SURFACE-MUR-HARMONIZE] Aucune surface VT extraite — rien à harmoniser.');
-            return;
-          }
-          var totalNet = uniqueNet.reduce(function(a,b){ return a + b; }, 0);
-          var totalBrut = uniqueBrut.reduce(function(a,b){ return a + b; }, 0);
-          // Applique la même valeur (somme totale VT) à toutes les parois-mur audit
-          wallSurfaceResults.forEach(function(rv){
-            rv.valeur_vt_detail = {
-              type: 'paroi_multi',
-              net_parts: uniqueNet,
-              net_total: totalNet,
-              brut_parts: uniqueBrut,
-              brut_total: totalBrut,
-              unit: 'm²'
-            };
-            // Trace dans le commentaire pour traçabilité
-            var note = '[Surface mur — somme totale VT (' + uniqueBrut.length + ' façade(s)) appliquée à toutes les parois-mur audit]';
-            if ((rv.commentaire || '').indexOf(note) === -1) {
-              rv.commentaire = (rv.commentaire ? rv.commentaire + ' ' : '') + note;
-            }
-          });
-          console.log('[SURFACE-MUR-HARMONIZE] ' + wallSurfaceResults.length + ' paroi(s)-mur harmonisée(s) — NET total = '
-            + totalNet.toFixed(2) + ' m² (' + uniqueNet.length + ' façade(s)), BRUT total = '
-            + totalBrut.toFixed(2) + ' m² (' + uniqueBrut.length + ' façade(s))');
-        })();
-
-        // ───────────────────────────────────────────────────────────────────
-        // Étape 4 — Dédup champs GLOBAUX du logement multipliés à tort par instance
-        // Filet de sécurité : si pour une raison quelconque le LLM ou l'expansion a quand
-        // même multiplié un champ global (HSP, surface habitable, adresse...), on regroupe
-        // toutes les copies en une seule entrée sans instance_label.
-        // ───────────────────────────────────────────────────────────────────
-        (function dedupGlobalFields(){
-          // Utilise GLOBAL_FIELD_REGEX (constante unique, voir haut du script)
-          var byChamp = {};
-          state.analysisResults.forEach(function(rv){
-            if (!byChamp[rv.id_champ]) byChamp[rv.id_champ] = [];
-            byChamp[rv.id_champ].push(rv);
-          });
-          var totalRemoved = 0, fusedChamps = 0;
-          Object.keys(byChamp).forEach(function(idChamp){
-            var arr = byChamp[idChamp];
-            if (arr.length < 2) return;
-            var champNom = (getFieldNom(idChamp) || '');
-            if (!GLOBAL_FIELD_REGEX.test(champNom)) return;
-            // Garde le premier résultat qui a une valeur audit (sinon le premier tout court)
-            var keep = arr.find(function(r){ return r.valeur_audit && String(r.valeur_audit).trim().length > 0; }) || arr[0];
-            keep.instance_label = null;
-            var beforeCount = state.analysisResults.length;
-            state.analysisResults = state.analysisResults.filter(function(rv){
-              if (rv.id_champ !== idChamp) return true;
-              return rv === keep;
-            });
-            var deleted = beforeCount - state.analysisResults.length;
-            totalRemoved += deleted;
-            fusedChamps++;
-            console.log('[CHAMP-GLOBAL-DEDUP] "' + champNom + '" : ' + arr.length + ' instances multipliées à tort → 1 (label retiré). ' + deleted + ' doublon(s) supprimé(s).');
-          });
-          if (totalRemoved > 0) {
-            console.log('[CHAMP-GLOBAL-DEDUP] Bilan : ' + fusedChamps + ' champ(s) global(aux) restauré(s), ' + totalRemoved + ' résultat(s) supprimé(s).');
-          }
-        })();
       })();
 
       // ═══════════════════════════════════════════════════════════════════
@@ -4577,6 +4463,9 @@
             if (rf) r._fieldNom = rf.nom;
           });
           state.analysisResults = await callMaya(state.analysisResults, auditFull, vtFull);
+          // ─── Phase 3 — Post-Maya (transformations basées sur validation Maya) ───
+          try { harmonizeWallSurfaces(); } catch(e) { console.warn('[POST-MAYA] harmonize:', e.message); }
+          try { dedupGlobalFields(); } catch(e) { console.warn('[POST-MAYA] dedup:', e.message); }
           var ms = state.analysisResults._mayaStatus;
           if (ms && ms.ran && ms.corrections > 0) {
             showAlert('alerts-area', 'info', '\u2726 Maya a v\u00e9rifi\u00e9 ' + ms.suspects + ' r\u00e9sultat(s) et corrig\u00e9 ' + ms.corrections + '. Les corrections sont marqu\u00e9es [\u2726 Maya] dans les r\u00e9sultats et l\'export Excel.');
@@ -4742,6 +4631,7 @@
       // Vérifie 7 invariants juste avant le rendu : ne bloque jamais l'affichage,
       // mais émet des console.error/warn dès qu'un cas connu défaillant ressurgit.
       // Mémorisé dans window._lastInvariantErrors / _lastInvariantWarnings pour inspection.
+      try { enforcePage6Classification(); } catch (e) { console.warn('[PAGE6-ENFORCE] erreur :', e.message); }
       try { assertDomainInvariants(state.analysisResults); } catch (e) { console.warn('[INVARIANTS] erreur assertion :', e.message); }
 
       showProgress(false);
@@ -4752,6 +4642,226 @@
       playCompletionBell();
       state.analysisRunning = false;
       document.getElementById('btn-analyze').disabled = false;
+    }
+
+    // =====================================================================
+    // Vague 3.2 (2026-05-06) — Fonctions nommées extraites de _antiCrossTalkParois
+    // pour exécution en Phase 3 (après callMaya).
+    //
+    // _buildCatByLabelFromState : reconstruit catByLabel depuis state.detectedInstances,
+    //   utilisé par harmonizeWallSurfaces quand elle est appelée hors de _antiCrossTalkParois.
+    //
+    // harmonizeWallSurfaces : DÉSACTIVÉE (return en début) — conservée pour structure.
+    //   Réactiver : supprimer le return au début du corps.
+    //
+    // dedupGlobalFields : ACTIVE — filet de sécurité champs globaux multipliés par instance.
+    // =====================================================================
+    function _buildCatByLabelFromState() {
+      var di = state.detectedInstances || {};
+      var map = {};
+      function _normLbl(lbl) {
+        return String(lbl||'').toLowerCase()
+          .replace(/\bparoi\s+0*(\d+)/g, 'paroi $1')
+          .replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim()
+          .split(/\s*(?:—|–)\s*/)[0].trim();
+      }
+      (di.murs       || []).forEach(function(l){ map[_normLbl(l)] = 'mur'; });
+      (di.planchers  || []).forEach(function(l){ map[_normLbl(l)] = 'plancher'; });
+      (di.toitures   || []).forEach(function(l){ map[_normLbl(l)] = 'toiture'; });
+      (di.menuiseries|| []).forEach(function(l){ map[_normLbl(l)] = 'menuiserie'; });
+      return map;
+    }
+
+    // ───────────────────────────────────────────────────────────────────
+    // harmonizeWallSurfaces — Harmonisation surfaces de MUR (NET + BRUT)
+    // L'audit groupe les murs en N parois (ex: 2-3 parois mur) ; la VT décompose en M façades (ex: 5).
+    // Tenter de matcher individuellement N audit ↔ M VT ne marche pas. Solution : pour CHAQUE
+    // paroi-mur de l'audit, afficher la SOMME TOTALE des façades VT (NET et BRUT). Identique partout.
+    // → l'utilisateur voit la même valeur VT sur toutes les lignes "Surface (m²) — Paroi N — Mur..."
+    //
+    // ⚠️ DÉSACTIVÉE le 2026-05-06 par retour utilisateur :
+    // L'utilisateur préfère voir le DÉTAIL PAR PAROI (les façades VT extraites par le LLM
+    // pour cette paroi spécifique) plutôt que la somme totale harmonisée appliquée à toutes
+    // les parois-mur. Format attendu : "NET : 8,07 + 7,94 = 15,99 m² (surface à isoler)".
+    // Le recalcul forcé du total via reduce(+) reste actif dans formatParoiSurface() — il
+    // garantit que l'addition affichée est correcte même si le LLM se trompe dans son total.
+    // Pour réactiver l'harmonisation : supprimer la ligne return ci-dessous.
+    // ───────────────────────────────────────────────────────────────────
+    function harmonizeWallSurfaces() {
+      // Recalcul local de catByLabel depuis state.detectedInstances
+      var catByLabel = _buildCatByLabelFromState();
+      // ⚠️ DÉSACTIVÉE — détail par paroi conservé (recalcul total via reduce reste actif)
+      console.info('[SURFACE-MUR-HARMONIZE] Désactivée — détail par paroi conservé (recalcul total via reduce reste actif).');
+      return;
+      /* eslint-disable */ // code conservé pour référence
+      var wallSurfaceResults = state.analysisResults.filter(function(rv){
+        if (!rv.instance_label) return false;
+        var paroiCat = catByLabel[String(rv.instance_label).trim().toLowerCase()];
+        if (paroiCat !== 'mur') return false;
+        var champNom = (getFieldNom(rv.id_champ) || '').toLowerCase();
+        // Champ surface de paroi (mais pas SHAB / surface de référence — exclus)
+        if (!/surface/.test(champNom)) return false;
+        if (/r[eé]f[eé]rence|habit|shab|sdp|au\s*sol|totale|utile/.test(champNom)) return false;
+        return true;
+      });
+      if (wallSurfaceResults.length < 2) {
+        if (wallSurfaceResults.length === 1) console.info('[SURFACE-MUR-HARMONIZE] 1 seule paroi-mur — pas d\'harmonisation nécessaire.');
+        return;
+      }
+      // Collecte de toutes les valeurs NET et BRUT extraites par le LLM (toutes parois mur confondues)
+      var allNet = [], allBrut = [];
+      wallSurfaceResults.forEach(function(rv){
+        var d = rv.valeur_vt_detail;
+        if (!d) return;
+        if (d.type === 'paroi_multi') {
+          (d.net_parts || []).forEach(function(v){ if (v != null && !isNaN(v)) allNet.push(Number(v)); });
+          (d.brut_parts || []).forEach(function(v){ if (v != null && !isNaN(v)) allBrut.push(Number(v)); });
+        } else if (d.type === 'single') {
+          if (d.value != null && !isNaN(d.value)) {
+            if (d.is_net) allNet.push(Number(d.value));
+            else allBrut.push(Number(d.value));
+          }
+        }
+      });
+      // Déduplication par valeur arrondie au cm² près (évite double-comptage des façades vues plusieurs fois)
+      function dedup(arr) {
+        var seen = {}, out = [];
+        arr.forEach(function(v){
+          var k = Math.round(v * 100);
+          if (!seen[k]) { seen[k] = true; out.push(v); }
+        });
+        return out;
+      }
+      var uniqueNet = dedup(allNet);
+      var uniqueBrut = dedup(allBrut);
+      if (uniqueNet.length === 0 && uniqueBrut.length === 0) {
+        console.info('[SURFACE-MUR-HARMONIZE] Aucune surface VT extraite — rien à harmoniser.');
+        return;
+      }
+      var totalNet = uniqueNet.reduce(function(a,b){ return a + b; }, 0);
+      var totalBrut = uniqueBrut.reduce(function(a,b){ return a + b; }, 0);
+      // Applique la même valeur (somme totale VT) à toutes les parois-mur audit
+      wallSurfaceResults.forEach(function(rv){
+        rv.valeur_vt_detail = {
+          type: 'paroi_multi',
+          net_parts: uniqueNet,
+          net_total: totalNet,
+          brut_parts: uniqueBrut,
+          brut_total: totalBrut,
+          unit: 'm²'
+        };
+        // Trace dans le commentaire pour traçabilité
+        var note = '[Surface mur — somme totale VT (' + uniqueBrut.length + ' façade(s)) appliquée à toutes les parois-mur audit]';
+        if ((rv.commentaire || '').indexOf(note) === -1) {
+          rv.commentaire = (rv.commentaire ? rv.commentaire + ' ' : '') + note;
+        }
+      });
+      console.log('[SURFACE-MUR-HARMONIZE] ' + wallSurfaceResults.length + ' paroi(s)-mur harmonisée(s) — NET total = '
+        + totalNet.toFixed(2) + ' m² (' + uniqueNet.length + ' façade(s)), BRUT total = '
+        + totalBrut.toFixed(2) + ' m² (' + uniqueBrut.length + ' façade(s))');
+    }
+
+    // ───────────────────────────────────────────────────────────────────
+    // dedupGlobalFields — Dédup champs GLOBAUX du logement multipliés à tort par instance
+    // Filet de sécurité : si pour une raison quelconque le LLM ou l'expansion a quand
+    // même multiplié un champ global (HSP, surface habitable, adresse...), on regroupe
+    // toutes les copies en une seule entrée sans instance_label.
+    // Utilise GLOBAL_FIELD_REGEX (constante unique, voir haut du script).
+    // ───────────────────────────────────────────────────────────────────
+    function dedupGlobalFields() {
+      var byChamp = {};
+      state.analysisResults.forEach(function(rv){
+        if (!byChamp[rv.id_champ]) byChamp[rv.id_champ] = [];
+        byChamp[rv.id_champ].push(rv);
+      });
+      var totalRemoved = 0, fusedChamps = 0;
+      Object.keys(byChamp).forEach(function(idChamp){
+        var arr = byChamp[idChamp];
+        if (arr.length < 2) return;
+        var champNom = (getFieldNom(idChamp) || '');
+        if (!GLOBAL_FIELD_REGEX.test(champNom)) return;
+        // Garde le premier résultat qui a une valeur audit (sinon le premier tout court)
+        var keep = arr.find(function(r){ return r.valeur_audit && String(r.valeur_audit).trim().length > 0; }) || arr[0];
+        keep.instance_label = null;
+        var beforeCount = state.analysisResults.length;
+        state.analysisResults = state.analysisResults.filter(function(rv){
+          if (rv.id_champ !== idChamp) return true;
+          return rv === keep;
+        });
+        var deleted = beforeCount - state.analysisResults.length;
+        totalRemoved += deleted;
+        fusedChamps++;
+        console.log('[CHAMP-GLOBAL-DEDUP] "' + champNom + '" : ' + arr.length + ' instances multipliées à tort → 1 (label retiré). ' + deleted + ' doublon(s) supprimé(s).');
+      });
+      if (totalRemoved > 0) {
+        console.log('[CHAMP-GLOBAL-DEDUP] Bilan : ' + fusedChamps + ' champ(s) global(aux) restauré(s), ' + totalRemoved + ' résultat(s) supprimé(s).');
+      }
+    }
+
+    // =====================================================================
+    // enforcePage6Classification() -- Override ABSOLU de classification des parois
+    // Source autoritaire : byNumber construit depuis PASS 0 (page 6 audit "Etat initial").
+    // Garantit independamment du LLM :
+    //   A) Suppression dure des parois inventees (absentes page 6 : hallucinations LLM)
+    //   B) Reconstruction state.detectedInstances strictement conforme a la page 6
+    // Appele juste avant assertDomainInvariants pour etre en dernier avant le rendu.
+    // Si byNumber est vide (PASS 0 n'a rien trouve), override desactive + alerte UI.
+    // =====================================================================
+    function enforcePage6Classification() {
+      var byNumber = (state.detectedInstances || {}).byNumber || {};
+      var totalKnown = Object.keys(byNumber).length;
+
+      if (totalKnown === 0) {
+        console.warn('[PAGE6-ENFORCE] Aucune paroi numerotee detectee page 6 — override desactive');
+        try {
+          showAlert('alerts-area', 'warning',
+            '⚠️ Page 6 audit non detectee — la classification des parois s\'appuie sur le LLM, à vérifier manuellement.');
+        } catch(e) {}
+        return;
+      }
+      console.log('[PAGE6-ENFORCE] Mapping page 6 detecte :', byNumber);
+
+      // Etape A -- supprime les hallucinations (parois numerotees absentes page 6)
+      var halluRemoved = [];
+      state.analysisResults = state.analysisResults.filter(function(rv) {
+        if (!rv.instance_label) return true; // champs globaux conserves
+        var m = String(rv.instance_label).match(/\bParoi\s+0*(\d+)/i);
+        if (!m) return true; // pas un format paroi numerotee -> laisser
+        var num = String(parseInt(m[1], 10));
+        if (!byNumber[num]) {
+          halluRemoved.push(rv.instance_label + ' (id_champ=' + rv.id_champ + ')');
+          return false; // paroi inventee -> suppression dure
+        }
+        return true;
+      });
+      if (halluRemoved.length > 0) {
+        console.warn('[PAGE6-ENFORCE] ' + halluRemoved.length + ' resultat(s) supprime(s) — paroi(s) inventee(s) absente(s) page 6 :');
+        halluRemoved.forEach(function(r){ console.warn('  - ' + r); });
+      }
+
+      // Etape B -- force la categorie : reconstruit state.detectedInstances depuis byNumber
+      // Les listes murs/planchers/toitures sont remises au strict des parois listees page 6
+      var di = state.detectedInstances;
+      var newCats = { murs: [], planchers: [], toitures: [] };
+      var allLabels = [].concat(di.murs || [], di.planchers || [], di.toitures || []);
+      var seenLabels = {};
+      allLabels.forEach(function(label) {
+        var m = String(label).match(/\bParoi\s+0*(\d+)/i);
+        if (!m) return;
+        var num = String(parseInt(m[1], 10));
+        var cat = byNumber[num];
+        if (!cat) return; // paroi non listee page 6 -> pas reintegree
+        var key = num + '|' + label.toLowerCase();
+        if (seenLabels[key]) return;
+        seenLabels[key] = true;
+        var pluralKey = cat + 's'; // mur -> murs, plancher -> planchers, toiture -> toitures
+        if (newCats[pluralKey].indexOf(label) < 0) newCats[pluralKey].push(label);
+      });
+      state.detectedInstances.murs      = newCats.murs;
+      state.detectedInstances.planchers = newCats.planchers;
+      state.detectedInstances.toitures  = newCats.toitures;
+      console.log('[PAGE6-ENFORCE] state.detectedInstances reconstruit depuis page 6 :',
+        { murs: newCats.murs.length, planchers: newCats.planchers.length, toitures: newCats.toitures.length });
     }
 
     // =====================================================================
@@ -4861,6 +4971,21 @@
         if (seen[k]) errors.push('INV-7 doublon (id_champ + instance) : ' + k);
         seen[k] = true;
       });
+
+      // INV 8 — Cohérence avec page 6 audit : toute paroi numérotée doit appartenir
+      // à la catégorie indiquée par byNumber. Détecte si l'override page 6 a échoué.
+      var byNumberInv = (state.detectedInstances || {}).byNumber || {};
+      if (Object.keys(byNumberInv).length > 0) {
+        results.forEach(function(rv) {
+          if (!rv.instance_label) return;
+          var m = String(rv.instance_label).match(/\bParoi\s+0*(\d+)/i);
+          if (!m) return;
+          var num = String(parseInt(m[1], 10));
+          if (!byNumberInv[num]) {
+            errors.push('INV-8 paroi "' + rv.instance_label + '" absente page 6 mais présente dans les résultats');
+          }
+        });
+      }
 
       // Rapport
       if (errors.length > 0) console.error('[INVARIANTS] ' + errors.length + ' VIOLATION(S) critique(s) :\n  - ' + errors.join('\n  - '));
