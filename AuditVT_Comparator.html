@@ -4679,21 +4679,14 @@
     // paroi-mur de l'audit, afficher la SOMME TOTALE des façades VT (NET et BRUT). Identique partout.
     // → l'utilisateur voit la même valeur VT sur toutes les lignes "Surface (m²) — Paroi N — Mur..."
     //
-    // ⚠️ DÉSACTIVÉE le 2026-05-06 par retour utilisateur :
-    // L'utilisateur préfère voir le DÉTAIL PAR PAROI (les façades VT extraites par le LLM
-    // pour cette paroi spécifique) plutôt que la somme totale harmonisée appliquée à toutes
-    // les parois-mur. Format attendu : "NET : 8,07 + 7,94 = 15,99 m² (surface à isoler)".
-    // Le recalcul forcé du total via reduce(+) reste actif dans formatParoiSurface() — il
-    // garantit que l'addition affichée est correcte même si le LLM se trompe dans son total.
-    // Pour réactiver l'harmonisation : supprimer la ligne return ci-dessous.
+    // ✅ RÉACTIVÉE le 2026-05-06 par retour utilisateur :
+    // L'utilisateur veut voir TOUTES les façades VT mur additionnées avec leur total,
+    // sur chaque ligne paroi-mur. Format : "NET : s1 + s2 + s3 + ... = total m² (surface à isoler)".
+    // Le recalcul forcé du total via reduce(+) garantit que l'addition affichée est arithmétiquement correcte.
     // ───────────────────────────────────────────────────────────────────
     function harmonizeWallSurfaces() {
       // Recalcul local de catByLabel depuis state.detectedInstances
       var catByLabel = _buildCatByLabelFromState();
-      // ⚠️ DÉSACTIVÉE — détail par paroi conservé (recalcul total via reduce reste actif)
-      console.info('[SURFACE-MUR-HARMONIZE] Désactivée — détail par paroi conservé (recalcul total via reduce reste actif).');
-      return;
-      /* eslint-disable */ // code conservé pour référence
       var wallSurfaceResults = state.analysisResults.filter(function(rv){
         if (!rv.instance_label) return false;
         var paroiCat = catByLabel[String(rv.instance_label).trim().toLowerCase()];
