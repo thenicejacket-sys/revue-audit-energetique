@@ -7092,17 +7092,15 @@ ${vtShort}`;
       }
 
       // Partie C — portée selon le scope
+      // IMPORTANT : tous les feedbacks (ligne et global) avec statut pending ou permanent sont
+      // réinjectés dans le prompt Maya à CHAQUE analyse future, peu importe le dossier en cours.
+      // La distinction ligne vs global est une distinction de FORME (cas précis vs règle transverse),
+      // pas de portée. Les deux servent à toutes les analyses futures.
       if (status !== 'archived') {
         if (item.scope === 'global') {
-          partC = ' Effet sur tous les futurs dossiers.';
-        } else if (item.scope === 'line') {
-          // Si c'est une règle ligne avec mention is_rule cochée, ne pas répéter (déjà devenu global aussi)
-          var isRule = !!(item.snapshot && item.snapshot.is_rule);
-          if (!isRule) {
-            partC = ' Effet limité au dossier actuel. Pour étendre à tous les futurs dossiers, utilise le bouton « Règle globale ».';
-          } else {
-            partC = ' Effet étendu à tous les futurs dossiers via la case « Règle générale ».';
-          }
+          partC = ' Appliqué à toutes les analyses futures, comme règle transverse.';
+        } else {
+          partC = ' Appliqué à toutes les analyses futures, en tant qu\'exemple de cas similaire.';
         }
       }
 
