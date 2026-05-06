@@ -4679,12 +4679,17 @@
     // paroi-mur de l'audit, afficher la SOMME TOTALE des façades VT (NET et BRUT). Identique partout.
     // → l'utilisateur voit la même valeur VT sur toutes les lignes "Surface (m²) — Paroi N — Mur..."
     //
-    // ✅ RÉACTIVÉE le 2026-05-06 par retour utilisateur :
-    // L'utilisateur veut voir TOUTES les façades VT mur additionnées avec leur total,
-    // sur chaque ligne paroi-mur. Format : "NET : s1 + s2 + s3 + ... = total m² (surface à isoler)".
-    // Le recalcul forcé du total via reduce(+) garantit que l'addition affichée est arithmétiquement correcte.
+    // ⚠️ DÉSACTIVÉE le 2026-05-06 (clarification utilisateur) :
+    // L'utilisateur veut le DÉTAIL PAR PAROI tel que le LLM l'extrait — chaque paroi affiche
+    // SES PROPRES façades VT, pas l'agrégation globale de toutes les parois mur.
+    // Format : "NET : 8,07 + 7,94 = 15,99 m² (surface à isoler)" (par paroi).
+    // Demande utilisateur originale : juste corriger l'addition (recalcul total via reduce(+)
+    // dans formatParoiSurface), pas changer le format. Le format détail par paroi est conservé.
     // ───────────────────────────────────────────────────────────────────
     function harmonizeWallSurfaces() {
+      console.info('[SURFACE-MUR-HARMONIZE] Désactivée — détail par paroi conservé (recalcul total via reduce reste actif).');
+      return;
+      /* eslint-disable */ // code conservé pour référence
       // Recalcul local de catByLabel depuis state.detectedInstances
       var catByLabel = _buildCatByLabelFromState();
       var wallSurfaceResults = state.analysisResults.filter(function(rv){
