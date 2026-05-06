@@ -3753,6 +3753,62 @@
             }
           })();
 
+          // ─── Filet de cohérence — Porte opaque ───
+          // Pour une instance "Porte" simple (pas porte-fenêtre, pas porte vitrée),
+          // certaines valeurs sont incohérentes par nature : type d'ouvrant fenêtre, volet,
+          // matériau PVC. On les détecte et on les corrige (MANQUANT) ou on les flagge.
+          (function porteCoherenceCheck(){
+            var lbl = String(rv.instance_label || '').trim().toLowerCase();
+            // Détecte une PORTE simple (commence par "porte" mais pas "porte-fenêtre" ni "porte vitrée")
+            var isPorteSimple = /^porte(?:\s|$|\d|\()/i.test(lbl) && !/porte[\s-]?fen[eê]tre|porte\s+vitr/i.test(lbl);
+            if (!isPorteSimple) return;
+            var champNom = (getFieldNom(rv.id_champ) || '').toLowerCase();
+
+            // 1. Type d'ouvrant : « Fenêtre… » sur une porte → MANQUANT
+            if (/type.*ouvrant|type.*menuis(?!erie\s+de\s+mat)|type.*fen|nature.*ouvrant/.test(champNom)) {
+              var checkVal = function(v){ return v && /fen[eê]tre|fen\.bat|oscillo|baie(?!\s*vitr)/i.test(String(v)); };
+              var fixedAudit = checkVal(rv.valeur_audit);
+              var fixedVT    = checkVal(rv.valeur_vt);
+              if (fixedAudit || fixedVT) {
+                rv = Object.assign({}, rv, {
+                  valeur_audit: fixedAudit ? null : rv.valeur_audit,
+                  valeur_vt:    fixedVT    ? null : rv.valeur_vt,
+                  statut: 'MANQUANT',
+                  commentaire: '[Cohérence porte] Type d\'ouvrant « fenêtre » incohérent pour une porte simple (probable transfert depuis une fenêtre voisine). ' + (rv.commentaire || '')
+                });
+                console.warn('[PORTE-COHERENCE] "' + lbl + '" — type ouvrant fenêtre détecté → MANQUANT');
+              }
+            }
+
+            // 2. Volet sur porte simple → MANQUANT (volets très rares sur portes)
+            if (/volet|fermeture/.test(champNom)) {
+              var hasVolet = function(v){ return v && /volet\s+(?:roulant|battant|coulissant|persienne)/i.test(String(v)); };
+              if (hasVolet(rv.valeur_audit) || hasVolet(rv.valeur_vt)) {
+                rv = Object.assign({}, rv, {
+                  valeur_audit: hasVolet(rv.valeur_audit) ? null : rv.valeur_audit,
+                  valeur_vt:    hasVolet(rv.valeur_vt)    ? null : rv.valeur_vt,
+                  statut: 'MANQUANT',
+                  commentaire: '[Cohérence porte] Volet détecté sur porte simple — quasi-impossible, probable transfert depuis fenêtre. ' + (rv.commentaire || '')
+                });
+                console.warn('[PORTE-COHERENCE] "' + lbl + '" — volet détecté sur porte simple → MANQUANT');
+              }
+            }
+
+            // 3. Matériau PVC sur porte → flag suspect (sans effacer, mais alerte)
+            if (/mat[ée]riau|menuiserie|composition/.test(champNom) && !/vitrage/.test(champNom)) {
+              var isPVC = function(v){ return v && /^pvc\b|\bpvc\s*$|\bpvc\b(?!.*(?:rev[êe]tu|enrob))/i.test(String(v).trim()); };
+              if (isPVC(rv.valeur_audit) || isPVC(rv.valeur_vt)) {
+                var flagNote = '[Cohérence porte] Matériau PVC inhabituel pour une porte simple, vérifier qu\'il ne s\'agit pas d\'un transfert depuis une fenêtre voisine.';
+                if ((rv.commentaire || '').indexOf(flagNote) === -1) {
+                  rv = Object.assign({}, rv, {
+                    commentaire: flagNote + ' ' + (rv.commentaire || '')
+                  });
+                  console.warn('[PORTE-COHERENCE] "' + lbl + '" — matériau PVC suspect (flag, pas effacé)');
+                }
+              }
+            }
+          })();
+
           // ---- Règle département ----
           // Délègue au registre SEMANTIC_EQUIVALENCES["departement"] — éditer là-haut uniquement.
           if (fieldNom.includes('d\u00e9partement') || fieldNom.includes('departement')) {
@@ -5130,6 +5186,26 @@ Une "Porte" simple (sans "vitrée", "fenêtre", "baie" ou "porte-fenêtre" dans 
 Ne jamais retourner "Double vitrage", "Simple vitrage", "Triple vitrage", ou tout autre type de vitrage pour une porte standard.
 Ne jamais remplir les champs extrait_audit ou extrait_vt avec des passages qui décrivent des fenêtres si l'ouvrant courant est une porte opaque.
 Cette règle est ABSOLUE même si des fenêtres avec vitrage apparaissent dans le même tableau juste au-dessus de la porte.
+
+RÈGLE PORTE — COHÉRENCE TYPE D'OUVRANT (ABSOLUE) :
+Si l'instance courante est une PORTE (instance_label commence par "Porte" et ne contient pas "fenêtre" ni "vitrée") :
+⛔ INTERDIT de retourner « Fenêtre battante », « Fenêtre », « Fen.bat. », « Baie », « Oscillo-battant » ou tout type d'ouvrant lié aux fenêtres pour les champs « Type d'ouvrant », « Type de menuiserie », « Type ouvrant ».
+→ Une porte ne peut PAS être une fenêtre battante. Si tu lis cela dans le document pour une ligne PORTE, c'est une erreur de transfert depuis une ligne fenêtre voisine → retourne MANQUANT.
+→ La porte peut être : « Porte », « Porte battante », « Porte pleine », « Porte coulissante », « Porte vitrée » (si description l'indique). Rien d'autre.
+
+RÈGLE PORTE — VOLETS (ABSOLUE) :
+Pour une PORTE OPAQUE simple (pas porte-fenêtre, pas porte vitrée), les volets sont quasi-inexistants — il s'agit presque toujours d'un transfert depuis une fenêtre voisine.
+⛔ Pour une porte simple, les champs « Volet », « Type de volet », « Volet roulant », « Volet battant », « Présence volet » doivent retourner MANQUANT par défaut, SAUF si le document mentionne EXPLICITEMENT un volet sur cette porte précise (cas rarissime, à réserver aux portes-fenêtres et baies).
+→ Si tu vois « Volet roulant PVC » dans la même section qu'une porte simple, c'est presque toujours un transfert depuis une fenêtre adjacente → retourne MANQUANT.
+→ Pour les portes-fenêtres et baies vitrées, les volets sont valides → garder la valeur.
+
+RÈGLE PORTE — TYPE DE MENUISERIE (ABSOLUE) :
+Le matériau d'une porte (Bois / Aluminium / Métal / Acier / etc.) doit être trouvé EXPLICITEMENT sur la ligne ou dans le bloc de la porte concernée. Ne JAMAIS prendre le matériau d'une fenêtre voisine.
+→ Le matériau dominant des portes en France est le BOIS. L'ALUMINIUM, l'ACIER et le MÉTAL sont également courants.
+→ Le PVC sur une porte d'entrée standard est TRÈS RARE (cas particulier de porte de service ou porte-fenêtre PVC). Si tu vois « PVC » comme matériau d'une porte simple, c'est presque toujours un transfert depuis une fenêtre voisine.
+→ Action : si tu hésites entre PVC (suspect pour porte) et MANQUANT, choisis MANQUANT.
+→ Si tu n'es pas certain à 100 % que le matériau provient bien de la ligne porte → retourne MANQUANT plutôt que d'inventer.
+→ Une discordance audit/VT sur le matériau (audit PVC, VT Bois) est suspecte : flag avec commentaire « porte PVC inhabituel, peut-être un transfert depuis une fenêtre voisine ».
 
 EXCEPTION ABSOLUE — SURFACE DE RÉFÉRENCE / SHAB DU LOGEMENT :
 Les champs "Surface de référence", "Surface habitable", "SHAB", "Surface de plancher" sont des champs GÉNÉRAUX du logement — PAS des surfaces d'ouvrant.
