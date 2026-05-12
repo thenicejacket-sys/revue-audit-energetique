@@ -12,9 +12,9 @@
 (function () {
   'use strict';
 
-  /* ── Garde : si callMaya n'existe pas encore, on ne fait rien ── */
+  /* ── T6 — Pré-condition critique : window.callMaya doit être disponible AVANT ce module ── */
   if (typeof window.callMaya !== 'function') {
-    console.warn('[MAYA-AGENT] window.callMaya introuvable — module non activé.');
+    console.error('[MAYA-AGENT] BOOT FAIL : window.callMaya non disponible. Vérifie l\'ordre de chargement.');
     return;
   }
 
