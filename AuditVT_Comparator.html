@@ -7347,7 +7347,7 @@ ${vtShort}`;
           // Les "applied" / "permanent" / "archived" sont d\u00e9j\u00e0 int\u00e9gr\u00e9s et n'ont plus besoin d'\u00eatre visibles dans le badge.
           const fbPendingCount = fbList.filter(function(fb){
             var fid = 'line:' + fbKey + ':' + normTs(fb.timestamp || '');
-            var st = (mayaFeedbackMeta[fid] || {}).status || 'pending';
+            var st = normalizeMayaStatus((mayaFeedbackMeta[fid] || {}).status || 'pending');
             return st === 'pending';
           }).length;
           const fbTotalCount = fbList.length;
@@ -7835,6 +7835,18 @@ ${vtShort}`;
       catch(e) { mayaGlobalFeedbacks = []; }
       try { mayaFeedbackMeta = JSON.parse(localStorage.getItem(MAYA_META_KEY) || '{}') || {}; }
       catch(e) { mayaFeedbackMeta = {}; }
+      // Migration : convertir tous les statuts hérités (applied, permanent, undefined) en 'archived'
+      var migrated = false;
+      Object.keys(mayaFeedbackMeta).forEach(function(fid) {
+        var s = (mayaFeedbackMeta[fid] || {}).status;
+        if (s !== 'pending') {
+          mayaFeedbackMeta[fid] = { status: 'archived' };
+          migrated = true;
+        }
+      });
+      if (migrated) {
+        try { localStorage.setItem(MAYA_META_KEY, JSON.stringify(mayaFeedbackMeta)); } catch(e) {}
+      }
     }
     function persistMayaGlobalFeedbacks() {
       try { localStorage.setItem(MAYA_GFB_KEY, JSON.stringify(mayaGlobalFeedbacks)); } catch(e) {}
@@ -8020,8 +8032,8 @@ ${vtShort}`;
 
     function updateMayaFabBadges() {
       var all = collectAllFeedbacks();
-      var pendingAll    = all.filter(function(i){ return i.meta.status === 'pending'; }).length;
-      var pendingGlobal = all.filter(function(i){ return i.meta.status === 'pending' && i.scope === 'global'; }).length;
+      var pendingAll    = all.filter(function(i){ return normalizeMayaStatus(i.meta.status) === 'pending'; }).length;
+      var pendingGlobal = all.filter(function(i){ return normalizeMayaStatus(i.meta.status) === 'pending' && i.scope === 'global'; }).length;
 
       var histBadge = document.getElementById('maya-fab-history-badge');
       var globBadge = document.getElementById('maya-fab-global-badge');
@@ -8033,6 +8045,18 @@ ${vtShort}`;
         if (pendingGlobal > 0) { globBadge.textContent = String(pendingGlobal); globBadge.classList.add('visible'); }
         else globBadge.classList.remove('visible');
       }
+    }
+
+    // ---- Tout archiver ----
+    function archiveAllPendingFeedbacks() {
+      var all = collectAllFeedbacks();
+      var pendingItems = all.filter(function(i){ return normalizeMayaStatus(i.meta.status) === 'pending'; });
+      if (pendingItems.length === 0) { alert('Aucun feedback en attente.'); return; }
+      if (!confirm('Archiver les ' + pendingItems.length + ' feedbacks en attente ?')) return;
+      pendingItems.forEach(function(i){ mayaFeedbackMeta[i.id] = { status: 'archived' }; });
+      persistMayaFeedbackMeta();
+      updateMayaFabBadges();
+      renderMayaDrawer();
     }
 
     // ---- Drawer historique ----
@@ -11248,6 +11272,7 @@ ${vtShort}`;
       <button type="button" class="maya-drawer-filter-btn active" data-filter="all" onclick="setMayaDrawerFilter('all')" title="Afficher tous les feedbacks, quel que soit leur statut.">Tous</button>
       <button type="button" class="maya-drawer-filter-btn" data-filter="pending" onclick="setMayaDrawerFilter('pending')" title="Feedbacks enregistrés, pas encore utilisés par Maya. Seront automatiquement injectés dans le prompt Maya lors de votre prochaine analyse, puis passeront en 'Archivé'.">En attente</button>
       <button type="button" class="maya-drawer-filter-btn" data-filter="archived" onclick="setMayaDrawerFilter('archived')" title="Feedbacks déjà traités par Maya. Ignorés dans les analyses suivantes.">Archivés</button>
+      <button type="button" onclick="archiveAllPendingFeedbacks()" title="Archiver tous les feedbacks en attente d'un coup." style="background:#FFF3E0;border:1px solid #FFB74D;border-radius:16px;padding:4px 12px;font-size:11px;font-weight:600;color:#7F3D00;cursor:pointer;">Tout archiver</button>
       <button type="button" class="maya-drawer-export" onclick="exportMayaFeedbacksExcel()">📥 Exporter Excel</button>
       <button type="button" class="maya-drawer-activity-btn" onclick="openMayaActivityModal()" title="Générer un rapport Excel de l'activité Maya sur une plage de dates : feedbacks traités, non traités, et résumés des analyses.">📊 Rapport activité Maya</button>
     </div>
