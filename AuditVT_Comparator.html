@@ -980,7 +980,7 @@
       margin-bottom: 10px;
       font-size: 12px;
     }
-    .maya-drawer-item.archived { opacity: 0.55; border-left-color: #999; }
+    .maya-drawer-item.archived { border-left-color: #999; }
     .maya-drawer-item.applied { border-left-color: #2E7D32; background: #F6FBF6; }
     .maya-drawer-item.permanent { border-left-color: #7B2D8E; background: #F5EFF8; border: 1px solid #C4A3D0; border-left-width: 4px; }
     .maya-drawer-item.scope-global { border-left-color: #E65100; background: #FFF9F1; }
@@ -7719,8 +7719,7 @@ ${vtShort}`;
           var stBadge = '';
           if (st === 'pending')  stBadge = '<span style="display:inline-block;padding:1px 6px;background:#FFE0B2;color:#7F3D00;border-radius:8px;font-size:9.5px;font-weight:700;margin-right:5px;">⏳ En attente</span>';
           else                   stBadge = '<span style="display:inline-block;padding:1px 6px;background:#CFD8DC;color:#37474F;border-radius:8px;font-size:9.5px;font-weight:700;margin-right:5px;">📦 Archivé</span>';
-          var faded = (st === 'archived') ? 'opacity:0.65;' : '';
-          html += '<div class="maya-modal-existing-item" style="' + faded + '">' + stBadge + '<span class="maya-modal-existing-date">' + dateStr + '</span>' + escHtml(fb.text) + '</div>';
+          html += '<div class="maya-modal-existing-item">' + stBadge + '<span class="maya-modal-existing-date">' + dateStr + '</span>' + escHtml(fb.text) + '</div>';
         });
         existingBlock.innerHTML = html;
       }
