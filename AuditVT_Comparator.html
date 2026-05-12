@@ -4992,8 +4992,8 @@
     // _buildCatByLabelFromState : reconstruit catByLabel depuis state.detectedInstances,
     //   utilisé par harmonizeWallSurfaces quand elle est appelée hors de _antiCrossTalkParois.
     //
-    // harmonizeWallSurfaces : RÉACTIVÉE le 2026-05-12 — audit exhaustivité + NET/BRUT distincts.
-    //   Fallback NET = BRUT si la VT ne fournit pas de surface nette par façade.
+    // harmonizeWallSurfaces : DÉSACTIVÉE (return en début) — conservée pour structure.
+    //   Réactiver : supprimer le return au début du corps.
     //
     // dedupGlobalFields : ACTIVE — filet de sécurité champs globaux multipliés par instance.
     // =====================================================================
@@ -5020,31 +5020,22 @@
     // paroi-mur de l'audit, afficher la SOMME TOTALE des façades VT (NET et BRUT). Identique partout.
     // → l'utilisateur voit la même valeur VT sur toutes les lignes "Surface (m²) — Paroi N — Mur..."
     //
-    // Réactivée le 2026-05-12 (demande utilisateur) :
-    // Audit d'exhaustivité : compare state.vtTables.FACADES (source brute PDF) vs façades sommées.
-    // Si écart : console.warn + badge ⚠️ dans commentaire de chaque paroi-mur impactée.
-    // Fallback NET = BRUT : si le LLM n'extrait pas de surface nette pour une façade, NET = BRUT.
-    // Format d'affichage : formatParoiSurface() (inchangé) — NET puis BRUT sur lignes séparées.
+    // ⚠️ DÉSACTIVÉE le 2026-05-06 (clarification utilisateur) :
+    // L'utilisateur veut le DÉTAIL PAR PAROI tel que le LLM l'extrait — chaque paroi affiche
+    // SES PROPRES façades VT, pas l'agrégation globale de toutes les parois mur.
+    // Format : "NET : 8,07 + 7,94 = 15,99 m² (surface à isoler)" (par paroi).
+    // Demande utilisateur originale : juste corriger l'addition (recalcul total via reduce(+)
+    // dans formatParoiSurface), pas changer le format. Le format détail par paroi est conservé.
     // ───────────────────────────────────────────────────────────────────
     function harmonizeWallSurfaces() {
-      // Réactivée le 2026-05-12 : harmonisation surfaces MUR avec audit exhaustivité + NET/BRUT.
-      // Pour chaque paroi-mur audit, on applique la SOMME TOTALE des façades VT (identique partout).
-      // Deux totaux distincts : total_brut_vt et total_net_vt (fallback NET = BRUT si VT ne fournit pas NET).
-
+      console.info('[SURFACE-MUR-HARMONIZE] Désactivée — détail par paroi conservé (recalcul total via reduce reste actif).');
+      return;
+      /* eslint-disable */ // code conservé pour référence
       // Recalcul local de catByLabel depuis state.detectedInstances
       var catByLabel = _buildCatByLabelFromState();
-      // Fix 2026-05-12 (soir) : normalisation cohérente avec _buildCatByLabelFromState
-      // qui coupe au premier tiret long. Sans ça, la clé recherchée
-      // ("paroi 1 — mur en blocs de béton…") ne matche jamais la clé stockée ("paroi 1").
-      function _normLblForLookup(lbl) {
-        return String(lbl||'').toLowerCase()
-          .replace(/\bparoi\s+0*(\d+)/g, 'paroi $1')
-          .replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim()
-          .split(/\s*(?:—|–)\s*/)[0].trim();
-      }
       var wallSurfaceResults = state.analysisResults.filter(function(rv){
         if (!rv.instance_label) return false;
-        var paroiCat = catByLabel[_normLblForLookup(rv.instance_label)];
+        var paroiCat = catByLabel[String(rv.instance_label).trim().toLowerCase()];
         if (paroiCat !== 'mur') return false;
         var champNom = (getFieldNom(rv.id_champ) || '').toLowerCase();
         // Champ surface de paroi (mais pas SHAB / surface de référence — exclus)
@@ -5052,13 +5043,10 @@
         if (/r[eé]f[eé]rence|habit|shab|sdp|au\s*sol|totale|utile/.test(champNom)) return false;
         return true;
       });
-      // Guard retiré (2026-05-12) : harmonizeWallSurfaces s'applique aussi aux murs mono-paroi
-      // (une seule paroi-mur dans l'audit) — le fallback NET=BRUT doit fonctionner dans ce cas.
-      if (wallSurfaceResults.length === 0) {
-        console.info('[WALL-HARMONIZE] Aucune paroi-mur avec champ surface — rien à harmoniser.');
+      if (wallSurfaceResults.length < 2) {
+        if (wallSurfaceResults.length === 1) console.info('[SURFACE-MUR-HARMONIZE] 1 seule paroi-mur — pas d\'harmonisation nécessaire.');
         return;
       }
-
       // Collecte de toutes les valeurs NET et BRUT extraites par le LLM (toutes parois mur confondues)
       var allNet = [], allBrut = [];
       wallSurfaceResults.forEach(function(rv){
@@ -5074,7 +5062,6 @@
           }
         }
       });
-
       // Déduplication par valeur arrondie au cm² près (évite double-comptage des façades vues plusieurs fois)
       function dedup(arr) {
         var seen = {}, out = [];
@@ -5086,85 +5073,31 @@
       }
       var uniqueNet = dedup(allNet);
       var uniqueBrut = dedup(allBrut);
-
       if (uniqueNet.length === 0 && uniqueBrut.length === 0) {
-        console.info('[WALL-HARMONIZE] Aucune surface VT extraite — rien à harmoniser.');
+        console.info('[SURFACE-MUR-HARMONIZE] Aucune surface VT extraite — rien à harmoniser.');
         return;
       }
-
-      // Fallback NET = BRUT : si le LLM n'a fourni aucune surface nette,
-      // on utilise les surfaces brutes comme approximation nette.
-      // Cela garantit qu'on a toujours deux totaux distincts NET et BRUT.
-      var finalNetParts, finalBrutParts;
-      if (uniqueNet.length === 0 && uniqueBrut.length > 0) {
-        finalNetParts = uniqueBrut.slice(); // copie
-        console.info('[WALL-HARMONIZE] Aucun NET extrait par le LLM — fallback NET = BRUT appliqué.');
-      } else {
-        finalNetParts = uniqueNet;
-      }
-      finalBrutParts = uniqueBrut.length > 0 ? uniqueBrut : uniqueNet.slice();
-
-      var totalNet = finalNetParts.reduce(function(a,b){ return a + b; }, 0);
-      var totalBrut = finalBrutParts.reduce(function(a,b){ return a + b; }, 0);
-
-      // ── Audit d'exhaustivité : compare façades brutes VT vs façades sommées ──
-      var rawFacadesCount = 0;
-      var exhaustiviteNote = '';
-      var exhaustiviteWarning = false;
-      if (state.vtTables && state.vtTables.FACADES && Array.isArray(state.vtTables.FACADES)) {
-        rawFacadesCount = state.vtTables.FACADES.length;
-        // Nombre de façades dans la somme = longueur des brut_parts (ou net_parts si pas de brut)
-        var sommeeCount = finalBrutParts.length;
-        if (rawFacadesCount > 0 && sommeeCount !== rawFacadesCount) {
-          exhaustiviteWarning = true;
-          // Identifier les façades brutes potentiellement manquantes (valeurs VT brutes non retrouvées)
-          var vtBrutRaw = [];
-          state.vtTables.FACADES.forEach(function(row){
-            var keys = Object.keys(row);
-            // Chercher une colonne "surface" brute dans la ligne du tableau VT
-            var surfKey = keys.find(function(k){ return /surface/i.test(k) && !/isol|net|à isol/i.test(k); })
-                       || keys.find(function(k){ return /surface/i.test(k); });
-            if (surfKey) {
-              var raw = String(row[surfKey]).replace(',', '.').replace(/[^\d.]/g, '');
-              var num = parseFloat(raw);
-              if (!isNaN(num) && num > 0) vtBrutRaw.push(num);
-            }
-          });
-          // Façades VT brutes dont la valeur n'est pas dans finalBrutParts (arrondi cm²)
-          var sommeeSet = {};
-          finalBrutParts.forEach(function(v){ sommeeSet[Math.round(v * 100)] = true; });
-          var manquantes = vtBrutRaw.filter(function(v){ return !sommeeSet[Math.round(v * 100)]; });
-          var manqStr = manquantes.length > 0
-            ? ' (valeurs absentes de la somme : ' + manquantes.map(function(v){ return v.toFixed(2) + ' m²'; }).join(', ') + ')'
-            : '';
-          console.warn('[WALL-HARMONIZE] Écart exhaustivité VT : ' + rawFacadesCount + ' façades brutes vs ' + sommeeCount + ' façades sommées' + manqStr);
-          exhaustiviteNote = '⚠️ Vérification : ' + sommeeCount + '/' + rawFacadesCount + ' façades VT sommées' + (manquantes.length > 0 ? ' — manquantes : ' + manquantes.map(function(v){ return v.toFixed(2) + ' m²'; }).join(', ') : '');
-        } else if (rawFacadesCount > 0) {
-          exhaustiviteNote = '✓ ' + sommeeCount + '/' + rawFacadesCount + ' façades VT sommées';
-        }
-      }
-
+      var totalNet = uniqueNet.reduce(function(a,b){ return a + b; }, 0);
+      var totalBrut = uniqueBrut.reduce(function(a,b){ return a + b; }, 0);
       // Applique la même valeur (somme totale VT) à toutes les parois-mur audit
       wallSurfaceResults.forEach(function(rv){
         rv.valeur_vt_detail = {
           type: 'paroi_multi',
-          net_parts: finalNetParts,
-          net_total: Math.round(totalNet * 100) / 100,
-          brut_parts: finalBrutParts,
-          brut_total: Math.round(totalBrut * 100) / 100,
+          net_parts: uniqueNet,
+          net_total: totalNet,
+          brut_parts: uniqueBrut,
+          brut_total: totalBrut,
           unit: 'm²'
         };
-        // Note de traçabilité : NET + BRUT + exhaustivité
-        var note = '[Harmonisation MUR — BRUT : ' + totalBrut.toFixed(2) + ' m² (' + finalBrutParts.length + ' façade(s)) | NET : ' + totalNet.toFixed(2) + ' m²' + (exhaustiviteNote ? ' | ' + exhaustiviteNote : '') + ']';
-        if ((rv.commentaire || '').indexOf('[Harmonisation MUR') === -1) {
+        // Trace dans le commentaire pour traçabilité
+        var note = '[Surface mur — somme totale VT (' + uniqueBrut.length + ' façade(s)) appliquée à toutes les parois-mur audit]';
+        if ((rv.commentaire || '').indexOf(note) === -1) {
           rv.commentaire = (rv.commentaire ? rv.commentaire + ' ' : '') + note;
         }
       });
-
-      console.log('[WALL-HARMONIZE] ' + wallSurfaceResults.length + ' paroi(s)-mur harmonisée(s) — BRUT total = '
-        + totalBrut.toFixed(2) + ' m² (' + finalBrutParts.length + ' façade(s)), NET total = '
-        + totalNet.toFixed(2) + ' m² (' + finalNetParts.length + ' façade(s))'
-        + (exhaustiviteNote ? ' | ' + exhaustiviteNote : ''));
+      console.log('[SURFACE-MUR-HARMONIZE] ' + wallSurfaceResults.length + ' paroi(s)-mur harmonisée(s) — NET total = '
+        + totalNet.toFixed(2) + ' m² (' + uniqueNet.length + ' façade(s)), BRUT total = '
+        + totalBrut.toFixed(2) + ' m² (' + uniqueBrut.length + ' façade(s))');
     }
 
     // ───────────────────────────────────────────────────────────────────
@@ -5641,21 +5574,6 @@
         var netParts = detail.net_parts && detail.net_parts.length > 0
           ? detail.net_parts.filter(function(p){ return p != null && !isNaN(p); }).map(Number)
           : (detail.net != null && !isNaN(detail.net) ? [Number(detail.net)] : null);
-
-        // BRUT — recalcul forcé depuis les parts
-        var brutValidParts = detail.brut_parts && detail.brut_parts.length > 0
-          ? detail.brut_parts.filter(function(p){ return p != null && !isNaN(p); }).map(Number)
-          : [];
-
-        // Fallback NET = BRUT : si brut_parts rempli mais net_parts vide (2026-05-12)
-        if ((!netParts || netParts.length === 0) && brutValidParts.length > 0) {
-          netParts = brutValidParts.slice(); // copie — NET = BRUT quand NET non fourni
-        }
-        // Fallback BRUT = NET : si net_parts rempli mais brut_parts vide (2026-05-12)
-        if (brutValidParts.length === 0 && netParts && netParts.length > 0) {
-          brutValidParts = netParts.slice(); // copie — BRUT = NET quand BRUT non fourni
-        }
-
         if (netParts && netParts.length > 0) {
           // Recalcul forcé depuis les parts — ne jamais faire confiance à detail.net_total
           var netTotalRecalc = netParts.reduce(function(a, b){ return a + b; }, 0);
@@ -5670,16 +5588,20 @@
           lines.push(netLine);
         }
 
-        if (brutValidParts.length > 0) {
-          var brutTotalRecalc = brutValidParts.reduce(function(a, b){ return a + b; }, 0);
-          var brutLine = 'BRUT : ';
-          if (brutValidParts.length === 1) {
-            brutLine += _frNum(brutValidParts[0]) + ' ' + unit;
-          } else {
-            brutLine += brutValidParts.map(_frNum).join(' + ') + ' = ' + _frNum(brutTotalRecalc) + ' ' + unit;
+        // BRUT — recalcul forcé depuis les parts
+        if (detail.brut_parts && detail.brut_parts.length > 0) {
+          var validParts = detail.brut_parts.filter(function(p){ return p != null && !isNaN(p); }).map(Number);
+          if (validParts.length > 0) {
+            var brutTotalRecalc = validParts.reduce(function(a, b){ return a + b; }, 0);
+            var brutLine = 'BRUT : ';
+            if (validParts.length === 1) {
+              brutLine += _frNum(validParts[0]) + ' ' + unit;
+            } else {
+              brutLine += validParts.map(_frNum).join(' + ') + ' = ' + _frNum(brutTotalRecalc) + ' ' + unit;
+            }
+            detail.brut_total = Math.round(brutTotalRecalc * 100) / 100;
+            lines.push(brutLine);
           }
-          detail.brut_total = Math.round(brutTotalRecalc * 100) / 100;
-          lines.push(brutLine);
         }
 
         return lines.length > 0 ? lines.join('\n') : null;
@@ -5720,76 +5642,6 @@
           instancesBlock += '- menuiseries_vt_count : ' + vtMenuiCount + '\n';
           if (vtMenuiCount > 0) {
             instancesBlock += '- Menuiseries/Ouvrants VT (' + vtMenuiCount + ') : "' + vtMenuiseriesList.join('" | "') + '"\n';
-          }
-          // TABLE STRUCTURÉE MENUISERIES VT — injectée en priorité si disponible
-          // Permet à Maya d'utiliser l'index exact au lieu de chercher dans ~90k chars de texte brut
-          if (state.vtTables && state.vtTables.MENUISERIES && Array.isArray(state.vtTables.MENUISERIES) && state.vtTables.MENUISERIES.length > 0) {
-            instancesBlock += '\nTABLE STRUCTURÉE MENUISERIES VT (utilise ces valeurs EN PRIORITÉ ABSOLUE, par index) :\n';
-            state.vtTables.MENUISERIES.forEach(function(row, idx) {
-              var parts = ['Index ' + (idx + 1)];
-              // Colonnes attendues dans un tableau VT menuiseries — on essaie toutes les variantes connues
-              var colMap = [
-                { keys: ['type','type d\'ouvrant','type ouvrant','nature','menuiserie'], label: null }, // type (Fenêtre/Porte/Baie)
-                { keys: ['largeur','larg','l','dimensions','dim'], label: 'dim_l' },
-                { keys: ['hauteur','haut','h'], label: 'dim_h' },
-                { keys: ['vitrage','type de vitrage','type vitrage','glazing'], label: 'vitrage' },
-                { keys: ['matériau','materiaux','matériaux','cadre','châssis','chassis'], label: 'materiau' },
-                { keys: ['volet','volets','type de volet','vr'], label: 'volet' },
-                { keys: ['surface','surf','s (m²)','s(m²)'], label: 'surface' },
-                { keys: ['isolation','isolé','isole','qualité isolation','qualite isolation'], label: 'isolation' },
-                { keys: ['année','annee','age'], label: 'annee' },
-                { keys: ['état','etat','état général','etat general'], label: 'etat' }
-              ];
-              var rowKeys = Object.keys(row).map(function(k){ return k.toLowerCase().trim(); });
-              var typeVal = null;
-              // Trouver le type (1er champ significatif)
-              var typeKey = Object.keys(row).find(function(k){
-                var kl = k.toLowerCase().trim();
-                return colMap[0].keys.some(function(ck){ return kl === ck || kl.includes(ck); });
-              }) || Object.keys(row)[0];
-              if (typeKey) typeVal = row[typeKey];
-              if (typeVal) parts.push(String(typeVal).trim());
-              // Dimensions
-              var dimL = null, dimH = null;
-              Object.keys(row).forEach(function(k){
-                var kl = k.toLowerCase().trim();
-                if (!dimL && colMap[1].keys.some(function(ck){ return kl === ck || kl.includes(ck); })) dimL = row[k];
-                if (!dimH && colMap[2].keys.some(function(ck){ return kl === ck || kl.includes(ck); })) dimH = row[k];
-                // Colonne "Dimensions" combine L×H dans un seul champ
-                if (!dimL && (kl === 'dimensions' || kl === 'dim')) { dimL = row[k]; dimH = null; }
-              });
-              if (dimL && dimH) parts.push(String(dimL).trim() + '×' + String(dimH).trim());
-              else if (dimL) parts.push(String(dimL).trim()); // format combiné "0.93×1.05"
-              // Autres attributs : vitrage, matériau, volet, surface, isolation
-              [colMap[3], colMap[4], colMap[5], colMap[6], colMap[7], colMap[8], colMap[9]].forEach(function(col){
-                var matchKey = Object.keys(row).find(function(k){
-                  var kl = k.toLowerCase().trim();
-                  return col.keys.some(function(ck){ return kl === ck || kl.includes(ck); });
-                });
-                if (matchKey && row[matchKey] && String(row[matchKey]).trim().length > 0) {
-                  parts.push(String(row[matchKey]).trim());
-                }
-              });
-              // Ajouter toutes les autres colonnes non encore capturées (fallback exhaustif)
-              var capturedKeys = new Set();
-              if (typeKey) capturedKeys.add(typeKey.toLowerCase().trim());
-              [colMap[1],colMap[2],colMap[3],colMap[4],colMap[5],colMap[6],colMap[7],colMap[8],colMap[9]].forEach(function(col){
-                var mk = Object.keys(row).find(function(k){
-                  var kl = k.toLowerCase().trim();
-                  return col.keys.some(function(ck){ return kl === ck || kl.includes(ck); });
-                });
-                if (mk) capturedKeys.add(mk.toLowerCase().trim());
-              });
-              Object.keys(row).forEach(function(k){
-                if (!capturedKeys.has(k.toLowerCase().trim()) && row[k] && String(row[k]).trim().length > 0) {
-                  parts.push(k + ': ' + String(row[k]).trim());
-                }
-              });
-              instancesBlock += parts.join(' — ') + '\n';
-            });
-            instancesBlock += '→ RÈGLE PRIORITÉ TABLE : pour chaque menuiserie audit n°N, prends EN PRIORITÉ ABSOLUE les valeurs dans TABLE STRUCTURÉE MENUISERIES VT à l\'index correspondant (index 1 = audit rang 1, etc.).\n';
-            instancesBlock += '→ Si une valeur manque dans la table structurée, alors et SEULEMENT ALORS cherche dans le texte VT brut.\n';
-            instancesBlock += '→ INTERDIT de retourner MANQUANT si la table structurée contient une valeur pour ce champ.\n';
           }
           if (auditMenuiCount !== vtMenuiCount) {
             instancesBlock += '→ ÉCART DÉTECTÉ : l\'audit a ' + auditMenuiCount + ' menuiserie(s), la VT en a ' + vtMenuiCount + '.\n';
@@ -5995,19 +5847,6 @@ Ne jamais transférer la valeur d'un ouvrant vers un autre ouvrant.
 - INTERDIT : copier la valeur d'une fenêtre pour une porte, ou inversement, même si le champ est le même.
 - Chaque ouvrant est un élément DISTINCT et INDÉPENDANT. Les valeurs extraites pour "Fenêtre 1" ne peuvent jamais migrer vers "Fenêtre 2", "Porte" ou tout autre ouvrant.
 - Si un champ ne mentionne pas explicitement cet ouvrant précis dans le document, retourner MANQUANT.
-
-RÈGLE MATCHING AUDIT ↔ VT PAR INDEX (ABSOLUE — MENUISERIES) :
-Le matching entre les menuiseries de l'audit et celles de la VT se fait par ORDRE D'APPARITION (index strict), pas par identité exacte de label.
-- La menuiserie n°1 de l'audit correspond à la menuiserie n°1 de la VT, même si les labels diffèrent légèrement.
-  Exemple : audit dit "Fenêtre 1 — séjour", VT dit "Fenêtre 1 (0,93×1,05)" → ce sont les mêmes par index (rang 1), donc elles correspondent.
-- Applique ce principe pour toutes les menuiseries : rang 1 ↔ rang 1, rang 2 ↔ rang 2, rang 3 ↔ rang 3, etc.
-- INTERDIT : retourner MANQUANT uniquement parce que le label VT ne correspond pas mot pour mot au label audit — si l'index correspond, les menuiseries sont appariées.
-
-RÈGLE RECHERCHE VALEUR VT PAR INDEX (ABSOLUE — MENUISERIES) :
-Pour chaque champ d'une menuiserie (vitrage, matériau, surface, volet, type d'ouvrant, etc.), cherche la valeur dans le texte complet de la VT au voisinage de la menuiserie correspondante identifiée par son index — pas uniquement dans la liste injectée des labels.
-- La liste injectée "Menuiseries/Ouvrants VT (N) : ..." ne contient que les noms/dimensions des ouvrants VT, pas les valeurs détaillées des champs.
-- Les valeurs réelles (vitrage, matériau, volet, etc.) se trouvent dans le bloc de texte VT adjacent à chaque ouvrant repéré par son rang.
-- INTERDIT : retourner MANQUANT pour un champ menuiserie uniquement parce que la valeur n'est pas dans la liste injectée — cherche systématiquement dans le texte VT complet au bon index.
 
 RÈGLE PORTE OPAQUE (ABSOLUE) :
 Une "Porte" simple (sans "vitrée", "fenêtre", "baie" ou "porte-fenêtre" dans sa description) est une porte opaque — elle n'a PAS de vitrage.
