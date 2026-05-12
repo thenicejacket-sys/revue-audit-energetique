@@ -6637,6 +6637,16 @@ RÈGLES DE CERTITUDE — applique-les strictement :
 
 Ne retourne PAS de correction pour les résultats déjà corrects et certains.
 
+⚡ RÈGLE ABSOLUE — SI TU TROUVES UNE VALEUR, TU LA REMPLIS ⚡
+SI DANS TON ANALYSE TU MENTIONNES UNE VALEUR TROUVÉE (avec page, source, ou montant), TU DOIS LA RENVOYER DANS valeur_vt_trouvee OU valeur_audit_trouvee SELON LE CHAMP CONCERNÉ.
+PAS D'EXCEPTION. PAS DE CALCUL. PAS DE VALIDATION PRÉALABLE.
+TU TROUVES → TU REMPLIS.
+Exemples :
+- Si tu écris "j'ai trouvé 56,66 m² en page 27 de l'audit" dans ton raisonnement → valeur_audit_trouvee: "56,66 m²" est OBLIGATOIRE.
+- Si tu écris "la VT indique Uw = 1,4 W/m².K page 12" → valeur_vt_trouvee: "1,4 W/m².K" est OBLIGATOIRE.
+- Si tu passes le statut en VERT parce que tu as trouvé la valeur → les deux champs valeur_*_trouvee correspondants DOIVENT être remplis.
+Un commentaire qui mentionne une valeur sans la remplir dans le JSON = ERREUR GRAVE. Sans exception.
+
 Réponds UNIQUEMENT en JSON strict :
 {
   "corrections": [
@@ -6645,7 +6655,8 @@ Réponds UNIQUEMENT en JSON strict :
       "instance_label": "...",
       "action": "corriger_statut|corriger_valeur|confirmer_manquant|hallucination_detectee",
       "nouveau_statut": "VERT|ORANGE|ROUGE|MANQUANT",
-      "valeur_vt_corrigee": "... ou null si pas de correction de valeur",
+      "valeur_vt_trouvee": "valeur EXACTE trouvée dans la VT pour ce champ — null si absente. OBLIGATOIRE si tu la mentionnes dans ton raisonnement.",
+      "valeur_audit_trouvee": "valeur EXACTE trouvée dans l'Audit pour ce champ — null si absente. OBLIGATOIRE si tu la mentionnes dans ton raisonnement.",
       "raison": "explication courte (max 100 chars)",
       "source_excerpt_audit": "extrait brut de 80 à 200 caractères autour de la valeur dans l'Audit (copié-collé du texte source) — null si indisponible",
       "source_excerpt_vt": "extrait brut de 80 à 200 caractères autour de la valeur dans la VT (copié-collé du texte source) — null si indisponible",
@@ -6947,7 +6958,11 @@ ${vtShort}`;
           }
 
           if (corr.nouveau_statut) target.statut = corr.nouveau_statut;
-          if (corr.valeur_vt_corrigee) target.valeur_vt = corr.valeur_vt_corrigee;
+          // valeur_vt_trouvee est le nom canonique ; valeur_vt_corrigee est maintenu pour r\u00e9trocompatibilit\u00e9
+          var vtTrouvee = corr.valeur_vt_trouvee || corr.valeur_vt_corrigee || null;
+          if (vtTrouvee) target.valeur_vt = vtTrouvee;
+          // canal sym\u00e9trique pour la valeur audit trouv\u00e9e par Maya
+          if (corr.valeur_audit_trouvee) target.valeur_audit = corr.valeur_audit_trouvee;
           target.commentaire = (target.commentaire ? target.commentaire + ' ' : '') + '[\u2726 Maya: ' + corr.raison + ']';
           target._maya_corrected = true;
           corrCount++;
