@@ -5904,6 +5904,19 @@ Ne jamais transférer la valeur d'un ouvrant vers un autre ouvrant.
 - Chaque ouvrant est un élément DISTINCT et INDÉPENDANT. Les valeurs extraites pour "Fenêtre 1" ne peuvent jamais migrer vers "Fenêtre 2", "Porte" ou tout autre ouvrant.
 - Si un champ ne mentionne pas explicitement cet ouvrant précis dans le document, retourner MANQUANT.
 
+RÈGLE MATCHING AUDIT ↔ VT PAR INDEX (ABSOLUE — MENUISERIES) :
+Le matching entre les menuiseries de l'audit et celles de la VT se fait par ORDRE D'APPARITION (index strict), pas par identité exacte de label.
+- La menuiserie n°1 de l'audit correspond à la menuiserie n°1 de la VT, même si les labels diffèrent légèrement.
+  Exemple : audit dit "Fenêtre 1 — séjour", VT dit "Fenêtre 1 (0,93×1,05)" → ce sont les mêmes par index (rang 1), donc elles correspondent.
+- Applique ce principe pour toutes les menuiseries : rang 1 ↔ rang 1, rang 2 ↔ rang 2, rang 3 ↔ rang 3, etc.
+- INTERDIT : retourner MANQUANT uniquement parce que le label VT ne correspond pas mot pour mot au label audit — si l'index correspond, les menuiseries sont appariées.
+
+RÈGLE RECHERCHE VALEUR VT PAR INDEX (ABSOLUE — MENUISERIES) :
+Pour chaque champ d'une menuiserie (vitrage, matériau, surface, volet, type d'ouvrant, etc.), cherche la valeur dans le texte complet de la VT au voisinage de la menuiserie correspondante identifiée par son index — pas uniquement dans la liste injectée des labels.
+- La liste injectée "Menuiseries/Ouvrants VT (N) : ..." ne contient que les noms/dimensions des ouvrants VT, pas les valeurs détaillées des champs.
+- Les valeurs réelles (vitrage, matériau, volet, etc.) se trouvent dans le bloc de texte VT adjacent à chaque ouvrant repéré par son rang.
+- INTERDIT : retourner MANQUANT pour un champ menuiserie uniquement parce que la valeur n'est pas dans la liste injectée — cherche systématiquement dans le texte VT complet au bon index.
+
 RÈGLE PORTE OPAQUE (ABSOLUE) :
 Une "Porte" simple (sans "vitrée", "fenêtre", "baie" ou "porte-fenêtre" dans sa description) est une porte opaque — elle n'a PAS de vitrage.
 ⛔ Pour une porte opaque, les champs suivants doivent OBLIGATOIREMENT retourner MANQUANT (valeur_audit null, valeur_vt null, extrait_audit vide, extrait_vt vide) :
