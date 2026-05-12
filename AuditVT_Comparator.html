@@ -5043,8 +5043,10 @@
         if (/r[eé]f[eé]rence|habit|shab|sdp|au\s*sol|totale|utile/.test(champNom)) return false;
         return true;
       });
-      if (wallSurfaceResults.length < 2) {
-        if (wallSurfaceResults.length === 1) console.info('[WALL-HARMONIZE] 1 seule paroi-mur — pas d\'harmonisation nécessaire.');
+      // Guard retiré (2026-05-12) : harmonizeWallSurfaces s'applique aussi aux murs mono-paroi
+      // (une seule paroi-mur dans l'audit) — le fallback NET=BRUT doit fonctionner dans ce cas.
+      if (wallSurfaceResults.length === 0) {
+        console.info('[WALL-HARMONIZE] Aucune paroi-mur avec champ surface — rien à harmoniser.');
         return;
       }
 
@@ -5630,6 +5632,21 @@
         var netParts = detail.net_parts && detail.net_parts.length > 0
           ? detail.net_parts.filter(function(p){ return p != null && !isNaN(p); }).map(Number)
           : (detail.net != null && !isNaN(detail.net) ? [Number(detail.net)] : null);
+
+        // BRUT — recalcul forcé depuis les parts
+        var brutValidParts = detail.brut_parts && detail.brut_parts.length > 0
+          ? detail.brut_parts.filter(function(p){ return p != null && !isNaN(p); }).map(Number)
+          : [];
+
+        // Fallback NET = BRUT : si brut_parts rempli mais net_parts vide (2026-05-12)
+        if ((!netParts || netParts.length === 0) && brutValidParts.length > 0) {
+          netParts = brutValidParts.slice(); // copie — NET = BRUT quand NET non fourni
+        }
+        // Fallback BRUT = NET : si net_parts rempli mais brut_parts vide (2026-05-12)
+        if (brutValidParts.length === 0 && netParts && netParts.length > 0) {
+          brutValidParts = netParts.slice(); // copie — BRUT = NET quand BRUT non fourni
+        }
+
         if (netParts && netParts.length > 0) {
           // Recalcul forcé depuis les parts — ne jamais faire confiance à detail.net_total
           var netTotalRecalc = netParts.reduce(function(a, b){ return a + b; }, 0);
@@ -5644,20 +5661,16 @@
           lines.push(netLine);
         }
 
-        // BRUT — recalcul forcé depuis les parts
-        if (detail.brut_parts && detail.brut_parts.length > 0) {
-          var validParts = detail.brut_parts.filter(function(p){ return p != null && !isNaN(p); }).map(Number);
-          if (validParts.length > 0) {
-            var brutTotalRecalc = validParts.reduce(function(a, b){ return a + b; }, 0);
-            var brutLine = 'BRUT : ';
-            if (validParts.length === 1) {
-              brutLine += _frNum(validParts[0]) + ' ' + unit;
-            } else {
-              brutLine += validParts.map(_frNum).join(' + ') + ' = ' + _frNum(brutTotalRecalc) + ' ' + unit;
-            }
-            detail.brut_total = Math.round(brutTotalRecalc * 100) / 100;
-            lines.push(brutLine);
+        if (brutValidParts.length > 0) {
+          var brutTotalRecalc = brutValidParts.reduce(function(a, b){ return a + b; }, 0);
+          var brutLine = 'BRUT : ';
+          if (brutValidParts.length === 1) {
+            brutLine += _frNum(brutValidParts[0]) + ' ' + unit;
+          } else {
+            brutLine += brutValidParts.map(_frNum).join(' + ') + ' = ' + _frNum(brutTotalRecalc) + ' ' + unit;
           }
+          detail.brut_total = Math.round(brutTotalRecalc * 100) / 100;
+          lines.push(brutLine);
         }
 
         return lines.length > 0 ? lines.join('\n') : null;
@@ -5698,6 +5711,76 @@
           instancesBlock += '- menuiseries_vt_count : ' + vtMenuiCount + '\n';
           if (vtMenuiCount > 0) {
             instancesBlock += '- Menuiseries/Ouvrants VT (' + vtMenuiCount + ') : "' + vtMenuiseriesList.join('" | "') + '"\n';
+          }
+          // TABLE STRUCTURÉE MENUISERIES VT — injectée en priorité si disponible
+          // Permet à Maya d'utiliser l'index exact au lieu de chercher dans ~90k chars de texte brut
+          if (state.vtTables && state.vtTables.MENUISERIES && Array.isArray(state.vtTables.MENUISERIES) && state.vtTables.MENUISERIES.length > 0) {
+            instancesBlock += '\nTABLE STRUCTURÉE MENUISERIES VT (utilise ces valeurs EN PRIORITÉ ABSOLUE, par index) :\n';
+            state.vtTables.MENUISERIES.forEach(function(row, idx) {
+              var parts = ['Index ' + (idx + 1)];
+              // Colonnes attendues dans un tableau VT menuiseries — on essaie toutes les variantes connues
+              var colMap = [
+                { keys: ['type','type d\'ouvrant','type ouvrant','nature','menuiserie'], label: null }, // type (Fenêtre/Porte/Baie)
+                { keys: ['largeur','larg','l','dimensions','dim'], label: 'dim_l' },
+                { keys: ['hauteur','haut','h'], label: 'dim_h' },
+                { keys: ['vitrage','type de vitrage','type vitrage','glazing'], label: 'vitrage' },
+                { keys: ['matériau','materiaux','matériaux','cadre','châssis','chassis'], label: 'materiau' },
+                { keys: ['volet','volets','type de volet','vr'], label: 'volet' },
+                { keys: ['surface','surf','s (m²)','s(m²)'], label: 'surface' },
+                { keys: ['isolation','isolé','isole','qualité isolation','qualite isolation'], label: 'isolation' },
+                { keys: ['année','annee','age'], label: 'annee' },
+                { keys: ['état','etat','état général','etat general'], label: 'etat' }
+              ];
+              var rowKeys = Object.keys(row).map(function(k){ return k.toLowerCase().trim(); });
+              var typeVal = null;
+              // Trouver le type (1er champ significatif)
+              var typeKey = Object.keys(row).find(function(k){
+                var kl = k.toLowerCase().trim();
+                return colMap[0].keys.some(function(ck){ return kl === ck || kl.includes(ck); });
+              }) || Object.keys(row)[0];
+              if (typeKey) typeVal = row[typeKey];
+              if (typeVal) parts.push(String(typeVal).trim());
+              // Dimensions
+              var dimL = null, dimH = null;
+              Object.keys(row).forEach(function(k){
+                var kl = k.toLowerCase().trim();
+                if (!dimL && colMap[1].keys.some(function(ck){ return kl === ck || kl.includes(ck); })) dimL = row[k];
+                if (!dimH && colMap[2].keys.some(function(ck){ return kl === ck || kl.includes(ck); })) dimH = row[k];
+                // Colonne "Dimensions" combine L×H dans un seul champ
+                if (!dimL && (kl === 'dimensions' || kl === 'dim')) { dimL = row[k]; dimH = null; }
+              });
+              if (dimL && dimH) parts.push(String(dimL).trim() + '×' + String(dimH).trim());
+              else if (dimL) parts.push(String(dimL).trim()); // format combiné "0.93×1.05"
+              // Autres attributs : vitrage, matériau, volet, surface, isolation
+              [colMap[3], colMap[4], colMap[5], colMap[6], colMap[7], colMap[8], colMap[9]].forEach(function(col){
+                var matchKey = Object.keys(row).find(function(k){
+                  var kl = k.toLowerCase().trim();
+                  return col.keys.some(function(ck){ return kl === ck || kl.includes(ck); });
+                });
+                if (matchKey && row[matchKey] && String(row[matchKey]).trim().length > 0) {
+                  parts.push(String(row[matchKey]).trim());
+                }
+              });
+              // Ajouter toutes les autres colonnes non encore capturées (fallback exhaustif)
+              var capturedKeys = new Set();
+              if (typeKey) capturedKeys.add(typeKey.toLowerCase().trim());
+              [colMap[1],colMap[2],colMap[3],colMap[4],colMap[5],colMap[6],colMap[7],colMap[8],colMap[9]].forEach(function(col){
+                var mk = Object.keys(row).find(function(k){
+                  var kl = k.toLowerCase().trim();
+                  return col.keys.some(function(ck){ return kl === ck || kl.includes(ck); });
+                });
+                if (mk) capturedKeys.add(mk.toLowerCase().trim());
+              });
+              Object.keys(row).forEach(function(k){
+                if (!capturedKeys.has(k.toLowerCase().trim()) && row[k] && String(row[k]).trim().length > 0) {
+                  parts.push(k + ': ' + String(row[k]).trim());
+                }
+              });
+              instancesBlock += parts.join(' — ') + '\n';
+            });
+            instancesBlock += '→ RÈGLE PRIORITÉ TABLE : pour chaque menuiserie audit n°N, prends EN PRIORITÉ ABSOLUE les valeurs dans TABLE STRUCTURÉE MENUISERIES VT à l\'index correspondant (index 1 = audit rang 1, etc.).\n';
+            instancesBlock += '→ Si une valeur manque dans la table structurée, alors et SEULEMENT ALORS cherche dans le texte VT brut.\n';
+            instancesBlock += '→ INTERDIT de retourner MANQUANT si la table structurée contient une valeur pour ce champ.\n';
           }
           if (auditMenuiCount !== vtMenuiCount) {
             instancesBlock += '→ ÉCART DÉTECTÉ : l\'audit a ' + auditMenuiCount + ' menuiserie(s), la VT en a ' + vtMenuiCount + '.\n';
