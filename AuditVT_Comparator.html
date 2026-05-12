@@ -2398,6 +2398,54 @@
     const STORAGE_KEY_REF     = 'otenergie_referentiel';
     const STORAGE_KEY_HISTORY = 'otenergie_history';
 
+    // ── Clés localStorage pour l'apprentissage permanent de Maya ──
+    const MAYA_GLOBAL_RULES_KEY  = 'MAYA_GLOBAL_RULES_v1';
+    const MAYA_LEXIQUE_EXT_KEY   = 'MAYA_LEXIQUE_EXTENSIONS_v1';
+
+    // Chargement initial des règles globales et extensions lexique apprises par Maya
+    var mayaGlobalRules = [];      // [{id, regle, date, feedback_id, dossier_origine}]
+    var mayaLexiqueExtensions = []; // [{id, champ, terme_vt, synonymes, date, feedback_id, dossier_origine}]
+
+    function loadMayaLearnings() {
+      try { mayaGlobalRules = JSON.parse(localStorage.getItem(MAYA_GLOBAL_RULES_KEY) || '[]') || []; } catch(e) { mayaGlobalRules = []; }
+      try { mayaLexiqueExtensions = JSON.parse(localStorage.getItem(MAYA_LEXIQUE_EXT_KEY) || '[]') || []; } catch(e) { mayaLexiqueExtensions = []; }
+    }
+    function saveMayaGlobalRules() {
+      try { localStorage.setItem(MAYA_GLOBAL_RULES_KEY, JSON.stringify(mayaGlobalRules)); } catch(e) { console.warn('[MAYA-LEARN] Sauvegarde règles globales échouée:', e.message); }
+    }
+    function saveMayaLexiqueExtensions() {
+      try { localStorage.setItem(MAYA_LEXIQUE_EXT_KEY, JSON.stringify(mayaLexiqueExtensions)); } catch(e) { console.warn('[MAYA-LEARN] Sauvegarde extensions lexique échouées:', e.message); }
+    }
+
+    // Injecte les extensions lexique dans le référentiel en mémoire (sans persister)
+    function applyLexiqueExtensionsToReferentiel() {
+      if (!mayaLexiqueExtensions || !mayaLexiqueExtensions.length) return;
+      var applied = 0;
+      mayaLexiqueExtensions.forEach(function(ext) {
+        if (!ext || !ext.champ || !ext.terme_vt || ext.disabled) return;
+        var refField = state.referentiel.find(function(r){ return r.id === ext.champ; });
+        if (!refField) return;
+        var existing = [refField.lexF, refField.lexG, refField.lexH, refField.lexAuto || ''].filter(Boolean).join(';').toLowerCase();
+        var terme = String(ext.terme_vt).trim();
+        var alreadyPresent = existing.split(/[;,|]/).map(function(s){ return s.trim(); }).some(function(s){ return s === terme.toLowerCase(); });
+        if (alreadyPresent) return;
+        // Ajouter comme lexAuto si pas déjà présent
+        refField.lexAuto = (refField.lexAuto ? refField.lexAuto + ';' : '') + terme;
+        refField.lexique = [refField.lexF, refField.lexG, refField.lexH, refField.lexAuto].filter(Boolean).join(';');
+        applied++;
+      });
+      if (applied > 0) console.log('[MAYA-LEARN] ' + applied + ' extension(s) lexique injectée(s) en mémoire depuis MAYA_LEXIQUE_EXTENSIONS_v1.');
+    }
+
+    // Construit le bloc des règles globales à injecter dans le systemPrompt Maya
+    function buildGlobalRulesPromptBlock() {
+      var active = (mayaGlobalRules || []).filter(function(r){ return !r.disabled; });
+      if (!active.length) return '';
+      var lines = active.map(function(r, i){ return (i+1) + '. ' + (r.regle || '').trim(); });
+      return '\n\nRÈGLES MÉTHODOLOGIQUES APPRISES (à appliquer systématiquement sur tous les dossiers) :\n'
+           + lines.join('\n') + '\n';
+    }
+
     // =====================================================================
     // REGISTRE DES ÉQUIVALENCES SÉMANTIQUES
     // Source unique de vérité pour les synonymes audit/VT (ex: RDC=1, R+1=2,
@@ -2660,6 +2708,8 @@
       lucide.createIcons();
       loadConfig();
       loadReferentielFromStorage();
+      loadMayaLearnings();
+      applyLexiqueExtensionsToReferentiel();
       loadHistory();
       updatePrereqs();
       // Sync Supabase en arrière-plan (n'interrompt pas le boot)
@@ -5996,7 +6046,7 @@ L'audit groupe souvent les murs en N parois (Paroi 01, Paroi 02, Paroi 03), mais
 → Le système JS post-traitement vérifie cette cohérence et harmonise automatiquement si besoin.
 → Cette règle s'applique UNIQUEMENT aux MURS (mur, façade, paroi opaque verticale). Pour les planchers et toitures, garde la logique paroi-par-paroi.
 
-Réponds UNIQUEMENT en JSON valide, sans markdown, sans commentaire.`;
+Réponds UNIQUEMENT en JSON valide, sans markdown, sans commentaire.` + buildGlobalRulesPromptBlock();
 
       // Synonymes VT pour les champs de surface générale du logement (SHAB)
       var SHAB_VT_SYNS = ['shab', 'surface habitable', 'surface de plancher', 'sdp', 'surface de r\u00e9f\u00e9rence', 'surface de reference', 'surface totale', 'surface utile', 'surface tax\u00e9e'];
@@ -6628,10 +6678,31 @@ Réponds UNIQUEMENT en JSON strict :
       "id": "fb_xxx",
       "raison": "explication courte de pourquoi ce feedback n'a pas pu être appliqué (max 120 chars)"
     }
+  ],
+  "feedbacks_status": [
+    {
+      "id": "fb_xxx",
+      "classification": "global",
+      "action": "description courte de ce que Maya a fait (max 120 chars)",
+      "enrichissement": {
+        "regle_globale": "texte de la règle ajoutée au prompt système (si classification=global)",
+        "lexique_entry": {"champ": "id_champ", "terme_vt": "nouveau terme", "synonymes": []},
+        "correction_locale": "description de la correction sur ce dossier (si classification=local)"
+      }
+    }
   ]
 }
 FEEDBACKS_NOT_PROCESSED — règle de traçabilité :
 Si des règles utilisateur t'ont été injectées (bloc « RÈGLES APPRISES DE L'UTILISATEUR »), retourne dans feedbacks_not_processed uniquement ceux que tu n'as PAS pu appliquer lors de cette analyse (par manque de données, inapplicabilité au dossier actuel, contradiction avec les sources, etc.). Les feedbacks absents de cette liste sont considérés comme appliqués. Si tous les feedbacks ont été appliqués (ou si aucun feedback n'a été injecté), retourne feedbacks_not_processed: [].
+
+FEEDBACKS_STATUS — règle de classification et d'enrichissement (OBLIGATOIRE) :
+Pour CHAQUE feedback qui t'a été injecté dans le bloc « RÈGLES APPRISES DE L'UTILISATEUR », tu DOIS retourner une entrée dans feedbacks_status avec ta classification :
+- "global" : le feedback est méthodologique — il s'applique à TOUS les futurs dossiers → remplis enrichissement.regle_globale avec le texte exact de la règle à mémoriser (formulation impérative, max 300 chars)
+- "lexique" : le feedback concerne du vocabulaire VT manquant ou une formule de composition → remplis enrichissement.lexique_entry avec l'id du champ concerné, le terme VT exact, et des synonymes éventuels
+- "local" : le feedback est spécifique à ce dossier uniquement → remplis enrichissement.correction_locale avec une description de la correction
+RÈGLE ABSOLUE : ne JAMAIS laisser un feedback sans classification. Chaque feedback DOIT avoir une entrée dans feedbacks_status, même si la classification est locale. S'il n'y a pas de feedbacks injectés, retourne feedbacks_status: [].
+PRIORITÉ DE CLASSIFICATION : si un feedback mentionne une règle générale applicable partout → global. S'il mentionne un terme VT à reconnaître dans d'autres dossiers → lexique. Sinon → local.
+
 IMPORTANT :
 - Pour CHAQUE correction, fournis source_excerpt_audit et/ou source_excerpt_vt — un court extrait BRUT du texte source (copié tel quel, pas reformulé) qui permet de vérifier ta décision. Max 200 caractères chacun. Si la valeur est absente du document, mets null.
 - low_confidence: true UNIQUEMENT si tu appliques quand même une correction MAIS avec doute résiduel (rare). Pour les cas où tu préfères ne pas corriger à cause du doute, utilise le bloc "low_confidence_flags".
@@ -6652,7 +6723,7 @@ Si tu détectes qu'une paroi est mal classée (ex: figurant dans la section "Mur
 - N'utilise ce mécanisme QUE si tu es certaine à 100% (page 6 audit = source de vérité absolue).
 - Le système JS appliquera automatiquement ces reclassifications au state.detectedInstances.
 
-Si tout est correct ET certain, retourne {"corrections": [], "low_confidence_flags": [], "lexique_enrichment": [], "paroi_reclassifications": []}` + (learningsBlock ? '\n' + learningsBlock : '') + (drawerInjection.block || '');
+Si tout est correct ET certain, retourne {"corrections": [], "low_confidence_flags": [], "lexique_enrichment": [], "paroi_reclassifications": [], "feedbacks_not_processed": [], "feedbacks_status": []}` + (learningsBlock ? '\n' + learningsBlock : '') + (drawerInjection.block || '');
 
       var suspectsCompact = suspects.map(function(r) {
         var o = {
@@ -6871,6 +6942,78 @@ ${vtShort}`;
         console.log('[MAYA] ' + corrCount + ' correction(s) appliquée(s).');
         results._mayaStatus = { ran: true, corrections: corrCount, suspects: suspects.length, lowConfidenceCount: lowConfCount, error: null };
 
+        // ── Traitement feedbacks_status : persistance des enrichissements ──
+        var feedbacksStatusRaw = (mayaResult && Array.isArray(mayaResult.feedbacks_status)) ? mayaResult.feedbacks_status : [];
+        var enrichGlobalCount = 0;
+        var enrichLexiqueCount = 0;
+        feedbacksStatusRaw.forEach(function(fbs) {
+          if (!fbs || !fbs.id || !fbs.classification) return;
+          var fbId = fbs.id;
+          var classif = fbs.classification;
+          var enrichissement = fbs.enrichissement || {};
+
+          if (classif === 'global' && enrichissement.regle_globale) {
+            var regle = String(enrichissement.regle_globale).trim().substring(0, 300);
+            if (regle.length >= 10) {
+              // Éviter doublons : ne pas ajouter si règle très proche d'une existante
+              var alreadyExists = mayaGlobalRules.some(function(r){ return r.feedback_id === fbId; });
+              if (!alreadyExists) {
+                mayaGlobalRules.push({
+                  id: 'rule_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+                  regle: regle,
+                  date: new Date().toISOString(),
+                  feedback_id: fbId,
+                  dossier_origine: state.dossierName || '—',
+                  disabled: false
+                });
+                saveMayaGlobalRules();
+                enrichGlobalCount++;
+                console.log('[MAYA-LEARN] Règle globale ajoutée depuis feedback ' + fbId + ' : ' + regle.substring(0, 80));
+              }
+            }
+          } else if (classif === 'lexique' && enrichissement.lexique_entry) {
+            var le = enrichissement.lexique_entry;
+            if (le && le.champ && le.terme_vt) {
+              var terme = String(le.terme_vt).trim();
+              var alreadyLex = mayaLexiqueExtensions.some(function(e){ return e.feedback_id === fbId; });
+              if (!alreadyLex && terme.length >= 3) {
+                mayaLexiqueExtensions.push({
+                  id: 'lex_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+                  champ: le.champ,
+                  terme_vt: terme,
+                  synonymes: Array.isArray(le.synonymes) ? le.synonymes.filter(function(s){ return s && s.length >= 2; }) : [],
+                  date: new Date().toISOString(),
+                  feedback_id: fbId,
+                  dossier_origine: state.dossierName || '—',
+                  disabled: false
+                });
+                saveMayaLexiqueExtensions();
+                applyLexiqueExtensionsToReferentiel();
+                enrichLexiqueCount++;
+                console.log('[MAYA-LEARN] Extension lexique ajoutée depuis feedback ' + fbId + ' : champ=' + le.champ + ', terme=' + terme);
+              }
+            }
+          }
+        });
+        if (enrichGlobalCount + enrichLexiqueCount > 0) {
+          try { showAlert('alerts-area', 'success', '🧠 Maya a appris : ' + (enrichGlobalCount > 0 ? enrichGlobalCount + ' règle(s) globale(s)' : '') + (enrichGlobalCount > 0 && enrichLexiqueCount > 0 ? ', ' : '') + (enrichLexiqueCount > 0 ? enrichLexiqueCount + ' terme(s) lexique' : '') + ' mémorisé(s) en permanent.'); } catch(e) {}
+        }
+        // Les feedbacks classifiés global ou lexique passent en archived immédiatement (déjà mémorisés en dur)
+        var autoArchivedIds = feedbacksStatusRaw
+          .filter(function(fbs){ return fbs && (fbs.classification === 'global' || fbs.classification === 'lexique'); })
+          .map(function(fbs){ return fbs.id; });
+        if (autoArchivedIds.length > 0) {
+          autoArchivedIds.forEach(function(fbId){
+            if (mayaFeedbackMeta[fbId] && mayaFeedbackMeta[fbId].status !== 'archived') {
+              mayaFeedbackMeta[fbId] = { status: 'archived', at: new Date().toISOString(), autoApplied: true, enriched: true };
+            }
+          });
+          persistMayaFeedbackMeta();
+          console.log('[MAYA-LEARN] ' + autoArchivedIds.length + ' feedback(s) global/lexique archivé(s) automatiquement après enrichissement.');
+        }
+        // Stocker feedbacks_status pour le log d'activité
+        results._feedbacksStatus = feedbacksStatusRaw;
+
         // ── Marquage auto pending → archived des feedbacks drawer injectés ──
         try {
           var flippedCount = markDrawerFeedbacksApplied(drawerInjection.injectedIds || []);
@@ -6885,15 +7028,23 @@ ${vtShort}`;
 
         // ── Log d'activité Maya (maya_activity_log_v1) ──
         try {
+          var allFeedbacksForLog = collectAllFeedbacks();
           var injectedFeedbacks = (drawerInjection.injectedIds || []).map(function(fbId) {
-            var all = collectAllFeedbacks();
-            var fb = all.find(function(f) { return f.id === fbId; });
+            var fb = allFeedbacksForLog.find(function(f) { return f.id === fbId; });
             if (!fb) return { id: fbId, comment: '', date_created: '' };
-            return {
+            // Enrichir avec classification Maya si disponible
+            var fbStatus = (feedbacksStatusRaw || []).find(function(s){ return s && s.id === fbId; });
+            var entry = {
               id: fb.id,
               comment: (fb.text || '').substring(0, 300),
               date_created: fb.timestamp || ''
             };
+            if (fbStatus) {
+              entry.classification = fbStatus.classification || 'local';
+              entry.action = (fbStatus.action || '').substring(0, 200);
+              entry.enrichissement = fbStatus.enrichissement || null;
+            }
+            return entry;
           }).filter(function(f) { return !!f.id; });
 
           var notProcessedRaw = (mayaResult && Array.isArray(mayaResult.feedbacks_not_processed))
@@ -6901,8 +7052,7 @@ ${vtShort}`;
           var notProcessedIds = notProcessedRaw.map(function(e) { return e.id; });
 
           var feedbacksNotProcessed = notProcessedRaw.map(function(entry) {
-            var all = collectAllFeedbacks();
-            var fb = all.find(function(f) { return f.id === entry.id; });
+            var fb = allFeedbacksForLog.find(function(f) { return f.id === entry.id; });
             return {
               id: entry.id,
               comment: fb ? (fb.text || '').substring(0, 300) : '',
@@ -6914,7 +7064,9 @@ ${vtShort}`;
           var promptSummary = 'Dossier : ' + (state.dossierName || '—')
             + '. ' + suspects.length + ' résultat(s) soumis à Maya.'
             + (injectedFeedbacks.length > 0 ? ' ' + injectedFeedbacks.length + ' feedback(s) injecté(s) en règles utilisateur.' : ' Aucun feedback utilisateur injecté.')
-            + (learningsBlock ? ' Learnings KB injectés.' : '');
+            + (learningsBlock ? ' Learnings KB injectés.' : '')
+            + (enrichGlobalCount > 0 ? ' ' + enrichGlobalCount + ' règle(s) globale(s) apprises.' : '')
+            + (enrichLexiqueCount > 0 ? ' ' + enrichLexiqueCount + ' terme(s) lexique appris.' : '');
 
           var logEntry = {
             id: 'activity_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
@@ -6923,6 +7075,7 @@ ${vtShort}`;
             dossier_nom: state.dossierName || '—',
             feedbacks_injected: injectedFeedbacks,
             feedbacks_not_processed: feedbacksNotProcessed,
+            feedbacks_status: feedbacksStatusRaw,
             prompt_summary: promptSummary
           };
 
@@ -8114,6 +8267,153 @@ ${vtShort}`;
       renderMayaDrawer();
     }
 
+    // ---- Modale "Maya a appris" ----
+    var _mayaLearningsTab = 'rules';
+
+    function openMayaLearningsModal() {
+      _mayaLearningsTab = 'rules';
+      renderMayaLearningsModal();
+      document.getElementById('maya-learnings-overlay').style.display = 'block';
+    }
+
+    function closeMayaLearningsModal() {
+      document.getElementById('maya-learnings-overlay').style.display = 'none';
+    }
+
+    function setMayaLearningsTab(tab) {
+      _mayaLearningsTab = tab;
+      renderMayaLearningsModal();
+    }
+
+    function renderMayaLearningsModal() {
+      // Onglets
+      var tabRules   = document.getElementById('maya-learn-tab-rules');
+      var tabLexique = document.getElementById('maya-learn-tab-lexique');
+      var panelRules   = document.getElementById('maya-learn-panel-rules');
+      var panelLexique = document.getElementById('maya-learn-panel-lexique');
+      if (!tabRules) return;
+
+      if (_mayaLearningsTab === 'rules') {
+        tabRules.style.borderBottomColor = '#7B2D8E'; tabRules.style.color = '#7B2D8E'; tabRules.style.fontWeight = '700';
+        tabLexique.style.borderBottomColor = 'transparent'; tabLexique.style.color = '#666'; tabLexique.style.fontWeight = '600';
+        panelRules.style.display = 'block'; panelLexique.style.display = 'none';
+        renderMayaRulesPanel();
+      } else {
+        tabLexique.style.borderBottomColor = '#7B2D8E'; tabLexique.style.color = '#7B2D8E'; tabLexique.style.fontWeight = '700';
+        tabRules.style.borderBottomColor = 'transparent'; tabRules.style.color = '#666'; tabRules.style.fontWeight = '600';
+        panelLexique.style.display = 'block'; panelRules.style.display = 'none';
+        renderMayaLexiquePanel();
+      }
+    }
+
+    function renderMayaRulesPanel() {
+      var container = document.getElementById('maya-learn-rules-body');
+      if (!container) return;
+      var active = (mayaGlobalRules || []).filter(function(r){ return !r.disabled; });
+      var disabled = (mayaGlobalRules || []).filter(function(r){ return r.disabled; });
+      if (!mayaGlobalRules || mayaGlobalRules.length === 0) {
+        container.innerHTML = '<p style="color:#888;font-size:12px;padding:12px;">Aucune règle globale apprise pour l\'instant. Les règles apparaissent ici après que Maya classifie un feedback comme "global".</p>';
+        return;
+      }
+      var html = '';
+      if (active.length > 0) {
+        html += '<div style="font-size:11px;font-weight:700;color:#4A1F5E;margin-bottom:6px;">' + active.length + ' règle(s) active(s)</div>';
+        active.forEach(function(r) {
+          html += '<div style="background:#F3E5F5;border:1px solid #CE93D8;border-radius:6px;padding:8px 10px;margin-bottom:6px;display:flex;align-items:flex-start;gap:8px;">';
+          html += '<div style="flex:1;font-size:11.5px;color:#333;line-height:1.5;">' + escHtml(r.regle || '') + '</div>';
+          html += '<div style="flex-shrink:0;font-size:10px;color:#888;">' + (r.date ? new Date(r.date).toLocaleDateString('fr-FR') : '') + '</div>';
+          html += '<button type="button" onclick="disableMayaGlobalRule(\'' + escHtml(r.id) + '\')" style="flex-shrink:0;background:#fff;border:1px solid #E57373;color:#C62828;border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer;" title="Désactiver cette règle — Maya ne l\'appliquera plus">Désactiver</button>';
+          html += '</div>';
+        });
+      }
+      if (disabled.length > 0) {
+        html += '<div style="font-size:11px;font-weight:600;color:#999;margin:10px 0 6px;">' + disabled.length + ' règle(s) désactivée(s)</div>';
+        disabled.forEach(function(r) {
+          html += '<div style="background:#F5F5F5;border:1px solid #DDD;border-radius:6px;padding:8px 10px;margin-bottom:6px;display:flex;align-items:flex-start;gap:8px;opacity:0.6;">';
+          html += '<div style="flex:1;font-size:11.5px;color:#666;line-height:1.5;text-decoration:line-through;">' + escHtml(r.regle || '') + '</div>';
+          html += '<button type="button" onclick="enableMayaGlobalRule(\'' + escHtml(r.id) + '\')" style="flex-shrink:0;background:#fff;border:1px solid #81C784;color:#2E7D32;border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer;">Réactiver</button>';
+          html += '</div>';
+        });
+      }
+      container.innerHTML = html;
+    }
+
+    function renderMayaLexiquePanel() {
+      var container = document.getElementById('maya-learn-lexique-body');
+      if (!container) return;
+      if (!mayaLexiqueExtensions || mayaLexiqueExtensions.length === 0) {
+        container.innerHTML = '<p style="color:#888;font-size:12px;padding:12px;">Aucune extension lexique apprise pour l\'instant. Les extensions apparaissent ici après que Maya classifie un feedback comme "lexique".</p>';
+        return;
+      }
+      var active = (mayaLexiqueExtensions || []).filter(function(e){ return !e.disabled; });
+      var disabled = (mayaLexiqueExtensions || []).filter(function(e){ return e.disabled; });
+      var html = '';
+      if (active.length > 0) {
+        html += '<div style="font-size:11px;font-weight:700;color:#2E7D32;margin-bottom:6px;">' + active.length + ' extension(s) active(s)</div>';
+        active.forEach(function(ext) {
+          var fieldName = '';
+          var refField = state.referentiel.find(function(r){ return r.id === ext.champ; });
+          if (refField) fieldName = ' (' + (refField.nom || ext.champ) + ')';
+          html += '<div style="background:#E8F5E9;border:1px solid #A5D6A7;border-radius:6px;padding:8px 10px;margin-bottom:6px;display:flex;align-items:flex-start;gap:8px;">';
+          html += '<div style="flex:1;">';
+          html += '<span style="font-size:11.5px;font-weight:700;color:#2E7D32;">' + escHtml(ext.terme_vt || '') + '</span>';
+          html += '<span style="font-size:10.5px;color:#666;margin-left:6px;">→ champ ' + escHtml(ext.champ || '') + escHtml(fieldName) + '</span>';
+          if (ext.synonymes && ext.synonymes.length > 0) {
+            html += '<div style="font-size:10px;color:#888;margin-top:2px;">Synonymes : ' + ext.synonymes.map(escHtml).join(', ') + '</div>';
+          }
+          html += '</div>';
+          html += '<div style="flex-shrink:0;font-size:10px;color:#888;">' + (ext.date ? new Date(ext.date).toLocaleDateString('fr-FR') : '') + '</div>';
+          html += '<button type="button" onclick="disableMayaLexiqueExt(\'' + escHtml(ext.id) + '\')" style="flex-shrink:0;background:#fff;border:1px solid #E57373;color:#C62828;border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer;" title="Désactiver cette extension lexique">Désactiver</button>';
+          html += '</div>';
+        });
+      }
+      if (disabled.length > 0) {
+        html += '<div style="font-size:11px;font-weight:600;color:#999;margin:10px 0 6px;">' + disabled.length + ' extension(s) désactivée(s)</div>';
+        disabled.forEach(function(ext) {
+          html += '<div style="background:#F5F5F5;border:1px solid #DDD;border-radius:6px;padding:8px 10px;margin-bottom:6px;display:flex;align-items:flex-start;gap:8px;opacity:0.6;">';
+          html += '<div style="flex:1;font-size:11.5px;color:#666;text-decoration:line-through;">' + escHtml(ext.terme_vt || '') + ' → ' + escHtml(ext.champ || '') + '</div>';
+          html += '<button type="button" onclick="enableMayaLexiqueExt(\'' + escHtml(ext.id) + '\')" style="flex-shrink:0;background:#fff;border:1px solid #81C784;color:#2E7D32;border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer;">Réactiver</button>';
+          html += '</div>';
+        });
+      }
+      container.innerHTML = html;
+    }
+
+    function disableMayaGlobalRule(ruleId) {
+      var rule = mayaGlobalRules.find(function(r){ return r.id === ruleId; });
+      if (!rule) return;
+      rule.disabled = true;
+      saveMayaGlobalRules();
+      renderMayaLearningsModal();
+      console.log('[MAYA-LEARN] Règle désactivée : ' + ruleId);
+    }
+
+    function enableMayaGlobalRule(ruleId) {
+      var rule = mayaGlobalRules.find(function(r){ return r.id === ruleId; });
+      if (!rule) return;
+      rule.disabled = false;
+      saveMayaGlobalRules();
+      renderMayaLearningsModal();
+    }
+
+    function disableMayaLexiqueExt(extId) {
+      var ext = mayaLexiqueExtensions.find(function(e){ return e.id === extId; });
+      if (!ext) return;
+      ext.disabled = true;
+      saveMayaLexiqueExtensions();
+      renderMayaLearningsModal();
+      console.log('[MAYA-LEARN] Extension lexique désactivée : ' + extId);
+    }
+
+    function enableMayaLexiqueExt(extId) {
+      var ext = mayaLexiqueExtensions.find(function(e){ return e.id === extId; });
+      if (!ext) return;
+      ext.disabled = false;
+      saveMayaLexiqueExtensions();
+      applyLexiqueExtensionsToReferentiel();
+      renderMayaLearningsModal();
+    }
+
     // ---- Drawer historique ----
     function openMayaDrawer() {
       renderMayaDrawer();
@@ -9004,90 +9304,117 @@ ${vtShort}`;
       var wb = new ExcelJS.Workbook();
       wb.creator = 'OT Énergie — Rapport activité Maya';
 
-      // ── Onglet 1 : Feedbacks traités ──
-      var ws1 = wb.addWorksheet('Feedbacks traités');
-      ws1.columns = [{width:20},{width:28},{width:22},{width:70},{width:22}];
-      var hr1 = ws1.addRow(['Date analyse','Dossier','ID feedback','Commentaire utilisateur','Date création feedback']);
-      hr1.height = 24;
-      setH(ws1, hr1.number, hr1.values.slice(1), 'FF1B3F8B', 'FFFFFFFF', {bold:true, align:'center', wrap:true});
-
+      // ── Collecte de toutes les lignes feedback avec classification pour le rapport ──
+      var allFbRows = [];
       filtered.forEach(function(entry) {
         var notProcessedIds = (entry.feedbacks_not_processed || []).map(function(e){ return e.id; });
-        var treated = (entry.feedbacks_injected || []).filter(function(fb){ return notProcessedIds.indexOf(fb.id) === -1; });
-        treated.forEach(function(fb) {
-          var row = ws1.addRow([fmtDate(entry.date), entry.dossier_nom || '—', fb.id || '', fb.comment || '', fmtDate(fb.date_created)]);
-          row.height = Math.min(60, Math.max(18, Math.ceil((fb.comment || '').length / 70) * 14));
-          row.eachCell(function(cell, colNum){
-            cell.font = xlFont('FF333333', false, 10);
-            cell.alignment = xlAlign(colNum === 1 || colNum === 3 || colNum === 5 ? 'center' : 'left', true);
-            cell.border = xlBorder();
-            if (colNum === 1 || colNum === 5) { cell.fill = xlFill('FFF0F4FF'); }
+        (entry.feedbacks_injected || []).forEach(function(fb) {
+          var classifIcon = '';
+          var classif = fb.classification || '';
+          if (classif === 'global')  classifIcon = '🌍 Global';
+          else if (classif === 'lexique') classifIcon = '📖 Lexique';
+          else classifIcon = '📍 Local';
+
+          // Texte d'enrichissement appliqué
+          var enrichTxt = '';
+          if (notProcessedIds.indexOf(fb.id) !== -1) {
+            enrichTxt = '(non traité)';
+          } else if (classif === 'global' && fb.enrichissement && fb.enrichissement.regle_globale) {
+            enrichTxt = 'Règle ajoutée au prompt : ' + String(fb.enrichissement.regle_globale).substring(0, 200);
+          } else if (classif === 'lexique' && fb.enrichissement && fb.enrichissement.lexique_entry) {
+            var le = fb.enrichissement.lexique_entry;
+            enrichTxt = 'Lexique enrichi : ' + (le.champ || '') + ' ← ' + (le.terme_vt || '') + (le.synonymes && le.synonymes.length ? ' (synonymes: ' + le.synonymes.join(', ') + ')' : '');
+          } else if (fb.enrichissement && fb.enrichissement.correction_locale) {
+            enrichTxt = 'Correction sur ce dossier : ' + String(fb.enrichissement.correction_locale).substring(0, 200);
+          } else if (fb.action) {
+            enrichTxt = fb.action;
+          }
+
+          allFbRows.push({
+            date: entry.date,
+            dossier: entry.dossier_nom || '—',
+            comment: fb.comment || '',
+            classifIcon: classifIcon,
+            enrichTxt: enrichTxt
           });
         });
       });
-      var ws1Count = ws1.rowCount - 1;
-      if (ws1Count <= 0) {
-        var e1 = ws1.addRow(['','','(aucun feedback traité dans cette période)','','']);
-        e1.getCell(3).font = xlFont('FF888888', false, 10);
-      }
-      ws1.autoFilter = { from:{row:1,column:1}, to:{row:1,column:5} };
-      ws1.views = [{ state:'frozen', ySplit:1 }];
 
-      // ── Onglet 2 : Feedbacks non traités ──
-      var ws2 = wb.addWorksheet('Feedbacks non traités');
-      ws2.columns = [{width:20},{width:28},{width:22},{width:70},{width:50}];
-      var hr2 = ws2.addRow(['Date analyse','Dossier','ID feedback','Commentaire utilisateur','Raison du non-traitement']);
-      hr2.height = 24;
-      setH(ws2, hr2.number, hr2.values.slice(1), 'FFBF360C', 'FFFFFFFF', {bold:true, align:'center', wrap:true});
+      // ── Calculs pour le bandeau de synthèse ──
+      var totalFb = allFbRows.length;
+      var nbGlobal  = allFbRows.filter(function(r){ return r.classifIcon && r.classifIcon.indexOf('Global')  !== -1; }).length;
+      var nbLexique = allFbRows.filter(function(r){ return r.classifIcon && r.classifIcon.indexOf('Lexique') !== -1; }).length;
+      var nbLocal   = allFbRows.filter(function(r){ return r.classifIcon && r.classifIcon.indexOf('Local')   !== -1; }).length;
+      var pctGlobal  = totalFb > 0 ? Math.round(nbGlobal  * 100 / totalFb) : 0;
+      var pctLexique = totalFb > 0 ? Math.round(nbLexique * 100 / totalFb) : 0;
+      var pctLocal   = totalFb > 0 ? Math.round(nbLocal   * 100 / totalFb) : 0;
+      var nbRulesActive = (mayaGlobalRules || []).filter(function(r){ return !r.disabled; }).length;
+      var nbLexExt      = (mayaLexiqueExtensions || []).filter(function(e){ return !e.disabled; }).length;
 
-      filtered.forEach(function(entry) {
-        (entry.feedbacks_not_processed || []).forEach(function(fb) {
-          var row = ws2.addRow([fmtDate(entry.date), entry.dossier_nom || '—', fb.id || '', fb.comment || '', fb.raison || '']);
-          row.height = Math.min(60, Math.max(18, Math.ceil(Math.max((fb.comment || '').length, (fb.raison || '').length) / 70) * 14));
-          row.eachCell(function(cell, colNum){
-            cell.font = xlFont('FF333333', false, 10);
-            cell.alignment = xlAlign(colNum === 1 || colNum === 3 ? 'center' : 'left', true);
-            cell.border = xlBorder();
-            if (colNum === 5) { cell.fill = xlFill('FFFFF3E0'); cell.font = xlFont('FF7F3D00', false, 10); }
-          });
-        });
-      });
-      var ws2Count = ws2.rowCount - 1;
-      if (ws2Count <= 0) {
-        var e2 = ws2.addRow(['','','(aucun feedback non traité dans cette période)','','']);
-        e2.getCell(3).font = xlFont('FF888888', false, 10);
-      }
-      ws2.autoFilter = { from:{row:1,column:1}, to:{row:1,column:5} };
-      ws2.views = [{ state:'frozen', ySplit:1 }];
+      // ── Onglet unique : Activité Maya ──
+      var ws = wb.addWorksheet('Activité Maya');
+      ws.columns = [{width:20},{width:30},{width:55},{width:20},{width:65}];
 
-      // ── Onglet 3 : Résumés prompt Maya ──
-      var ws3 = wb.addWorksheet('Résumés prompt Maya');
-      ws3.columns = [{width:20},{width:28},{width:16},{width:16},{width:18},{width:80}];
-      var hr3 = ws3.addRow(['Date analyse','Dossier','Nb feedbacks injectés','Nb feedbacks traités','Nb feedbacks non traités','Résumé du prompt']);
-      hr3.height = 24;
-      setH(ws3, hr3.number, hr3.values.slice(1), 'FF2E7D32', 'FFFFFFFF', {bold:true, align:'center', wrap:true});
+      // Bandeau de synthèse (lignes 1–4)
+      var synthTitle = ws.addRow(['SYNTHÈSE — Période du ' + fromVal + ' au ' + toVal, '', '', '', '']);
+      synthTitle.height = 22;
+      synthTitle.getCell(1).font = { name:'Calibri', size:12, bold:true, color:{argb:'FFFFFFFF'} };
+      synthTitle.getCell(1).fill = xlFill('FF4A1F5E');
+      synthTitle.getCell(1).alignment = xlAlign('left', false);
+      ws.mergeCells(synthTitle.number, 1, synthTitle.number, 5);
 
-      filtered.forEach(function(entry) {
-        var nbInj = (entry.feedbacks_injected || []).length;
-        var nbNotProc = (entry.feedbacks_not_processed || []).length;
-        var nbTreated = nbInj - nbNotProc;
-        var row = ws3.addRow([fmtDate(entry.date), entry.dossier_nom || '—', nbInj, nbTreated >= 0 ? nbTreated : 0, nbNotProc, entry.prompt_summary || '']);
-        row.height = Math.min(80, Math.max(18, Math.ceil((entry.prompt_summary || '').length / 80) * 14));
-        row.eachCell(function(cell, colNum){
+      var synthStats = ws.addRow([
+        'Feedbacks total : ' + totalFb + '   |   ' +
+        '🌍 Global : ' + nbGlobal + ' (' + pctGlobal + '%)   ' +
+        '📖 Lexique : ' + nbLexique + ' (' + pctLexique + '%)   ' +
+        '📍 Local : ' + nbLocal + ' (' + pctLocal + '%)',
+        '', '', '', ''
+      ]);
+      synthStats.height = 18;
+      synthStats.getCell(1).font = { name:'Calibri', size:10, bold:false, color:{argb:'FF333333'} };
+      synthStats.getCell(1).fill = xlFill('FFF3E5F5');
+      ws.mergeCells(synthStats.number, 1, synthStats.number, 5);
+
+      var synthEvol = ws.addRow([
+        'Évolution de Maya — Règles globales actives : ' + nbRulesActive + '   |   Extensions lexique actives : ' + nbLexExt,
+        '', '', '', ''
+      ]);
+      synthEvol.height = 18;
+      synthEvol.getCell(1).font = { name:'Calibri', size:10, bold:true, color:{argb:'FF1B5E20'} };
+      synthEvol.getCell(1).fill = xlFill('FFE8F5E9');
+      ws.mergeCells(synthEvol.number, 1, synthEvol.number, 5);
+
+      // Ligne vide de séparation
+      var sepRow = ws.addRow(['', '', '', '', '']);
+      sepRow.height = 6;
+
+      // En-têtes du tableau
+      var hr = ws.addRow(['Date', 'Dossier', 'Feedback utilisateur', 'Classification Maya', 'Enrichissement appliqué']);
+      hr.height = 26;
+      setH(ws, hr.number, hr.values.slice(1), 'FF4A1F5E', 'FFFFFFFF', {bold:true, align:'center', wrap:true});
+
+      // Lignes de données
+      var classifBgMap = { 'Global': 'FFE8EAF6', 'Lexique': 'FFE8F5E9', 'Local': 'FFFFF9C4' };
+      allFbRows.forEach(function(row) {
+        var dataRow = ws.addRow([fmtDate(row.date), row.dossier, row.comment, row.classifIcon, row.enrichTxt]);
+        dataRow.height = Math.min(80, Math.max(18, Math.ceil(Math.max((row.comment || '').length, (row.enrichTxt || '').length) / 60) * 14));
+        var bgKey = row.classifIcon ? (row.classifIcon.indexOf('Global') !== -1 ? 'Global' : row.classifIcon.indexOf('Lexique') !== -1 ? 'Lexique' : 'Local') : 'Local';
+        var bg = classifBgMap[bgKey] || 'FFFFFFFF';
+        dataRow.eachCell(function(cell, colNum){
           cell.font = xlFont('FF333333', false, 10);
-          cell.alignment = xlAlign(colNum <= 2 || colNum >= 6 ? (colNum >= 6 ? 'left' : 'center') : 'center', true);
+          cell.alignment = xlAlign(colNum === 1 || colNum === 4 ? 'center' : 'left', true);
           cell.border = xlBorder();
-          if (colNum === 3) { cell.fill = xlFill('FFF0F4FF'); }
-          if (colNum === 4) { cell.fill = xlFill('FFF1F8E9'); }
-          if (colNum === 5) { cell.fill = xlFill('FFFFF3E0'); }
+          if (colNum === 4) { cell.fill = xlFill(bg); cell.font = { name:'Calibri', size:10, bold:true, color:{argb:'FF333333'} }; }
+          if (colNum === 5) { cell.fill = xlFill('FFFAFAFA'); }
         });
       });
-      if (filtered.length === 0) {
-        var e3 = ws3.addRow(['','','','','','(aucune analyse dans cette période)']);
-        e3.getCell(6).font = xlFont('FF888888', false, 10);
+      if (allFbRows.length === 0) {
+        var emptyRow = ws.addRow(['', '(aucun feedback sur cette période)', '', '', '']);
+        emptyRow.getCell(2).font = xlFont('FF888888', false, 10);
       }
-      ws3.autoFilter = { from:{row:1,column:1}, to:{row:1,column:6} };
-      ws3.views = [{ state:'frozen', ySplit:1 }];
+
+      ws.autoFilter = { from:{row:5,column:1}, to:{row:5,column:5} };
+      ws.views = [{ state:'frozen', ySplit:5 }];
 
       // Télécharger
       var buf = await wb.xlsx.writeBuffer();
@@ -9101,7 +9428,7 @@ ${vtShort}`;
       setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
 
       closeMayaActivityModal();
-      showAlert('alerts-area', 'success', '📊 Rapport activité Maya téléchargé (' + filtered.length + ' analyse(s) sur la période).');
+      showAlert('alerts-area', 'success', '📊 Rapport activité Maya téléchargé (' + totalFb + ' feedback(s) sur la période, ' + nbRulesActive + ' règle(s) active(s)).');
     }
 
     // Init au chargement final — nettoie aussi l'ancien flag doubleVerif s'il traîne en localStorage
@@ -11299,7 +11626,7 @@ ${vtShort}`;
         <button type="button" class="maya-activity-modal-close" onclick="closeMayaActivityModal()" aria-label="Fermer">✕</button>
       </div>
       <div class="maya-activity-modal-body">
-        <p class="maya-activity-modal-hint">Génère un fichier Excel 3 onglets : feedbacks traités, non traités, et résumés des analyses Maya sur la période choisie.</p>
+        <p class="maya-activity-modal-hint">Génère un fichier Excel avec le tableau de tous les feedbacks de la période : date, dossier, commentaire utilisateur, classification Maya (🌍/📖/📍) et enrichissement appliqué. Bandeau de synthèse en haut (répartition par type, évolution de Maya).</p>
         <div class="maya-activity-modal-row">
           <span class="maya-activity-modal-label">Du</span>
           <input type="date" id="maya-activity-date-from" class="maya-activity-modal-input" />
@@ -11312,6 +11639,35 @@ ${vtShort}`;
           <button type="button" class="maya-activity-modal-cancel" onclick="closeMayaActivityModal()">Annuler</button>
           <button type="button" class="maya-activity-modal-generate" onclick="generateMayaActivityReport()">Générer le rapport</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================ MAYA — Modale "Maya a appris" ================ -->
+  <div id="maya-learnings-overlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.45);z-index:9200;overflow-y:auto;" onclick="if(event.target===this)closeMayaLearningsModal()">
+    <div style="background:#fff;border-radius:12px;max-width:780px;margin:60px auto;box-shadow:0 8px 32px rgba(74,31,94,0.18);overflow:hidden;">
+      <div style="background:linear-gradient(135deg,#4A1F5E,#7B2D8E);padding:16px 20px;display:flex;align-items:center;justify-content:space-between;">
+        <div style="color:#fff;font-size:15px;font-weight:700;">🧠 Ce que Maya a appris</div>
+        <button type="button" onclick="closeMayaLearningsModal()" style="background:none;border:none;color:#fff;font-size:18px;cursor:pointer;line-height:1;">✕</button>
+      </div>
+      <div style="padding:16px 20px 8px;">
+        <p style="margin:0 0 12px;font-size:12px;color:#666;">Ces éléments sont mémorisés <strong>en permanent</strong> et injectés automatiquement dans chaque analyse Maya. Vous pouvez désactiver ceux qui ne sont plus pertinents.</p>
+        <!-- Onglets -->
+        <div style="display:flex;gap:8px;border-bottom:2px solid #E0D4F0;margin-bottom:14px;">
+          <button type="button" id="maya-learn-tab-rules" onclick="setMayaLearningsTab('rules')" style="padding:6px 16px;border:none;background:none;border-bottom:3px solid #7B2D8E;color:#7B2D8E;font-weight:700;font-size:12px;cursor:pointer;margin-bottom:-2px;">🌍 Règles globales</button>
+          <button type="button" id="maya-learn-tab-lexique" onclick="setMayaLearningsTab('lexique')" style="padding:6px 16px;border:none;background:none;border-bottom:3px solid transparent;color:#666;font-weight:600;font-size:12px;cursor:pointer;margin-bottom:-2px;">📖 Extensions lexique</button>
+        </div>
+        <!-- Contenu onglet règles -->
+        <div id="maya-learn-panel-rules" style="display:block;">
+          <div id="maya-learn-rules-body" style="max-height:400px;overflow-y:auto;"></div>
+        </div>
+        <!-- Contenu onglet lexique -->
+        <div id="maya-learn-panel-lexique" style="display:none;">
+          <div id="maya-learn-lexique-body" style="max-height:400px;overflow-y:auto;"></div>
+        </div>
+      </div>
+      <div style="padding:10px 20px;display:flex;justify-content:flex-end;border-top:1px solid #eee;">
+        <button type="button" onclick="closeMayaLearningsModal()" style="background:#7B2D8E;color:#fff;border:none;border-radius:8px;padding:8px 20px;font-size:12px;font-weight:600;cursor:pointer;">Fermer</button>
       </div>
     </div>
   </div>
@@ -11330,6 +11686,7 @@ ${vtShort}`;
       <button type="button" onclick="archiveAllPendingFeedbacks()" title="Archiver tous les feedbacks en attente d'un coup." style="background:#FFF3E0;border:1px solid #FFB74D;border-radius:16px;padding:4px 12px;font-size:11px;font-weight:600;color:#7F3D00;cursor:pointer;">Tout archiver</button>
       <button type="button" class="maya-drawer-export" onclick="exportMayaFeedbacksExcel()">📥 Exporter Excel</button>
       <button type="button" class="maya-drawer-activity-btn" onclick="openMayaActivityModal()" title="Générer un rapport Excel de l'activité Maya sur une plage de dates : feedbacks traités, non traités, et résumés des analyses.">📊 Rapport activité Maya</button>
+      <button type="button" onclick="openMayaLearningsModal()" title="Voir et gérer ce que Maya a appris : règles globales actives et extensions du lexique. Vous pouvez désactiver individuellement chaque élément appris." style="background:#EDE7F6;border:1px solid #9C27B0;border-radius:16px;padding:4px 12px;font-size:11px;font-weight:600;color:#4A1F5E;cursor:pointer;" id="maya-learnings-btn">🧠 Maya a appris</button>
     </div>
     <div class="maya-drawer-filters" style="margin-top:6px;align-items:center;flex-wrap:wrap;gap:6px;">
       <span style="font-size:11px;color:#666;font-weight:600;margin-right:4px;">Période :</span>
