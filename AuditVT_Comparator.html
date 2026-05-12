@@ -6684,6 +6684,7 @@ Réponds UNIQUEMENT en JSON strict :
       "id": "fb_xxx",
       "classification": "global",
       "action": "description courte de ce que Maya a fait (max 120 chars)",
+      "local_justification": null,
       "enrichissement": {
         "regle_globale": "texte de la règle ajoutée au prompt système (si classification=global)",
         "lexique_entry": {"champ": "id_champ", "terme_vt": "nouveau terme", "synonymes": []},
@@ -6696,12 +6697,42 @@ FEEDBACKS_NOT_PROCESSED — règle de traçabilité :
 Si des règles utilisateur t'ont été injectées (bloc « RÈGLES APPRISES DE L'UTILISATEUR »), retourne dans feedbacks_not_processed uniquement ceux que tu n'as PAS pu appliquer lors de cette analyse (par manque de données, inapplicabilité au dossier actuel, contradiction avec les sources, etc.). Les feedbacks absents de cette liste sont considérés comme appliqués. Si tous les feedbacks ont été appliqués (ou si aucun feedback n'a été injecté), retourne feedbacks_not_processed: [].
 
 FEEDBACKS_STATUS — règle de classification et d'enrichissement (OBLIGATOIRE) :
-Pour CHAQUE feedback qui t'a été injecté dans le bloc « RÈGLES APPRISES DE L'UTILISATEUR », tu DOIS retourner une entrée dans feedbacks_status avec ta classification :
+Pour CHAQUE feedback qui t'a été injecté dans le bloc « RÈGLES APPRISES DE L'UTILISATEUR », tu DOIS retourner une entrée dans feedbacks_status avec ta classification.
+
+PRINCIPE FONDAMENTAL — DÉFAUT = GLOBAL ou LEXIQUE :
+Tu DOIS classer en "global" ou "lexique" sauf si tu peux justifier précisément et explicitement pourquoi le feedback est intransposable à d'autres dossiers. Le "local" est l'exception ultra-rare (moins de 2% des cas). Ne classe JAMAIS en local par défaut ou par confort — si tu hésites, c'est global.
+
+RÈGLES DE CLASSIFICATION (lire dans l'ordre — s'arrêter à la première qui s'applique) :
+
+1. LEXIQUE en priorité si le feedback :
+   - Mentionne un terme précis, un libellé de champ VT, ou une page de référence (ex: "valeur en page 26")
+   - Pointe vers une correspondance terminologique ou une source de donnée précise dans la VT
+   - Exemple : "La valeur de Sref est à la page 26, pas dans le tableau de synthèse" → LEXIQUE, entrée : {terme:"Sref", source_vt:"page 26"}
+
+2. GLOBAL si le feedback :
+   - Décrit une méthodologie (ex: "toujours prendre la surface nette quand elle existe")
+   - Concerne un type de donnée à enforcer (ex: "ce champ doit être numérique")
+   - Indique comment combler une valeur manquante (ex: "si la surface est vide, calculer longueur × hauteur")
+   - S'applique à tous les futurs dossiers sans restriction
+   - Exemple : "Le champ surface_nette est vide" → GLOBAL, règle : "Quand surface_nette est vide, calculer à partir des dimensions des façades (longueur × hauteur) en déduisant les ouvertures."
+   - Exemple : "Coefficient_U doit être un nombre, pas du texte" → GLOBAL, règle : "Coefficient_U doit toujours être numérique. Si la VT contient du texte (NC, à déterminer), reporter tel quel mais signaler dans commentaire IA."
+   - Exemple : "Toujours préférer la surface nette à la surface brute si les deux existent" → GLOBAL, règle : "Quand surface_nette ET surface_brute sont disponibles, utiliser surface_nette en valeur principale et surface_brute en secondaire."
+
+3. LOCAL UNIQUEMENT SI le feedback contient EXPLICITEMENT au moins l'un de ces éléments :
+   - Le nom d'un bâtiment ou d'une adresse spécifique (ex: "Rue de la Paix 42")
+   - Un cas particulier impossible à généraliser (ex: "ce bâtiment a une extension non comptabilisée")
+   - Une donnée propre au dossier en cours qui ne peut être réutilisée dans aucun autre contexte
+   - Exemple légitime : "Pour le bâtiment Rue de la Paix 42, la cave est habitable" → LOCAL, local_justification : "Spécificité de ce bâtiment précis, mention explicite d'une adresse, non généralisable."
+
+OBLIGATION LOCAL_JUSTIFICATION :
+Quand tu classes un feedback en "local", tu DOIS remplir le champ "local_justification" avec une phrase expliquant POURQUOI ce feedback ne peut pas être généralisé à d'autres dossiers. Si tu ne peux pas rédiger cette justification de manière convaincante, bascule immédiatement en "global" ou "lexique" — un local injustifiable n'existe pas.
+Pour les classifications "global" et "lexique", mets local_justification: null.
+
 - "global" : le feedback est méthodologique — il s'applique à TOUS les futurs dossiers → remplis enrichissement.regle_globale avec le texte exact de la règle à mémoriser (formulation impérative, max 300 chars)
 - "lexique" : le feedback concerne du vocabulaire VT manquant ou une formule de composition → remplis enrichissement.lexique_entry avec l'id du champ concerné, le terme VT exact, et des synonymes éventuels
-- "local" : le feedback est spécifique à ce dossier uniquement → remplis enrichissement.correction_locale avec une description de la correction
-RÈGLE ABSOLUE : ne JAMAIS laisser un feedback sans classification. Chaque feedback DOIT avoir une entrée dans feedbacks_status, même si la classification est locale. S'il n'y a pas de feedbacks injectés, retourne feedbacks_status: [].
-PRIORITÉ DE CLASSIFICATION : si un feedback mentionne une règle générale applicable partout → global. S'il mentionne un terme VT à reconnaître dans d'autres dossiers → lexique. Sinon → local.
+- "local" : le feedback est spécifique à ce dossier uniquement ET tu as rempli local_justification → remplis enrichissement.correction_locale avec une description de la correction
+RÈGLE ABSOLUE : ne JAMAIS laisser un feedback sans classification. Chaque feedback DOIT avoir une entrée dans feedbacks_status. S'il n'y a pas de feedbacks injectés, retourne feedbacks_status: [].
+PRIORITÉ DE CLASSIFICATION : global ou lexique par défaut. Local uniquement si justification explicite et irréfutable.
 
 IMPORTANT :
 - Pour CHAQUE correction, fournis source_excerpt_audit et/ou source_excerpt_vt — un court extrait BRUT du texte source (copié tel quel, pas reformulé) qui permet de vérifier ta décision. Max 200 caractères chacun. Si la valeur est absente du document, mets null.
@@ -9326,6 +9357,7 @@ ${vtShort}`;
             enrichTxt = 'Lexique enrichi : ' + (le.champ || '') + ' ← ' + (le.terme_vt || '') + (le.synonymes && le.synonymes.length ? ' (synonymes: ' + le.synonymes.join(', ') + ')' : '');
           } else if (fb.enrichissement && fb.enrichissement.correction_locale) {
             enrichTxt = 'Correction sur ce dossier : ' + String(fb.enrichissement.correction_locale).substring(0, 200);
+            if (fb.local_justification) enrichTxt += ' [Justification local : ' + String(fb.local_justification).substring(0, 150) + ']';
           } else if (fb.action) {
             enrichTxt = fb.action;
           }
