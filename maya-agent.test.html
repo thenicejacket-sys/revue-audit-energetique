@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>maya-agent.js — Tests d'isolation (TDD)</title>
+  <style>
+    body { font-family: monospace; padding: 20px; background: #111; color: #eee; }
+    h1 { color: #CE93D8; }
+    .suite { margin-top: 24px; }
+    .test { margin: 6px 0; padding: 8px 12px; border-radius: 4px; }
+    .pass { background: #1B5E20; color: #A5D6A7; }
+    .fail { background: #B71C1C; color: #FFCDD2; }
+    .label { font-weight: bold; margin-right: 8px; }
+    #summary { margin-top: 30px; font-size: 1.2em; }
+    .ok  { color: #69F0AE; }
+    .err { color: #FF5252; }
+  </style>
+</head>
+<body>
+<h1>🧪 maya-agent.js — Tests d'isolation</h1>
+<p style="color:#aaa">Ouvre la console (F12) pour les logs détaillés. Les tests s'exécutent au chargement.</p>
+
+<div id="results"></div>
+<div id="summary"></div>
+
+<script>
+/* =========================================================
+   HARNESS DE TEST MINIMAL — pas de dépendance externe
+   ========================================================= */
+const TESTS = [];
+let passed = 0, failed = 0;
+
+function test(name, fn) {
+  TESTS.push({ name, fn });
+}
+
+function assert(condition, message) {
+  if (!condition) throw new Error('ASSERT FAILED: ' + (message || 'condition is false'));
+}
+
+function assertEqual(a, b, message) {
+  if (a !== b) throw new Error('ASSERT EQUAL FAILED: ' + JSON.stringify(a) + ' !== ' + JSON.stringify(b) + (message ? ' — ' + message : ''));
+}
+
+async function runAll() {
+  const container = document.getElementById('results');
+
+  for (const t of TESTS) {
+    const div = document.createElement('div');
+    div.className = 'test suite';
+    try {
+      await t.fn();
+      div.className = 'test pass';
+      div.innerHTML = '<span class="label">PASS</span>' + t.name;
+      passed++;
+      console.log('[PASS]', t.name);
+    } catch(e) {
+      div.className = 'test fail';
+      div.innerHTML = '<span class="label">FAIL</span>' + t.name + '<br><small>' + e.message + '</small>';
+      failed++;
+      console.error('[FAIL]', t.name, e);
+    }
+    container.appendChild(div);
+  }
+
+  const summary = document.getElementById('summary');
+  summary.innerHTML = failed === 0
+    ? '<span class="ok">✅ ' + passed + '/' + (passed + failed) + ' tests passés</span>'
+    : '<span class="err">❌ ' + failed + ' test(s) en échec — ' + passed + ' passés</span>';
+}
+
+/* =========================================================
+   SETUP : simuler l'environnement de AuditVT_Comparator.html
+   On doit planter une fonction callMaya factice AVANT
+   de charger maya-agent.js, exactement comme dans l'app.
+   ========================================================= */
+window.callMaya = async function callMayaOriginal(results, auditText, vtText) {
+  // Fonction stub qui simule le comportement de base
+  return results;
+};
+
+// Nettoyage localStorage pour environnement propre
+['maya_system_prompt_rules_v1', 'maya_vt_lexicon_v1', 'maya_feedbacks_agent_v1'].forEach(function(k) {
+  localStorage.removeItem(k);
+});
+
+/* =========================================================
+   TEST 1 — callMaya intacte AVANT chargement de maya-agent.js
+   ========================================================= */
+test('T1 — callMaya intacte avant chargement', function() {
+  // À ce stade maya-agent.js n'est PAS encore chargé (script dynamique plus bas)
+  assert(typeof window.callMaya === 'function', 'window.callMaya doit être une fonction');
+  // MayaAgent ne doit PAS exister encore
+  assert(typeof window.MayaAgent === 'undefined', 'window.MayaAgent ne doit pas exister avant chargement');
+  console.log('[T1] callMaya type avant chargement:', typeof window.callMaya);
+});
+
+/* =========================================================
+   Chargement dynamique de maya-agent.js
+   Les tests T2-T5 s'exécutent après.
+   ========================================================= */
+async function loadAgentAndContinue() {
+  return new Promise(function(resolve, reject) {
+    var s = document.createElement('script');
+    s.src = 'maya-agent.js?ts=' + Date.now(); // cache-bust
+    s.onload = resolve;
+    s.onerror = function() { reject(new Error('Impossible de charger maya-agent.js — vérifiez que le fichier existe')); };
+    document.head.appendChild(s);
+  });
+}
+
+/* =========================================================
+   TEST 2 — MayaAgent expose l'API publique complète
+   ========================================================= */
+test('T2 — MayaAgent expose API publique (enable/disable/learn/getMemory)', function() {
+  assert(typeof window.MayaAgent === 'object' && window.MayaAgent !== null, 'window.MayaAgent doit être un objet');
+  ['enable', 'disable', 'learn', 'getMemory', 'toggleRule', 'getDashboardData'].forEach(function(method) {
+    assert(typeof window.MayaAgent[method] === 'function', 'MayaAgent.' + method + ' doit être une fonction');
+  });
+  console.log('[T2] MayaAgent API:', Object.keys(window.MayaAgent));
+});
+
+/* =========================================================
+   TEST 3 — Toggle disable() restaure callMaya d'origine
+   ========================================================= */
+test('T3 — disable() restaure window.callMaya original', function() {
+  // Après chargement, callMaya devrait être le wrapper
+  assert(typeof window.__callMayaOriginal === 'function', 'window.__callMayaOriginal doit être sauvegardée');
+
+  window.MayaAgent.disable();
+  assert(window.callMaya === window.__callMayaOriginal,
+    'Après disable(), window.callMaya doit === window.__callMayaOriginal');
+
+  // Réactiver pour les tests suivants
+  window.MayaAgent.enable();
+  console.log('[T3] disable/enable cycle OK — callMaya restaurée puis re-wrappée');
+});
+
+/* =========================================================
+   TEST 4 — Classification par défaut = GLOBAL
+   Un feedback générique doit créer une règle dans maya_system_prompt_rules_v1
+   ========================================================= */
+test('T4 — Classification par défaut = global (règle prompt)', function() {
+  // Nettoyer avant test
+  localStorage.removeItem('maya_system_prompt_rules_v1');
+
+  var genericFeedback = 'Maya confond souvent la résistance thermique R et le coefficient U dans les VT';
+  window.MayaAgent.learn({ text: genericFeedback, source: 'test' });
+
+  var mem = window.MayaAgent.getMemory();
+  assert(Array.isArray(mem.rules), 'getMemory().rules doit être un tableau');
+  assert(mem.rules.length > 0, 'Au moins une règle doit être créée après learn() sur feedback générique');
+
+  var lastRule = mem.rules[mem.rules.length - 1];
+  assert(lastRule.rule && lastRule.rule.length > 0, 'La règle doit avoir un contenu non vide');
+  assert(lastRule.active === true, 'La règle doit être active par défaut');
+  assert(typeof lastRule.appliedCount === 'number', 'appliedCount doit être un nombre');
+
+  console.log('[T4] Règle globale créée:', lastRule);
+});
+
+/* =========================================================
+   TEST 5 — Lexique enrichi sur feedback terme VT
+   Un feedback contenant un pattern "X = Y" ou "terme VT"
+   doit créer une entrée dans maya_vt_lexicon_v1
+   ========================================================= */
+test('T5 — Lexique enrichi sur feedback terme VT', function() {
+  // Nettoyer avant test
+  localStorage.removeItem('maya_vt_lexicon_v1');
+
+  // Feedback contenant un signal lexique explicite (format attendu par le classifier)
+  var lexiqueFeedback = 'Dans les VT, "surface habitable" correspond toujours à "SHAB" dans l\'audit';
+  window.MayaAgent.learn({ text: lexiqueFeedback, type: 'lexique', vtTerm: 'surface habitable', auditTerm: 'SHAB' });
+
+  var mem = window.MayaAgent.getMemory();
+  assert(Array.isArray(mem.lexicon), 'getMemory().lexicon doit être un tableau');
+  assert(mem.lexicon.length > 0, 'Au moins une entrée lexique doit être créée');
+
+  var lastEntry = mem.lexicon[mem.lexicon.length - 1];
+  assert(lastEntry.vtTerm && lastEntry.vtTerm.length > 0, 'vtTerm doit être renseigné');
+  assert(lastEntry.auditTerm && lastEntry.auditTerm.length > 0, 'auditTerm doit être renseigné');
+  assert(lastEntry.active === true, 'L\'entrée lexique doit être active par défaut');
+
+  console.log('[T5] Entrée lexique créée:', lastEntry);
+});
+
+/* =========================================================
+   LANCEMENT — T1 synchrone, puis charge le module, puis T2-T5
+   ========================================================= */
+(async function() {
+  // T1 s'exécute avant le chargement
+  const t1 = TESTS[0];
+  const t1div = document.createElement('div');
+  try {
+    await t1.fn();
+    t1div.className = 'test pass';
+    t1div.innerHTML = '<span class="label">PASS</span>' + t1.name;
+    passed++;
+    console.log('[PASS]', t1.name);
+  } catch(e) {
+    t1div.className = 'test fail';
+    t1div.innerHTML = '<span class="label">FAIL</span>' + t1.name + '<br><small>' + e.message + '</small>';
+    failed++;
+    console.error('[FAIL]', t1.name, e);
+  }
+  document.getElementById('results').appendChild(t1div);
+
+  // Chargement du module
+  try {
+    await loadAgentAndContinue();
+    console.log('[HARNESS] maya-agent.js chargé avec succès');
+  } catch(e) {
+    const errDiv = document.createElement('div');
+    errDiv.className = 'test fail';
+    errDiv.innerHTML = '<span class="label">ERREUR CHARGEMENT</span>' + e.message;
+    document.getElementById('results').appendChild(errDiv);
+    document.getElementById('summary').innerHTML = '<span class="err">❌ Impossible de charger maya-agent.js</span>';
+    return;
+  }
+
+  // T2-T5 s'exécutent après chargement
+  for (let i = 1; i < TESTS.length; i++) {
+    const t = TESTS[i];
+    const div = document.createElement('div');
+    try {
+      await t.fn();
+      div.className = 'test pass';
+      div.innerHTML = '<span class="label">PASS</span>' + t.name;
+      passed++;
+      console.log('[PASS]', t.name);
+    } catch(e) {
+      div.className = 'test fail';
+      div.innerHTML = '<span class="label">FAIL</span>' + t.name + '<br><small>' + e.message + '</small>';
+      failed++;
+      console.error('[FAIL]', t.name, e);
+    }
+    document.getElementById('results').appendChild(div);
+  }
+
+  const summary = document.getElementById('summary');
+  summary.innerHTML = failed === 0
+    ? '<span class="ok">✅ ' + (passed) + '/' + (passed + failed) + ' tests passés — module maya-agent.js valide</span>'
+    : '<span class="err">❌ ' + failed + ' test(s) en échec — ' + passed + ' passés</span>';
+})();
+</script>
+</body>
+</html>

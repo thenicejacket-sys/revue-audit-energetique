@@ -7308,6 +7308,8 @@ ${vtShort}`;
         snapshot: snapshot
       });
       persistMayaFeedbacks();
+      // [MAYA-AGENT] Transmission au module d'apprentissage isolé (fire-and-forget)
+      try { if (window.MayaAgent && typeof window.MayaAgent.learn === 'function') { window.MayaAgent.learn({ text: txt, type: isRule ? 'global' : 'line', source: 'line-feedback' }); } } catch(e) { console.warn('[MAYA-AGENT] learn line:', e.message); }
       // Push Supabase (fire-and-forget)
       try {
         var fid = 'line:' + currentFeedbackKey + ':' + ts;
@@ -7413,6 +7415,8 @@ ${vtShort}`;
         text: txt
       });
       persistMayaGlobalFeedbacks();
+      // [MAYA-AGENT] Transmission au module d'apprentissage isolé (fire-and-forget)
+      try { if (window.MayaAgent && typeof window.MayaAgent.learn === 'function') { window.MayaAgent.learn({ text: txt, type: cat === 'lexique' ? 'lexique' : 'global', source: 'global-feedback' }); } } catch(e) { console.warn('[MAYA-AGENT] learn global:', e.message); }
       // Push Supabase (fire-and-forget)
       try {
         MayaSupabase.saveFeedback({
@@ -10544,6 +10548,10 @@ ${vtShort}`;
 
   <!-- ================ MAYA VAGUE 3 — Floating action buttons ================ -->
   <div class="maya-fab-stack">
+    <button type="button" class="maya-fab" id="maya-fab-agent" onclick="openMayaAgentDashboard()" aria-label="Maya apprend — memoire active" style="background:linear-gradient(135deg,#7B2D8E,#4A148C);">
+      <span style="font-size:1.1em;">&#x1F9E0;</span>
+      <span class="maya-fab-tooltip">Maya apprend — voir la memoire</span>
+    </button>
     <button type="button" class="maya-fab" id="maya-fab-guide" onclick="window.open('Guide_Feedback_Maya.pdf', '_blank')" aria-label="Guide pour rédiger un feedback efficace" style="background:#FFC107;">
       📖
       <span class="maya-fab-tooltip">Guide : bien écrire un feedback à Maya</span>
@@ -10675,6 +10683,72 @@ ${vtShort}`;
     </div>
     <div class="maya-drawer-body" id="maya-drawer-body"></div>
   </aside>
+
+  <!-- ================ MAYA-AGENT — Dashboard "Maya apprend" ================ -->
+  <div id="maya-agent-dashboard-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:3000;overflow-y:auto;" onclick="if(event.target===this)document.getElementById('maya-agent-dashboard-overlay').style.display='none'">
+    <div style="background:#fff;max-width:900px;margin:40px auto;border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,0.3);overflow:hidden;">
+      <div style="background:linear-gradient(135deg,#7B2D8E,#4A148C);color:#fff;padding:18px 24px;display:flex;align-items:center;justify-content:space-between;">
+        <div style="font-size:1.1em;font-weight:700;">Maya apprend — Memoire active</div>
+        <button type="button" onclick="document.getElementById('maya-agent-dashboard-overlay').style.display='none'" style="background:none;border:none;color:#fff;font-size:1.4em;cursor:pointer;line-height:1;">x</button>
+      </div>
+      <div id="maya-agent-dashboard-banner" style="background:#F3E5F5;padding:10px 24px;font-size:0.92em;color:#4A148C;font-weight:600;border-bottom:1px solid #CE93D8;"></div>
+      <div style="padding:20px 24px;">
+        <table style="width:100%;border-collapse:collapse;font-size:0.88em;">
+          <thead>
+            <tr style="background:#F3E5F5;text-align:left;">
+              <th style="padding:8px 10px;border-bottom:2px solid #CE93D8;width:120px;">Date</th>
+              <th style="padding:8px 10px;border-bottom:2px solid #CE93D8;">Feedback</th>
+              <th style="padding:8px 10px;border-bottom:2px solid #CE93D8;">Action Maya</th>
+              <th style="padding:8px 10px;border-bottom:2px solid #CE93D8;width:100px;">Statut</th>
+            </tr>
+          </thead>
+          <tbody id="maya-agent-dashboard-rows">
+            <tr><td colspan="4" style="padding:20px;text-align:center;color:#aaa;">Aucun feedback enregistre par le module d'apprentissage.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ── Dashboard Maya-Agent — rendu côté app ── */
+    function openMayaAgentDashboard() {
+      if (!window.MayaAgent) {
+        alert('Module Maya-Agent non charge.');
+        return;
+      }
+      var data = window.MayaAgent.getDashboardData();
+      var s = data.stats;
+
+      /* Bandeau */
+      document.getElementById('maya-agent-dashboard-banner').textContent =
+        'Maya a appris ' + s.totalRules + ' regles globales + ' + s.totalLexicon + ' termes lexique au total  —  taux d\'application : ' + s.appRate + '%';
+
+      /* Lignes */
+      var tbody = document.getElementById('maya-agent-dashboard-rows');
+      if (data.feedbacks.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="padding:20px;text-align:center;color:#aaa;">Aucun feedback enregistre par le module d\'apprentissage.</td></tr>';
+      } else {
+        tbody.innerHTML = data.feedbacks.slice().reverse().map(function(fb) {
+          var dateStr = fb.date ? new Date(fb.date).toLocaleDateString('fr-FR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
+          var kindBadge = fb.kind === 'global' ? '<span style="background:#7B2D8E;color:#fff;border-radius:8px;padding:1px 7px;font-size:10px;font-weight:700;">Global</span>'
+                        : fb.kind === 'lexique' ? '<span style="background:#1565C0;color:#fff;border-radius:8px;padding:1px 7px;font-size:10px;font-weight:700;">Lexique</span>'
+                        : '<span style="background:#555;color:#fff;border-radius:8px;padding:1px 7px;font-size:10px;font-weight:700;">Local</span>';
+          return '<tr style="border-bottom:1px solid #eee;">'
+            + '<td style="padding:7px 10px;color:#555;white-space:nowrap;">' + dateStr + '</td>'
+            + '<td style="padding:7px 10px;">' + escHtml(fb.text.slice(0, 120)) + (fb.text.length > 120 ? '…' : '') + '</td>'
+            + '<td style="padding:7px 10px;color:#333;">' + escHtml(fb.action) + '</td>'
+            + '<td style="padding:7px 10px;">' + kindBadge + '</td>'
+            + '</tr>';
+        }).join('');
+      }
+
+      document.getElementById('maya-agent-dashboard-overlay').style.display = 'block';
+    }
+  </script>
+
+  <!-- ================ MAYA-AGENT — Chargement module isolé (EN DERNIER) ================ -->
+  <script src="maya-agent.js"></script>
 
 </body>
 </html>
