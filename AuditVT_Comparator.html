@@ -647,6 +647,23 @@
     .status-rouge   { background: #B71C1C; color: #ffffff; }
     .status-manquant{ background: #546E7A; color: #ffffff; }
 
+    /* ===== ORPHAN MENUISERIES BADGES ===== */
+    .orphan-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-weight: 700;
+      font-size: 10px;
+      white-space: nowrap;
+      margin-top: 3px;
+    }
+    .orphan-vt-only    { background: #0097A7; color: #ffffff; }
+    .orphan-audit-only { background: #FF8F00; color: #ffffff; }
+    tr.orphan-row-vt    > td { background: #E0F7FA !important; }
+    tr.orphan-row-audit > td { background: #FFF8E1 !important; }
+
     /* ===== CONFIDENCE & MAYA FEEDBACK (Vague 1) ===== */
     .confidence-chip {
       display: inline-flex;
@@ -1009,6 +1026,146 @@
       text-align: center; color: #888; padding: 40px 20px;
       font-size: 13px; font-style: italic;
     }
+
+    /* ===== BOUTON RAPPORT ACTIVITÉ MAYA ===== */
+    .maya-drawer-activity-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: #EDE7F6;
+      border: 1px solid #B39DDB;
+      color: #4527A0;
+      font-family: 'Montserrat', sans-serif;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 5px 11px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.18s, border-color 0.18s, transform 0.12s;
+      white-space: nowrap;
+      letter-spacing: 0.2px;
+    }
+    .maya-drawer-activity-btn:hover {
+      background: #D1C4E9;
+      border-color: #7E57C2;
+      transform: scale(1.04);
+    }
+
+    /* ===== MODALE RAPPORT ACTIVITÉ MAYA ===== */
+    .maya-activity-modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 2000;
+      align-items: center;
+      justify-content: center;
+    }
+    .maya-activity-modal-overlay.visible { display: flex; }
+    .maya-activity-modal {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 8px 40px rgba(27,63,139,0.22);
+      width: 380px;
+      max-width: calc(100vw - 32px);
+      overflow: hidden;
+      animation: fadeIn 0.18s ease;
+    }
+    .maya-activity-modal-header {
+      background: linear-gradient(135deg, #4527A0 0%, #7B2D8E 100%);
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .maya-activity-modal-title {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .maya-activity-modal-close {
+      background: rgba(255,255,255,0.15);
+      border: none;
+      color: #fff;
+      font-size: 16px;
+      line-height: 1;
+      padding: 4px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.18s;
+    }
+    .maya-activity-modal-close:hover { background: rgba(255,255,255,0.3); }
+    .maya-activity-modal-body {
+      padding: 18px 20px;
+    }
+    .maya-activity-modal-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .maya-activity-modal-label {
+      font-size: 12px;
+      font-weight: 700;
+      color: #444;
+      min-width: 38px;
+    }
+    .maya-activity-modal-input {
+      flex: 1;
+      font-size: 12px;
+      padding: 5px 8px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-family: 'Nunito', sans-serif;
+      transition: border-color 0.18s, box-shadow 0.18s;
+    }
+    .maya-activity-modal-input:focus {
+      outline: none;
+      border-color: #7B2D8E;
+      box-shadow: 0 0 0 3px rgba(123,45,142,0.12);
+    }
+    .maya-activity-modal-hint {
+      font-size: 11px;
+      color: #888;
+      margin-bottom: 16px;
+      font-style: italic;
+    }
+    .maya-activity-modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding-top: 4px;
+    }
+    .maya-activity-modal-cancel {
+      background: #f5f5f5;
+      border: 1px solid #ddd;
+      color: #555;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: 'Montserrat', sans-serif;
+      padding: 7px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.18s;
+    }
+    .maya-activity-modal-cancel:hover { background: #ebebeb; }
+    .maya-activity-modal-generate {
+      background: linear-gradient(135deg, #4527A0 0%, #7B2D8E 100%);
+      border: none;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      font-family: 'Montserrat', sans-serif;
+      padding: 7px 18px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: opacity 0.18s, transform 0.12s;
+    }
+    .maya-activity-modal-generate:hover { opacity: 0.9; transform: scale(1.03); }
 
     /* ===== MISSING FIELDS SECTION ===== */
     .missing-section {
@@ -1901,6 +2058,7 @@
                 <th>Statut</th>
                 <th title="Niveau de confiance de Maya + feedback">Confiance</th>
                 <th>Commentaire IA</th>
+                <th>Sources et vérifications</th>
                 <th>Revue Analyse</th>
               </tr>
             </thead>
@@ -3428,6 +3586,126 @@
 
         return { murs:murs, planchers:planchers, toitures:toitures, menuiseries:menuiseries, generic:generic, byNumber:byNumber };
       }
+      // ---- Détection des menuiseries côté VT — symétrique à detectBatiauditInstances ----
+      // Produit une liste ordonnée des menuiseries dans leur ordre d'apparition dans la VT.
+      // Réutilise les mêmes passes que detectBatiauditInstances (PASS 0 → 2c → 3),
+      // limitées aux menuiseries uniquement (on ne touche pas aux autres catégories VT).
+      function detectVtMenuiseries(text) {
+        var menuiseries = [];
+        var lines = text.split(/\r?\n/);
+
+        function addUniq(arr, val) { if (arr.indexOf(val) < 0) arr.push(val); }
+
+        // PASS 0 : format tableau récapitulatif "(L×H) Description Isolation"
+        // Cherche un en-tête de section menuiseries puis lit les dimensions
+        var CAT_HDR_M = /^(menuiseries?|ouvrants?|baies?\s*vitr[eé]es?)\s*(?:description|isolat)?/i;
+        var SECT_EXIT_M = /^(?:murs?|planchers?|toitures?|combles?|chauffage|ventilation|ecs|observations?|plan\s+ou|sc[eé]narios?|annexe|\d+\s*\.\s*[A-ZÀ-ÿ])/i;
+        var fenC0=0, porteC0=0, baieC0=0, inMenuiSect0=false;
+        for (var i0=0; i0<lines.length; i0++) {
+          var l0 = lines[i0].trim();
+          if (!l0) continue;
+          if (CAT_HDR_M.test(l0) && l0.length < 120) { inMenuiSect0=true; fenC0=0; porteC0=0; baieC0=0; continue; }
+          if (inMenuiSect0 && l0.length>3 && SECT_EXIT_M.test(l0)) { inMenuiSect0=false; break; }
+          if (!inMenuiSect0) continue;
+          var dm0 = l0.match(/^\(\s*(\d+[,.]?\d*)\s*[xX××]\s*(\d+[,.]?\d*)\s*\)\s*(.*)/);
+          if (!dm0) continue;
+          var W0=dm0[1].replace(',','.'), H0=dm0[2].replace(',','.');
+          if (parseFloat(W0)<0.2||parseFloat(W0)>5||parseFloat(H0)<0.2||parseFloat(H0)>5) continue;
+          var d0=dm0[3].toLowerCase(), lbl0;
+          if (d0.match(/porte(?!\s*fen)/)) { porteC0++; lbl0='Porte'+(porteC0>1?' '+porteC0:'')+' ('+W0+'×'+H0+')'; }
+          else if (d0.match(/baie|couliss/)) { baieC0++; lbl0='Baie vitrée'+(baieC0>1?' '+baieC0:'')+' ('+W0+'×'+H0+')'; }
+          else { fenC0++; lbl0='Fenêtre '+fenC0+' ('+W0+'×'+H0+')'; }
+          addUniq(menuiseries, lbl0);
+        }
+
+        // PASS 1 (fallback) : BATIAUDIT "Observé/Mesuré" dans contexte menuiserie
+        if (menuiseries.length === 0) {
+          var SECT_HDRS_M = /^(?:menuiseries?|ouvrants?|baies?\s*vitr[eé]es?)\s*$/i;
+          var inSect1=false, fenC1=0, porteC1=0, baieC1=0;
+          for (var i1=0; i1<lines.length; i1++) {
+            var l1 = lines[i1].trim();
+            if (SECT_HDRS_M.test(l1)) { inSect1=true; fenC1=0; porteC1=0; baieC1=0; continue; }
+            if (inSect1 && l1.length>3 && /^(?:murs?|planchers?|toitures?|chauffage|ventilation|ecs|observations?|sc[eé]narios?)\s*/i.test(l1)) { inSect1=false; break; }
+            var m1 = l1.match(/(?:fen[eê]tre|porte|baie|ouvrant|menuiserie)\s*(?:0*\d+\s*)?[Oo]bserv[^\/\n]{0,30}\/\s*[Mm]esur[eé][eé]?\s+(.+)/i);
+            if (!m1) continue;
+            var rawLbl = m1[0].toLowerCase();
+            var label1 = m1[1].trim().split(/\s{3,}|\t/)[0].trim();
+            if (!label1 || label1.length < 2 || label1.length > 100) continue;
+            if (rawLbl.match(/porte(?!\s*fen)/)) { porteC1++; addUniq(menuiseries, 'Porte'+(porteC1>1?' '+porteC1:'')+' — '+label1); }
+            else if (rawLbl.match(/baie|couliss/)) { baieC1++; addUniq(menuiseries, 'Baie vitrée'+(baieC1>1?' '+baieC1:'')+' — '+label1); }
+            else { fenC1++; addUniq(menuiseries, 'Fenêtre '+fenC1+' — '+label1); }
+          }
+        }
+
+        // PASS 2 (fallback) : "(W x H)" dans section menuiseries
+        if (menuiseries.length === 0) {
+          var tableRe2 = /\(\s*(\d+[,.]?\d*)\s*[xX××]\s*(\d+[,.]?\d*)\s*\)/;
+          var fenCnt2=0, porteCnt2=0, baieCnt2=0, inMenuiSect2=false;
+          for (var j2=0; j2<lines.length; j2++) {
+            var tl2 = lines[j2].trim();
+            if (/^(?:menuiseries?|ouvrants?|baies?\s*vitr[eé]es?)\s*(?:description|isolat.*)?$/i.test(tl2) && tl2.length<120) { inMenuiSect2=true; continue; }
+            if (inMenuiSect2 && tl2.length>3 && /^(?:murs?|planchers?|toitures?|chauffage|ventilation|ecs|observations?|sc[eé]narios?)\s*/i.test(tl2)) { inMenuiSect2=false; break; }
+            if (!inMenuiSect2) continue;
+            var mt2 = tl2.match(tableRe2);
+            if (!mt2) continue;
+            var W2=mt2[1].replace(',','.'), H2=mt2[2].replace(',','.');
+            if (parseFloat(W2)<0.2||parseFloat(W2)>5||parseFloat(H2)<0.2||parseFloat(H2)>5) continue;
+            var dl2=tl2.toLowerCase(), il2;
+            if (dl2.match(/porte(?!\s*fen)/)) { porteCnt2++; il2='Porte'+(porteCnt2>1?' '+porteCnt2:'')+' ('+W2+'×'+H2+')'; }
+            else if (dl2.match(/baie|couliss/)) { baieCnt2++; il2='Baie vitrée'+(baieCnt2>1?' '+baieCnt2:'')+' ('+W2+'×'+H2+')'; }
+            else { fenCnt2++; il2='Fenêtre '+fenCnt2+' ('+W2+'×'+H2+')'; }
+            addUniq(menuiseries, il2);
+          }
+        }
+
+        // PASS 2c (fallback) : fenêtre contextuelle 50 lignes après header "menuiseries"
+        if (menuiseries.length === 0) {
+          var fn2c=0, pn2c=0, bn2c=0;
+          for (var j2c=0; j2c<lines.length; j2c++) {
+            var tl2c = lines[j2c].trim();
+            if (!/\bmenuiseries?\b/i.test(tl2c) || tl2c.length > 120) continue;
+            for (var k2c=j2c+1; k2c<Math.min(lines.length, j2c+50); k2c++) {
+              var lk2c = lines[k2c].trim();
+              if (/^(?:murs?|planchers?|toitures?|chauffage|ventilation|ecs|observations?|sc[eé]narios?)\s/i.test(lk2c) && lk2c.length < 80) break;
+              var dm2c = lk2c.match(/\(\s*(\d+[,.]?\d*)\s*[xX××]\s*(\d+[,.]?\d*)\s*\)/);
+              if (!dm2c) continue;
+              var W2c=dm2c[1].replace(',','.'), H2c=dm2c[2].replace(',','.');
+              if (parseFloat(W2c)<0.2||parseFloat(W2c)>5||parseFloat(H2c)<0.2||parseFloat(H2c)>5) continue;
+              var dl2c=lk2c.toLowerCase(), lbl2c;
+              if (dl2c.match(/porte(?!\s*fen)/)) { pn2c++; lbl2c='Porte'+(pn2c>1?' '+pn2c:'')+' ('+W2c+'×'+H2c+')'; }
+              else if (dl2c.match(/baie|couliss/)) { bn2c++; lbl2c='Baie vitrée'+(bn2c>1?' '+bn2c:'')+' ('+W2c+'×'+H2c+')'; }
+              else { fn2c++; lbl2c='Fenêtre '+fn2c+' ('+W2c+'×'+H2c+')'; }
+              addUniq(menuiseries, lbl2c);
+            }
+            if (menuiseries.length > 0) { console.log('[VT-PASS2c] Menuiseries VT header-context:', menuiseries.join(' / ')); break; }
+          }
+        }
+
+        // PASS 3 (fallback) : détection contextuelle par section, format dimensions
+        if (menuiseries.length === 0) {
+          var inSect3=false, cnt3=0;
+          for (var p3=0; p3<lines.length; p3++) {
+            var pl3 = lines[p3].trim();
+            if (/^(?:menuiseries?|ouvrants?)(?:\s+(?:description|isolat).*)?$/i.test(pl3)) { inSect3=true; cnt3=0; continue; }
+            if (inSect3 && pl3.length>3 && /^(?:ventilation|chauffage|b[âa]timent|enveloppe|bilan|murs?|planchers?|toitures?)\s*/i.test(pl3)) { inSect3=false; break; }
+            if (!inSect3 || pl3.length<4) continue;
+            var dimM3 = pl3.match(/(\d+[,.]\d+)\s*[xX××]\s*(\d+[,.]\d+)/);
+            if (!dimM3) continue;
+            var W3=dimM3[1].replace(',','.'), H3=dimM3[2].replace(',','.');
+            if (parseFloat(W3)<0.2||parseFloat(W3)>5||parseFloat(H3)<0.2||parseFloat(H3)>5) continue;
+            var dl3=pl3.toLowerCase(), il3;
+            if (dl3.match(/porte(?!\s*fen)/)) { cnt3++; il3='Porte'+(cnt3>1?' '+cnt3:'')+' ('+W3+'×'+H3+')'; }
+            else if (dl3.match(/baie|couliss/)) { cnt3++; il3='Baie vitrée'+(cnt3>1?' '+cnt3:'')+' ('+W3+'×'+H3+')'; }
+            else { cnt3++; il3='Fenêtre '+cnt3+' ('+W3+'×'+H3+')'; }
+            addUniq(menuiseries, il3);
+          }
+        }
+
+        if (menuiseries.length > 0) console.log('[VT-MENUISERIES] Détectées (' + menuiseries.length + ') :', menuiseries.join(' / '));
+        else console.log('[VT-MENUISERIES] Aucune menuiserie détectée dans la VT.');
+        return menuiseries;
+      }
+
       // Vérifie qu'un extrait cité par l'IA existe réellement dans le texte source
       // Retourne : 'verifie' | 'partiel' | 'non_verifie' | 'non_cite' | 'court'
       function verifyCitation(extract, sourceText) {
@@ -3456,6 +3734,9 @@
           .map(function(k){return k+'('+detectedInstances[k].length+'): '+detectedInstances[k].join(' / ');}).join(' | ');
         if (log) console.log('[INSTANCES PAROIS]', log);
       })();
+
+      // Détection symétrique côté VT — menuiseries uniquement, par ordre d'apparition
+      state.vtMenuiseries = detectVtMenuiseries(vtFull);
       // ASSERTION RUNTIME — RÈGLE INVARIANTE : toutes les parois doivent être comptées et loguées.
       // Si le nombre de parois détectées ne correspond pas au nombre attendu (d'après les "Paroi NN"
       // présents dans le texte brut), un console.warn explicite est émis.
@@ -4634,6 +4915,16 @@
       try { enforcePage6Classification(); } catch (e) { console.warn('[PAGE6-ENFORCE] erreur :', e.message); }
       try { assertDomainInvariants(state.analysisResults); } catch (e) { console.warn('[INVARIANTS] erreur assertion :', e.message); }
 
+      // ─── Injection des menuiseries orphelines (VT-only et audit-only) ───
+      // Appariement strict par index d'ordre d'apparition — aucun fuzzy matching.
+      // Les orphelines sont des pseudo-résultats injectés dans analysisResults pour
+      // forcer leur apparition dans le tableau rapport (colonnes Audit ou VT vides selon le cas).
+      injectMenuiseriesOrphans(
+        state.detectedInstances.menuiseries || [],
+        state.vtMenuiseries || [],
+        state.analysisResults
+      );
+
       showProgress(false);
       renderResults();
       renderRapport();
@@ -5271,6 +5562,8 @@
     async function callAI(fields, auditText, vtText, preExtracted, instanceHints) {
       preExtracted = preExtracted || {};
       instanceHints = instanceHints || {};
+      // Récupérer la liste VT menuiseries détectées (stockée dans state lors de l'analyse)
+      var vtMenuiseriesList = (state.vtMenuiseries || []);
       // Construire le bloc d'instances détectées à injecter dans le prompt
       var instancesBlock = '';
       var typeLabels = { murs:'Murs/Parois opaques', planchers:'Planchers', toitures:'Toitures/Plafonds hauts', menuiseries:'Menuiseries/Ouvrants' };
@@ -5289,6 +5582,27 @@
               instancesBlock += '- ' + gc + ' (' + instanceHints.generic[gc].length + ') : "' + instanceHints.generic[gc].join('" | "') + '"\n';
             }
           });
+        }
+        // Ajouter les menuiseries VT et les comptes pour informer Maya des orphelines potentielles
+        var auditMenuiCount = (instanceHints.menuiseries || []).length;
+        var vtMenuiCount = vtMenuiseriesList.length;
+        if (auditMenuiCount > 0 || vtMenuiCount > 0) {
+          instancesBlock += '\nCOMPTES MENUISERIES :\n';
+          instancesBlock += '- menuiseries_audit_count : ' + auditMenuiCount + '\n';
+          instancesBlock += '- menuiseries_vt_count : ' + vtMenuiCount + '\n';
+          if (vtMenuiCount > 0) {
+            instancesBlock += '- Menuiseries/Ouvrants VT (' + vtMenuiCount + ') : "' + vtMenuiseriesList.join('" | "') + '"\n';
+          }
+          if (auditMenuiCount !== vtMenuiCount) {
+            instancesBlock += '→ ÉCART DÉTECTÉ : l\'audit a ' + auditMenuiCount + ' menuiserie(s), la VT en a ' + vtMenuiCount + '.\n';
+            if (vtMenuiCount > auditMenuiCount) {
+              instancesBlock += '→ Les menuiseries VT aux indices ' + auditMenuiCount + ' à ' + (vtMenuiCount-1) + ' (base 0) sont ORPHELINES VT — absentes de l\'audit.\n';
+              instancesBlock += '→ Pour ces orphelines VT : retourne valeur_audit=null, statut=MANQUANT, commentaire "Présente en VT uniquement".\n';
+            } else {
+              instancesBlock += '→ Les menuiseries audit aux indices ' + vtMenuiCount + ' à ' + (auditMenuiCount-1) + ' (base 0) sont ORPHELINES AUDIT — absentes de la VT.\n';
+              instancesBlock += '→ Pour ces orphelines audit : retourne valeur_vt=null, statut=MANQUANT, commentaire "Présente en audit uniquement".\n';
+            }
+          }
         }
         if (hasPreLabeled) {
           // Mode pré-labellisé : chaque champ a déjà son instance_label → l'IA retourne 1 seul résultat
@@ -6142,11 +6456,11 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
         if (learningsBlock) console.log('[MAYA-KB] ' + (learningsBlock.match(/^- /gm) || []).length + ' learning(s) injecté(s) dans le prompt.');
       } catch (e) { console.warn('[MAYA-KB] Injection learnings échouée:', e.message); }
 
-      // ── Injection des feedbacks utilisateur du drawer (pending + permanent) ──
+      // ── Injection des feedbacks utilisateur du drawer (pending uniquement) ──
       var drawerInjection = { block: '', injectedIds: [] };
       try {
         drawerInjection = buildDrawerFeedbackInjection();
-        if (drawerInjection.block) console.log('[MAYA-DRAWER] ' + drawerInjection.injectedIds.length + ' règle(s) apprise(s) injectée(s) dans le prompt Maya (pending + permanent).');
+        if (drawerInjection.block) console.log('[MAYA-DRAWER] ' + drawerInjection.injectedIds.length + ' règle(s) apprise(s) injectée(s) dans le prompt Maya.');
       } catch (e) { console.warn('[MAYA-DRAWER] Injection feedbacks échouée:', e.message); }
 
       var mayaSystemPrompt = `⚠️ RÈGLE ABSOLUE — FORMAT DE SORTIE ⚠️
@@ -6252,8 +6566,16 @@ Réponds UNIQUEMENT en JSON strict :
       "correct_category": "plancher",
       "raison": "Page 6 audit indique cette paroi sous l'en-tête PLANCHERS"
     }
+  ],
+  "feedbacks_not_processed": [
+    {
+      "id": "fb_xxx",
+      "raison": "explication courte de pourquoi ce feedback n'a pas pu être appliqué (max 120 chars)"
+    }
   ]
 }
+FEEDBACKS_NOT_PROCESSED — règle de traçabilité :
+Si des règles utilisateur t'ont été injectées (bloc « RÈGLES APPRISES DE L'UTILISATEUR »), retourne dans feedbacks_not_processed uniquement ceux que tu n'as PAS pu appliquer lors de cette analyse (par manque de données, inapplicabilité au dossier actuel, contradiction avec les sources, etc.). Les feedbacks absents de cette liste sont considérés comme appliqués. Si tous les feedbacks ont été appliqués (ou si aucun feedback n'a été injecté), retourne feedbacks_not_processed: [].
 IMPORTANT :
 - Pour CHAQUE correction, fournis source_excerpt_audit et/ou source_excerpt_vt — un court extrait BRUT du texte source (copié tel quel, pas reformulé) qui permet de vérifier ta décision. Max 200 caractères chacun. Si la valeur est absente du document, mets null.
 - low_confidence: true UNIQUEMENT si tu appliques quand même une correction MAIS avec doute résiduel (rare). Pour les cas où tu préfères ne pas corriger à cause du doute, utilise le bloc "low_confidence_flags".
@@ -6493,17 +6815,70 @@ ${vtShort}`;
         console.log('[MAYA] ' + corrCount + ' correction(s) appliquée(s).');
         results._mayaStatus = { ran: true, corrections: corrCount, suspects: suspects.length, lowConfidenceCount: lowConfCount, error: null };
 
-        // ── Marquage auto pending → applied des feedbacks drawer injectés ──
+        // ── Marquage auto pending → archived des feedbacks drawer injectés ──
         try {
           var flippedCount = markDrawerFeedbacksApplied(drawerInjection.injectedIds || []);
           if (flippedCount > 0) {
-            console.log('[MAYA-DRAWER] ' + flippedCount + ' feedback(s) pending passé(s) en applied (règles permanentes inchangées).');
+            console.log('[MAYA-DRAWER] ' + flippedCount + ' feedback(s) pending passé(s) en archived.');
             if (document.getElementById('maya-drawer') && document.getElementById('maya-drawer').classList.contains('visible')) {
               renderMayaDrawer();
             }
             updateMayaFabBadges();
           }
-        } catch (e) { console.warn('[MAYA-DRAWER] Marquage applied échoué:', e.message); }
+        } catch (e) { console.warn('[MAYA-DRAWER] Marquage archived échoué:', e.message); }
+
+        // ── Log d'activité Maya (maya_activity_log_v1) ──
+        try {
+          var injectedFeedbacks = (drawerInjection.injectedIds || []).map(function(fbId) {
+            var all = collectAllFeedbacks();
+            var fb = all.find(function(f) { return f.id === fbId; });
+            if (!fb) return { id: fbId, comment: '', date_created: '' };
+            return {
+              id: fb.id,
+              comment: (fb.text || '').substring(0, 300),
+              date_created: fb.timestamp || ''
+            };
+          }).filter(function(f) { return !!f.id; });
+
+          var notProcessedRaw = (mayaResult && Array.isArray(mayaResult.feedbacks_not_processed))
+            ? mayaResult.feedbacks_not_processed : [];
+          var notProcessedIds = notProcessedRaw.map(function(e) { return e.id; });
+
+          var feedbacksNotProcessed = notProcessedRaw.map(function(entry) {
+            var all = collectAllFeedbacks();
+            var fb = all.find(function(f) { return f.id === entry.id; });
+            return {
+              id: entry.id,
+              comment: fb ? (fb.text || '').substring(0, 300) : '',
+              raison: (entry.raison || '').substring(0, 200)
+            };
+          });
+
+          // Résumé bref du prompt envoyé à Maya (dossier + nb suspects + feedbacks injectés)
+          var promptSummary = 'Dossier : ' + (state.dossierName || '—')
+            + '. ' + suspects.length + ' résultat(s) soumis à Maya.'
+            + (injectedFeedbacks.length > 0 ? ' ' + injectedFeedbacks.length + ' feedback(s) injecté(s) en règles utilisateur.' : ' Aucun feedback utilisateur injecté.')
+            + (learningsBlock ? ' Learnings KB injectés.' : '');
+
+          var logEntry = {
+            id: 'activity_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+            date: new Date().toISOString(),
+            dossier_id: (state.dossierName || '').replace(/\s+/g, '_').toLowerCase() || 'inconnu',
+            dossier_nom: state.dossierName || '—',
+            feedbacks_injected: injectedFeedbacks,
+            feedbacks_not_processed: feedbacksNotProcessed,
+            prompt_summary: promptSummary
+          };
+
+          var activityLog = [];
+          try { activityLog = JSON.parse(localStorage.getItem('maya_activity_log_v1') || '[]'); } catch(e) { activityLog = []; }
+          if (!Array.isArray(activityLog)) activityLog = [];
+          activityLog.unshift(logEntry); // plus récent en premier
+          // Garde max 500 entrées pour ne pas exploser le localStorage
+          if (activityLog.length > 500) activityLog = activityLog.slice(0, 500);
+          localStorage.setItem('maya_activity_log_v1', JSON.stringify(activityLog));
+          console.log('[MAYA-ACTIVITY] Entrée loguée — ' + injectedFeedbacks.length + ' injecté(s), ' + feedbacksNotProcessed.length + ' non traité(s).');
+        } catch (e) { console.warn('[MAYA-ACTIVITY] Log activité échoué:', e.message); }
 
         // ── Auto-apprentissage : sauvegarder les corrections comme learnings ──
         try {
@@ -6871,6 +7246,30 @@ ${vtShort}`;
       lucide.createIcons();
     }
 
+    function buildVerifCellHTML(rv) {
+      var iA = rv._verif_audit || 'non_cite';
+      var iV = rv._verif_vt    || 'non_cite';
+      var icon = { verifie:'✅', partiel:'~', non_verifie:'⚠️', non_cite:'—', court:'?' };
+      var lines = [];
+      var extA = rv.extrait_audit ? rv.extrait_audit.substring(0,80) + (rv.extrait_audit.length>80?'…':'') : '';
+      var extV = rv.extrait_vt   ? rv.extrait_vt.substring(0,80)   + (rv.extrait_vt.length>80?'…':'')   : '';
+      var ctxA = extA || (rv._ctx_audit  ? rv._ctx_audit.substring(0, 120)  : '');
+      var ctxV = extV || (rv._ctx_vt     ? rv._ctx_vt.substring(0, 120)    : '');
+      var pgA = rv._page_audit ? ' (p.' + rv._page_audit + ')' : '';
+      var pgV = rv._page_vt   ? ' (p.' + rv._page_vt   + ')' : '';
+      if (extA)      { lines.push('<div style="margin-bottom:4px"><span style="font-weight:600">' + (icon[iA]||'—') + ' Audit' + escHtml(pgA) + '</span> : <em>"' + escHtml(extA) + '"</em></div>'); }
+      else if (ctxA) { lines.push('<div style="margin-bottom:4px"><span style="font-weight:600">🔍 Audit' + escHtml(pgA) + '</span> : <em>"' + escHtml(ctxA) + '"</em></div>'); }
+      if (extV)      { lines.push('<div><span style="font-weight:600">' + (icon[iV]||'—') + ' VT' + escHtml(pgV) + '</span> : <em>"' + escHtml(extV) + '"</em></div>'); }
+      else if (ctxV) { lines.push('<div><span style="font-weight:600">🔍 VT' + escHtml(pgV) + '</span> : <em>"' + escHtml(ctxV) + '"</em></div>'); }
+      if (!extA && !ctxA && !extV && !ctxV) lines.push('<div style="color:#666;font-style:italic">— Non cité par l\'IA</div>');
+      var hasWarn  = iA==='non_verifie' || iV==='non_verifie';
+      var bg, fg;
+      if (hasWarn)              { bg='#FFF3CD'; fg='#7F4000'; }
+      else if (!extA && !extV)  { bg='#FAFAFA'; fg='#666666'; }
+      else                      { bg='#E8F5E9'; fg='#2E4A2E'; }
+      return '<td style="max-width:280px;font-size:11px;line-height:1.45;background:' + bg + ';color:' + fg + ';padding:6px 8px;vertical-align:top">' + lines.join('') + '</td>';
+    }
+
     function renderTable(filter) {
       const tbody = document.getElementById('rapport-tbody');
       tbody.innerHTML = '';
@@ -6883,7 +7282,7 @@ ${vtShort}`;
       }
 
       if (filtered.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:28px;color:var(--text-muted);font-style:italic;">Aucun résultat pour ce filtre.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:28px;color:var(--text-muted);font-style:italic;">Aucun résultat pour ce filtre.</td></tr>';
         return;
       }
 
@@ -6896,9 +7295,13 @@ ${vtShort}`;
       });
 
       // Grouper les résultats filtrés par section
+      // Les orphelines menuiseries (id_champ='_orphan_menuiserie') n'ont pas de section
+      // dans le référentiel → capturées séparément pour un rendu groupé distinct.
       const bySection = {};
       const noSection = [];
+      const orphanRows = [];
       filtered.forEach(function(r) {
+        if (r._orphan_source) { orphanRows.push(r); return; }
         const sec = getFieldSection(r.id_champ) || '';
         if (!sec) { noSection.push(r); return; }
         if (!bySection[sec]) bySection[sec] = [];
@@ -6914,16 +7317,29 @@ ${vtShort}`;
           const currInst = r.instance_label || null;
           if (lastInstance !== undefined && currInst !== lastInstance) {
             const spacer = document.createElement('tr');
-            spacer.innerHTML = '<td colspan="8" style="padding:0;background:transparent;border:none;height:10px"></td>';
+            spacer.innerHTML = '<td colspan="9" style="padding:0;background:transparent;border:none;height:10px"></td>';
             tbody.appendChild(spacer);
           }
           lastInstance = currInst;
 
           rowNum++;
           const row = document.createElement('tr');
-          const instanceTag = r.instance_label
+
+          // Badge orpheline — affiché à la place du badge instance normal
+          var orphanBadgeHtml = '';
+          if (r._orphan_source === 'vt_only') {
+            row.className = 'orphan-row-vt';
+            orphanBadgeHtml = '<br><span class="orphan-badge orphan-vt-only">Présente en VT uniquement</span>';
+          } else if (r._orphan_source === 'audit_only') {
+            row.className = 'orphan-row-audit';
+            orphanBadgeHtml = '<br><span class="orphan-badge orphan-audit-only">Présente en audit uniquement</span>';
+          }
+
+          const instanceTag = (r.instance_label && !r._orphan_source)
             ? '<br><span style="display:inline-block;margin-top:3px;padding:1px 7px;background:rgba(27,63,139,0.08);border-radius:10px;font-size:10px;color:var(--primary);font-weight:600">' + escHtml(r.instance_label) + '</span>'
-            : '';
+            : (r._orphan_source
+                ? '<br><span style="display:inline-block;margin-top:3px;font-size:11px;font-weight:600;color:var(--text-muted)">' + escHtml(r.instance_label || '') + '</span>'
+                : '');
           const conf = computeConfidence(r);
           const fbKey = feedbackKey(r.id_champ, r.instance_label);
           const fbList = (mayaFeedbacks[fbKey] || []);
@@ -6953,14 +7369,23 @@ ${vtShort}`;
               '<span class="confidence-chip conf-' + conf.level + '" title="' + escHtml(conf.reason) + '">' + conf.icon + ' ' + conf.label + '</span>' +
               '<button type="button" class="' + fbClass + '" title="' + fbTitle + '"' + fbAttr + ' onclick="openMayaFeedback(\'' + safeKey + '\')">\ud83d\udcac</button>' +
             '</td>';
+          // Pour les orphelines, la cellule "champ" affiche l'instance_label + badge source
+          // au lieu de l'id_champ interne "_orphan_menuiserie"
+          var champCellContent;
+          if (r._orphan_source) {
+            champCellContent = '<strong style="font-size:11px;color:var(--text-muted)">Menuiserie</strong>' + instanceTag + orphanBadgeHtml;
+          } else {
+            champCellContent = '<strong>' + escHtml(r.id_champ || '') + '</strong><br><span style="font-size:11px;color:var(--text-muted)">' + escHtml(getFieldNom(r.id_champ)) + '</span>' + instanceTag;
+          }
           row.innerHTML =
             '<td>' + rowNum + '</td>' +
-            '<td><strong>' + escHtml(r.id_champ || '') + '</strong><br><span style="font-size:11px;color:var(--text-muted)">' + escHtml(getFieldNom(r.id_champ)) + '</span>' + instanceTag + '</td>' +
-            '<td style="max-width:180px;font-size:12px">' + escHtml(r.valeur_audit || '\u2014') + '</td>' +
-            '<td style="max-width:180px;font-size:12px;white-space:pre-line">' + escHtml(r.valeur_vt || '\u2014') + '</td>' +
+            '<td>' + champCellContent + '</td>' +
+            '<td style="max-width:180px;font-size:12px">' + escHtml(r.valeur_audit || '—') + '</td>' +
+            '<td style="max-width:180px;font-size:12px;white-space:pre-line">' + escHtml(r.valeur_vt || '—') + '</td>' +
             '<td>' + statusChip(r.statut) + '</td>' +
             confCell +
-            '<td style="max-width:200px;font-size:12px;color:var(--text-muted)">' + escHtml(r.commentaire || '\u2014') + (r._maya_corrected ? ' <span style="display:inline-block;margin-top:3px;padding:1px 7px;background:#7B2D8E;color:white;border-radius:10px;font-size:9px;font-weight:700">&#10022; Maya</span>' : '') + '</td>' +
+            '<td style="max-width:200px;font-size:12px;color:var(--text-muted)">' + escHtml(r.commentaire || '—') + (r._maya_corrected ? ' <span style="display:inline-block;margin-top:3px;padding:1px 7px;background:#7B2D8E;color:white;border-radius:10px;font-size:9px;font-weight:700">&#10022; Maya</span>' : '') + '</td>' +
+            buildVerifCellHTML(r) +
             '<td>' + revuSelectHtml(r.id_champ, r.instance_label, r.revu_doc) + '</td>';
           tbody.appendChild(row);
         });
@@ -6975,13 +7400,13 @@ ${vtShort}`;
           for (var __sp = 0; __sp < 2; __sp++) {
             var spacerRow = document.createElement('tr');
             spacerRow.className = 'rapport-section-spacer';
-            spacerRow.innerHTML = '<td colspan="8" style="padding:0;border:none;background:transparent;height:14px">&nbsp;</td>';
+            spacerRow.innerHTML = '<td colspan="9" style="padding:0;border:none;background:transparent;height:14px">&nbsp;</td>';
             tbody.appendChild(spacerRow);
           }
         }
         const secRow = document.createElement('tr');
         secRow.className = 'rapport-section-row';
-        secRow.innerHTML = '<td colspan="8">&#9656; ' + escHtml(sec) + '<span class="rapport-section-count">(' + rows.length + ' champ' + (rows.length > 1 ? 's' : '') + ')</span></td>';
+        secRow.innerHTML = '<td colspan="9">&#9656; ' + escHtml(sec) + '<span class="rapport-section-count">(' + rows.length + ' champ' + (rows.length > 1 ? 's' : '') + ')</span></td>';
         tbody.appendChild(secRow);
         appendDataRows(rows);
         sectionIndex++;
@@ -6990,6 +7415,27 @@ ${vtShort}`;
       // Champs sans section (fallback)
       if (noSection.length > 0) {
         appendDataRows(noSection);
+      }
+
+      // Orphelines menuiseries — section dédiée en fin de tableau
+      if (orphanRows.length > 0) {
+        for (var _osp = 0; _osp < 2; _osp++) {
+          var _ospRow = document.createElement('tr');
+          _ospRow.className = 'rapport-section-spacer';
+          _ospRow.innerHTML = '<td colspan="9" style="padding:0;border:none;background:transparent;height:14px">&nbsp;</td>';
+          tbody.appendChild(_ospRow);
+        }
+        var vtOnly  = orphanRows.filter(function(r){ return r._orphan_source === 'vt_only'; });
+        var audOnly = orphanRows.filter(function(r){ return r._orphan_source === 'audit_only'; });
+        var orphSecLabel = 'Menuiseries orphelines';
+        if (vtOnly.length > 0 && audOnly.length === 0)  orphSecLabel = 'Menuiseries orphelines — présentes en VT uniquement (' + vtOnly.length + ')';
+        if (audOnly.length > 0 && vtOnly.length === 0)  orphSecLabel = 'Menuiseries orphelines — présentes en audit uniquement (' + audOnly.length + ')';
+        if (vtOnly.length > 0 && audOnly.length > 0)    orphSecLabel = 'Menuiseries orphelines — ' + vtOnly.length + ' VT only / ' + audOnly.length + ' audit only';
+        var orphSecRow = document.createElement('tr');
+        orphSecRow.className = 'rapport-section-row';
+        orphSecRow.innerHTML = '<td colspan="9">&#9656; ' + escHtml(orphSecLabel) + '<span class="rapport-section-count">(' + orphanRows.length + ' menuiserie' + (orphanRows.length > 1 ? 's' : '') + ')</span></td>';
+        tbody.appendChild(orphSecRow);
+        appendDataRows(orphanRows);
       }
     }
 
@@ -7019,16 +7465,33 @@ ${vtShort}`;
         const field = state.referentiel.find(f => f.id === r.id_champ) || {};
         const div = document.createElement('div');
         div.className = 'missing-card';
-        div.innerHTML = `
-          <span class="missing-card-id">${escHtml(r.id_champ || '—')}</span>
-          <div>
-            <div class="missing-card-field">${escHtml(field.nom || r.id_champ || '—')}${r.instance_label ? ' <span style="font-size:10px;font-weight:600;background:rgba(27,63,139,0.1);padding:1px 6px;border-radius:8px;color:var(--primary)">' + escHtml(r.instance_label) + '</span>' : ''}</div>
-            <div class="missing-card-cat">${escHtml(field.categorie || getFieldSection(r.id_champ) || '—')}</div>
-          </div>
-          <div class="missing-card-suggestion">
-            ${escHtml(r.commentaire || 'Ce champ est absent ou non identifiable dans la Visite Technique.')}
-          </div>
-        `;
+        // Orphelines menuiseries : affichage spécifique (pas d'id_champ référentiel)
+        if (r._orphan_source) {
+          var orphBadge = r._orphan_source === 'vt_only'
+            ? '<span class="orphan-badge orphan-vt-only">Présente en VT uniquement</span>'
+            : '<span class="orphan-badge orphan-audit-only">Présente en audit uniquement</span>';
+          div.innerHTML = `
+            <span class="missing-card-id" style="background:#E0F2F1;color:#00695C">Menuiserie</span>
+            <div>
+              <div class="missing-card-field">${escHtml(r.instance_label || '—')} ${orphBadge}</div>
+              <div class="missing-card-cat">Menuiseries / Ouvrants</div>
+            </div>
+            <div class="missing-card-suggestion">
+              ${escHtml(r.commentaire || '')}
+            </div>
+          `;
+        } else {
+          div.innerHTML = `
+            <span class="missing-card-id">${escHtml(r.id_champ || '—')}</span>
+            <div>
+              <div class="missing-card-field">${escHtml(field.nom || r.id_champ || '—')}${r.instance_label ? ' <span style="font-size:10px;font-weight:600;background:rgba(27,63,139,0.1);padding:1px 6px;border-radius:8px;color:var(--primary)">' + escHtml(r.instance_label) + '</span>' : ''}</div>
+              <div class="missing-card-cat">${escHtml(field.categorie || getFieldSection(r.id_champ) || '—')}</div>
+            </div>
+            <div class="missing-card-suggestion">
+              ${escHtml(r.commentaire || 'Ce champ est absent ou non identifiable dans la Visite Technique.')}
+            </div>
+          `;
+        }
         container.appendChild(div);
       });
     }
@@ -7180,31 +7643,27 @@ ${vtShort}`;
         existingBlock.innerHTML = '';
       } else {
         existingBlock.style.display = 'block';
-        // Compte par statut pour titre informatif
-        var pendingN = 0, appliedN = 0, otherN = 0;
+        // Compte par statut pour titre informatif (2 statuts uniquement)
+        var pendingN = 0, archivedN = 0;
         list.forEach(function(fb){
           var fid = 'line:' + key + ':' + normTs(fb.timestamp || '');
-          var st = (mayaFeedbackMeta[fid] || {}).status || 'pending';
+          var st = normalizeMayaStatus((mayaFeedbackMeta[fid] || {}).status || 'pending');
           if (st === 'pending') pendingN++;
-          else if (st === 'applied' || st === 'permanent') appliedN++;
-          else otherN++;
+          else archivedN++;
         });
         var titleParts = [];
-        if (pendingN > 0)  titleParts.push('<span style="color:#7F3D00;font-weight:700;">' + pendingN + ' en attente</span>');
-        if (appliedN > 0)  titleParts.push('<span style="color:#1B5E20;">' + appliedN + ' déjà traité(s) par Maya</span>');
-        if (otherN > 0)    titleParts.push(otherN + ' archivé(s)');
+        if (pendingN > 0)   titleParts.push('<span style="color:#7F3D00;font-weight:700;">' + pendingN + ' en attente</span>');
+        if (archivedN > 0)  titleParts.push(archivedN + ' archivé(s)');
         let html = '<div class="maya-modal-existing-title">Historique (' + list.length + ') — ' + titleParts.join(' · ') + '</div>';
         list.slice().reverse().forEach(function(fb){
           const d = new Date(fb.timestamp);
           const dateStr = d.toLocaleDateString('fr-FR') + ' ' + d.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
           var fid = 'line:' + key + ':' + normTs(fb.timestamp || '');
-          var st = (mayaFeedbackMeta[fid] || {}).status || 'pending';
+          var st = normalizeMayaStatus((mayaFeedbackMeta[fid] || {}).status || 'pending');
           var stBadge = '';
-          if (st === 'pending')        stBadge = '<span style="display:inline-block;padding:1px 6px;background:#FFE0B2;color:#7F3D00;border-radius:8px;font-size:9.5px;font-weight:700;margin-right:5px;">⏳ En attente</span>';
-          else if (st === 'applied')   stBadge = '<span style="display:inline-block;padding:1px 6px;background:#C8E6C9;color:#1B5E20;border-radius:8px;font-size:9.5px;font-weight:700;margin-right:5px;">✅ Traité</span>';
-          else if (st === 'permanent') stBadge = '<span style="display:inline-block;padding:1px 6px;background:#E1BEE7;color:#4A148C;border-radius:8px;font-size:9.5px;font-weight:700;margin-right:5px;">🧠 Permanent</span>';
-          else if (st === 'archived')  stBadge = '<span style="display:inline-block;padding:1px 6px;background:#CFD8DC;color:#37474F;border-radius:8px;font-size:9.5px;font-weight:700;margin-right:5px;">📦 Archivé</span>';
-          var faded = (st === 'applied' || st === 'permanent' || st === 'archived') ? 'opacity:0.65;' : '';
+          if (st === 'pending')  stBadge = '<span style="display:inline-block;padding:1px 6px;background:#FFE0B2;color:#7F3D00;border-radius:8px;font-size:9.5px;font-weight:700;margin-right:5px;">⏳ En attente</span>';
+          else                   stBadge = '<span style="display:inline-block;padding:1px 6px;background:#CFD8DC;color:#37474F;border-radius:8px;font-size:9.5px;font-weight:700;margin-right:5px;">📦 Archivé</span>';
+          var faded = (st === 'archived') ? 'opacity:0.65;' : '';
           html += '<div class="maya-modal-existing-item" style="' + faded + '">' + stBadge + '<span class="maya-modal-existing-date">' + dateStr + '</span>' + escHtml(fb.text) + '</div>';
         });
         existingBlock.innerHTML = html;
@@ -7477,51 +7936,22 @@ ${vtShort}`;
       return deduped;
     }
 
-    // ---- Promotion automatique des feedbacks récurrents en règle permanente ----
-    function promoteRecurringToPermanent() {
-      var all = collectAllFeedbacks();
-      var byKey = {};  // line scope
-      var byCat = {};  // global scope
-      all.forEach(function(i){
-        if (i.meta && i.meta.status === 'archived') return;
-        if (i.scope === 'line' && i.key) {
-          byKey[i.key] = byKey[i.key] || [];
-          byKey[i.key].push(i);
-        } else if (i.scope === 'global' && i.category) {
-          byCat[i.category] = byCat[i.category] || [];
-          byCat[i.category].push(i);
-        }
-      });
-      var changed = 0;
-      Object.keys(byKey).forEach(function(k){
-        if (byKey[k].length >= 3) byKey[k].forEach(function(it){
-          var cur = (mayaFeedbackMeta[it.id] || {}).status || 'pending';
-          if (cur !== 'permanent' && cur !== 'archived') {
-            mayaFeedbackMeta[it.id] = { status: 'permanent', at: new Date().toISOString(), autoPromoted: true };
-            changed++;
-          }
-        });
-      });
-      Object.keys(byCat).forEach(function(c){
-        if (byCat[c].length >= 3) byCat[c].forEach(function(it){
-          var cur = (mayaFeedbackMeta[it.id] || {}).status || 'pending';
-          if (cur !== 'permanent' && cur !== 'archived') {
-            mayaFeedbackMeta[it.id] = { status: 'permanent', at: new Date().toISOString(), autoPromoted: true };
-            changed++;
-          }
-        });
-      });
-      if (changed > 0) persistMayaFeedbackMeta();
-      return changed;
+    // ---- Promotion permanente DÉSACTIVÉE (statuts simplifiés à pending/archived) ----
+    function promoteRecurringToPermanent() { return 0; }
+
+    // ---- Normalisation statuts : toute valeur héritée (applied/permanent) → archived ----
+    function normalizeMayaStatus(s) {
+      if (s === 'pending') return 'pending';
+      if (!s) return 'pending';
+      return 'archived';
     }
 
     // ---- Construction du bloc RÈGLES APPRISES injecté dans le prompt Maya ----
     function buildDrawerFeedbackInjection() {
-      promoteRecurringToPermanent();
       var all = collectAllFeedbacks();
       var toInject = all.filter(function(i){
-        var s = (i.meta && i.meta.status) || 'pending';
-        return s === 'pending' || s === 'permanent';
+        var s = normalizeMayaStatus((i.meta && i.meta.status) || 'pending');
+        return s === 'pending';
       });
       if (toInject.length === 0) return { block: '', injectedIds: [] };
 
@@ -7548,8 +7978,7 @@ ${vtShort}`;
         if (seen[dedupKey]) { skipped++; return; }
         seen[dedupKey] = true;
 
-        var isPerm = (it.meta && it.meta.status === 'permanent');
-        var permTag = isPerm ? ' [🧠 RÈGLE PERMANENTE]' : '';
+        var permTag = '';
         var displayTxt = (it.text || '').replace(/\s+/g, ' ').trim();
 
         // Snapshot : ce que Maya avait sorti à l'origine (rejeté par l'utilisateur)
@@ -7567,24 +7996,23 @@ ${vtShort}`;
       if (skipped > 0) console.log('[MAYA-DRAWER] ' + skipped + ' feedback(s) doublon(s) déduplé(s) avant injection.');
 
       var block = '\n\n=== RÈGLES APPRISES DE L\'UTILISATEUR (à appliquer obligatoirement) ===\n'
-                + 'L\'utilisateur t\'a déjà donné les retours suivants lors de précédentes analyses. Tu DOIS les appliquer strictement lors de cette nouvelle passe. Les [🧠 RÈGLE PERMANENTE] sont des patterns récurrents (≥3 retours) à respecter systématiquement.\n'
+                + 'L\'utilisateur t\'a déjà donné les retours suivants lors de précédentes analyses. Tu DOIS les appliquer strictement lors de cette nouvelle passe.\n'
                 + 'Quand "contexte rejeté" est indiqué, c\'est ce que tu avais sorti la fois précédente — l\'utilisateur l\'a explicitement contesté. Ajuste ton raisonnement pour ne plus produire cette sortie.\n'
                 + lines.join('\n') + '\n'
                 + '==================================================================\n';
       return { block: block, injectedIds: dedupedIds };
     }
 
-    // ---- Marquage auto pending → applied après injection réussie ----
+    // ---- Marquage auto pending → archived après injection réussie ----
     function markDrawerFeedbacksApplied(injectedIds) {
       if (!injectedIds || !injectedIds.length) return 0;
       var flipped = 0;
       injectedIds.forEach(function(id){
         var cur = (mayaFeedbackMeta[id] || {}).status || 'pending';
         if (cur === 'pending') {
-          mayaFeedbackMeta[id] = { status: 'applied', at: new Date().toISOString(), autoApplied: true };
+          mayaFeedbackMeta[id] = { status: 'archived', at: new Date().toISOString(), autoApplied: true };
           flipped++;
         }
-        // permanent reste permanent (toujours ré-injecté)
       });
       if (flipped > 0) persistMayaFeedbackMeta();
       return flipped;
@@ -7801,12 +8229,9 @@ ${vtShort}`;
 
       // ── Action de Maya : ce qu'elle a fait (ou fera) du feedback ──
       var action;
-      if (status === 'applied' || status === 'permanent') {
-        action = (status === 'permanent')
-          ? 'Maya l\'a intégré comme règle permanente, ré-injectée à chaque analyse future.'
-          : 'Maya a intégré ce feedback dans son prompt à la dernière analyse.';
-      } else if (status === 'archived') {
-        action = 'Feedback archivé, Maya ne l\'utilise plus.';
+      var normSt = normalizeMayaStatus(status);
+      if (normSt === 'archived') {
+        action = 'Maya a traité ce feedback à la dernière analyse. Il est archivé.';
       } else {
         action = 'Maya intégrera ce feedback à son prompt dès la prochaine analyse.';
       }
@@ -7833,14 +8258,12 @@ ${vtShort}`;
     }
 
     function renderMayaDrawer() {
-      // Promotion automatique avant render (pour refléter les règles récurrentes)
-      try { promoteRecurringToPermanent(); } catch(e) {}
       var items = collectAllFeedbacks();
       var learnings = detectMayaRecurringLearnings(items);
 
-      // Filtre statut + filtre date
+      // Filtre statut (normalisé : applied/permanent → archived) + filtre date
       var filtered = items.filter(function(i){
-        if (mayaDrawerFilter !== 'all' && i.meta.status !== mayaDrawerFilter) return false;
+        if (mayaDrawerFilter !== 'all' && normalizeMayaStatus(i.meta.status) !== mayaDrawerFilter) return false;
         if (!passesDateFilter(i.timestamp)) return false;
         return true;
       });
@@ -7875,17 +8298,14 @@ ${vtShort}`;
             fieldLabel = '🌐 Global — ' + (catLabels2[it.category] || 'Remarque');
           }
 
+          var normStatus = normalizeMayaStatus(it.meta.status);
           var classes = ['maya-drawer-item'];
-          if (it.meta.status === 'archived') classes.push('archived');
-          if (it.meta.status === 'applied') classes.push('applied');
-          if (it.meta.status === 'permanent') classes.push('permanent');
+          if (normStatus === 'archived') classes.push('archived');
           if (it.scope === 'global') classes.push('scope-global');
 
           var statusBadge = '';
-          if (it.meta.status === 'pending') statusBadge = '<span class="maya-drawer-item-badge pending">En attente</span>';
-          else if (it.meta.status === 'applied') statusBadge = '<span class="maya-drawer-item-badge applied">Appliqué</span>';
-          else if (it.meta.status === 'archived') statusBadge = '<span class="maya-drawer-item-badge archived">Archivé</span>';
-          else if (it.meta.status === 'permanent') statusBadge = '<span class="maya-drawer-item-badge permanent">🧠 Règle permanente</span>';
+          if (normStatus === 'pending') statusBadge = '<span class="maya-drawer-item-badge pending">En attente</span>';
+          else statusBadge = '<span class="maya-drawer-item-badge archived">Archivé</span>';
 
           var scopeBadge = (it.scope === 'global') ? '<span class="maya-drawer-item-badge global">Global</span>' : '';
 
@@ -7935,14 +8355,14 @@ ${vtShort}`;
                +   '<div class="maya-drawer-item-text">' + escHtml(it.text || '') + '</div>'
                +   qualityHtml
                +   '<div class="maya-drawer-item-actions">';
-          if (it.meta.status === 'pending') {
+          if (normStatus === 'pending') {
             html +=   '<button type="button" class="maya-drawer-item-action" onclick="mayaEditFeedback(\'' + it.id + '\')" title="Modifier le texte de ce feedback. Possible uniquement tant qu\'il est En attente (Maya ne l\'a pas encore traité).">✏️ Modifier</button>';
           }
           // Bouton "promouvoir en règle globale" : transforme un feedback ligne en règle globale réutilisable sur tous dossiers
           if (it.scope === 'line') {
             html +=   '<button type="button" class="maya-drawer-item-action" style="border-color:#FFC107;color:#7F3D00;background:#FFF8E1" onclick="mayaPromoteToGlobal(\'' + it.id + '\')" title="Crée une copie de ce feedback comme règle globale (catégorie « Règle manquante ») applicable à TOUS les futurs dossiers, pas juste cette ligne. À utiliser quand la règle métier est généralisable.">🌐 Règle globale</button>';
           }
-          html +=     '<button type="button" class="maya-drawer-item-action danger" onclick="mayaDeleteFeedback(\'' + it.id + '\')" title="Retire définitivement ce feedback. Les statuts (En attente / Appliqué / Permanente) sont gérés automatiquement par le système et ne peuvent pas être modifiés manuellement.">🗑 Supprimer</button>'
+          html +=     '<button type="button" class="maya-drawer-item-action danger" onclick="mayaDeleteFeedback(\'' + it.id + '\')" title="Retire définitivement ce feedback. Les statuts (En attente / Archivé) sont gérés automatiquement par le système et ne peuvent pas être modifiés manuellement.">🗑 Supprimer</button>'
                +   '</div>'
                + '</div>';
         });
@@ -7952,9 +8372,9 @@ ${vtShort}`;
     }
 
     function mayaMarkApplied(id) {
-      mayaFeedbackMeta[id] = { status: 'applied', at: new Date().toISOString() };
+      mayaFeedbackMeta[id] = { status: 'archived', at: new Date().toISOString() };
       persistMayaFeedbackMeta();
-      try { MayaSupabase.updateFeedback(id, { status: 'applied' }); } catch(e) {}
+      try { MayaSupabase.updateFeedback(id, { status: 'archived' }); } catch(e) {}
       renderMayaDrawer(); updateMayaFabBadges();
     }
 
@@ -8002,9 +8422,9 @@ ${vtShort}`;
       updateMayaFabBadges();
     }
     function mayaMarkPermanent(id) {
-      mayaFeedbackMeta[id] = { status: 'permanent', at: new Date().toISOString() };
+      mayaFeedbackMeta[id] = { status: 'archived', at: new Date().toISOString() };
       persistMayaFeedbackMeta();
-      try { MayaSupabase.updateFeedback(id, { status: 'permanent' }); } catch(e) {}
+      try { MayaSupabase.updateFeedback(id, { status: 'archived' }); } catch(e) {}
       renderMayaDrawer(); updateMayaFabBadges();
     }
     function mayaArchive(id) {
@@ -8299,9 +8719,10 @@ ${vtShort}`;
         return;
       }
 
-      var STATUS_LBL = { pending: 'En attente', applied: 'Appliqué', archived: 'Archivé', permanent: 'Règle permanente' };
-      var STATUS_BG  = { pending: 'FFFFF3E0', applied: 'FFE8F5E9', archived: 'FFECEFF1', permanent: 'FFF3E5F5' };
-      var STATUS_FG  = { pending: 'FF7F3D00', applied: 'FF1B5E20', archived: 'FF37474F', permanent: 'FF4A148C' };
+      var STATUS_LBL = { pending: 'En attente', archived: 'Archivé' };
+      var STATUS_BG  = { pending: 'FFFFF3E0', archived: 'FFECEFF1' };
+      var STATUS_FG  = { pending: 'FF7F3D00', archived: 'FF37474F' };
+      function normSt(s){ return normalizeMayaStatus(s); }
       var CAT_LBL    = { pattern: 'Pattern récurrent', rule: 'Règle manquante', prompt: 'Ajustement prompt', other: 'Remarque transverse' };
 
       function xlFill(a){ return { type:'pattern', pattern:'solid', fgColor:{argb:a} }; }
@@ -8347,7 +8768,7 @@ ${vtShort}`;
           var r2 = it.key ? findResultByFbKey(it.key) : null;
           if (r2) { var cc = computeConfidence(r2); conf = cc.icon + ' ' + cc.label; }
         } catch(e) {}
-        var statusKey = (it.meta && it.meta.status) || 'pending';
+        var statusKey = normSt((it.meta && it.meta.status) || 'pending');
         var row = ws1.addRow([
           dateStr,
           fieldLabel,
@@ -8388,7 +8809,7 @@ ${vtShort}`;
       globalItems.forEach(function(it){
         var d = new Date(it.timestamp);
         var dateStr = isNaN(d.getTime()) ? '' : (d.toLocaleDateString('fr-FR') + ' ' + d.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'}));
-        var statusKey = (it.meta && it.meta.status) || 'pending';
+        var statusKey = normSt((it.meta && it.meta.status) || 'pending');
         var row = ws2.addRow([
           dateStr,
           CAT_LBL[it.category] || (it.category || 'Remarque'),
@@ -8414,58 +8835,6 @@ ${vtShort}`;
       ws2.autoFilter = { from: {row:1, column:1}, to: {row:1, column:4} };
       ws2.views = [{ state:'frozen', ySplit:1 }];
 
-      // ── Onglet 3 : Règles permanentes ──
-      var ws3 = wb.addWorksheet('Règles permanentes');
-      ws3.columns = [{width: 42}, {width: 70}, {width: 22}, {width: 22}];
-      var hr3 = ws3.addRow(['Champ concerné / Catégorie', 'Règle apprise', 'Nb feedbacks source', 'Date de promotion']);
-      hr3.height = 24;
-      setH(ws3, hr3.number, hr3.values.slice(1), 'FF4A148C', 'FFFFFFFF', {bold:true, align:'center', wrap:true});
-
-      // Regrouper permanentes par clé (ligne) ou catégorie (global)
-      var permsByGroup = {};
-      items.forEach(function(it){
-        if ((it.meta && it.meta.status) !== 'permanent') return;
-        var groupKey, groupLabel;
-        if (it.scope === 'line' && it.key) {
-          groupKey = 'line:' + it.key;
-          var r = findResultByFbKey(it.key);
-          groupLabel = r ? (getFieldNom(r.id_champ) || r.id_champ) + (r.instance_label ? ' — ' + r.instance_label : '') : it.key;
-        } else if (it.scope === 'global' && it.category) {
-          groupKey = 'cat:' + it.category;
-          groupLabel = '🌐 Global — ' + (CAT_LBL[it.category] || it.category);
-        } else {
-          groupKey = 'other:' + it.id;
-          groupLabel = '(divers)';
-        }
-        if (!permsByGroup[groupKey]) permsByGroup[groupKey] = { label: groupLabel, texts: [], dates: [] };
-        permsByGroup[groupKey].texts.push((it.text || '').replace(/\s+/g, ' ').trim());
-        if (it.meta && it.meta.at) permsByGroup[groupKey].dates.push(it.meta.at);
-      });
-
-      var permKeys = Object.keys(permsByGroup);
-      permKeys.forEach(function(k){
-        var g = permsByGroup[k];
-        var latestDate = g.dates.sort().slice(-1)[0] || '';
-        var dateStr = '';
-        if (latestDate) { var dd = new Date(latestDate); if (!isNaN(dd.getTime())) dateStr = dd.toLocaleDateString('fr-FR'); }
-        var combined = g.texts.map(function(t, i){ return '(' + (i+1) + ') ' + t; }).join('\n');
-        var row = ws3.addRow([g.label, combined, g.texts.length, dateStr]);
-        row.height = Math.min(100, Math.max(22, g.texts.length * 16));
-        row.eachCell(function(cell, colNum){
-          cell.font = xlFont('FF333333', false, 10);
-          cell.alignment = xlAlign(colNum === 3 || colNum === 4 ? 'center' : 'left', true);
-          cell.border = xlBorder();
-          cell.fill = xlFill('FFF3E5F5');
-        });
-      });
-      if (permKeys.length === 0) {
-        var empty3 = ws3.addRow(['', '(aucune règle permanente — elles apparaissent automatiquement après 3 feedbacks sur le même champ ou la même catégorie)', '', '']);
-        empty3.getCell(2).font = xlFont('FF888888', false, 10, true);
-        empty3.getCell(2).alignment = xlAlign('left', true);
-      }
-      ws3.autoFilter = { from: {row:1, column:1}, to: {row:1, column:4} };
-      ws3.views = [{ state:'frozen', ySplit:1 }];
-
       // Télécharger
       var buf = await wb.xlsx.writeBuffer();
       var blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -8476,6 +8845,184 @@ ${vtShort}`;
       document.body.appendChild(a); a.click();
       setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
       showAlert('alerts-area', 'success', '📥 Export Excel téléchargé (' + today + ').');
+    }
+
+    // ── Rapport d'activité Maya ──────────────────────────────────────────────
+    function openMayaActivityModal() {
+      var overlay = document.getElementById('maya-activity-modal-overlay');
+      if (!overlay) return;
+      // Pré-remplir les dates par défaut : mois courant
+      var now = new Date();
+      var firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+      function pad(n){ return String(n).padStart(2,'0'); }
+      function toInputDate(d){ return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()); }
+      document.getElementById('maya-activity-date-from').value = toInputDate(firstDay);
+      document.getElementById('maya-activity-date-to').value   = toInputDate(now);
+      overlay.classList.add('visible');
+    }
+
+    function closeMayaActivityModal() {
+      var overlay = document.getElementById('maya-activity-modal-overlay');
+      if (overlay) overlay.classList.remove('visible');
+    }
+
+    async function generateMayaActivityReport() {
+      var ExcelJS = window.ExcelJS;
+      if (!ExcelJS) { showAlert('alerts-area', 'error', 'ExcelJS non chargé — vérifie la connexion.'); return; }
+
+      var fromVal = document.getElementById('maya-activity-date-from').value;
+      var toVal   = document.getElementById('maya-activity-date-to').value;
+      if (!fromVal || !toVal) {
+        showAlert('alerts-area', 'warning', 'Sélectionne une plage de date valide.');
+        return;
+      }
+
+      var fromDate = new Date(fromVal + 'T00:00:00');
+      var toDate   = new Date(toVal   + 'T23:59:59');
+      if (fromDate > toDate) {
+        showAlert('alerts-area', 'warning', 'La date de début doit être antérieure à la date de fin.');
+        return;
+      }
+
+      // Charger le log
+      var activityLog = [];
+      try { activityLog = JSON.parse(localStorage.getItem('maya_activity_log_v1') || '[]'); } catch(e) { activityLog = []; }
+      if (!Array.isArray(activityLog)) activityLog = [];
+
+      // Filtrer par plage
+      var filtered = activityLog.filter(function(entry) {
+        if (!entry || !entry.date) return false;
+        var d = new Date(entry.date);
+        return d >= fromDate && d <= toDate;
+      });
+
+      if (filtered.length === 0) {
+        showAlert('alerts-area', 'warning', 'Aucune activité Maya trouvée pour cette période.');
+        return;
+      }
+
+      // Helpers ExcelJS communs (réutilisés de exportMayaFeedbacksExcel)
+      function xlFill(a){ return { type:'pattern', pattern:'solid', fgColor:{argb:a} }; }
+      function xlFont(color, bold, sz){ return { name:'Calibri', size: sz||10, bold: !!bold, color:{argb: color||'FF333333'} }; }
+      function xlBorder(){ var s={style:'thin', color:{argb:'FFCCCCCC'}}; return {top:s, bottom:s, left:s, right:s}; }
+      function xlAlign(h, w){ return { vertical:'middle', horizontal: h||'left', wrapText: !!w }; }
+      function setH(ws, rowNum, cells, bg, fg, opts) {
+        cells.forEach(function(_, idx){
+          var cell = ws.getRow(rowNum).getCell(idx + 1);
+          cell.fill = xlFill(bg);
+          cell.font = xlFont(fg, opts.bold, opts.sz);
+          cell.alignment = xlAlign(opts.align, opts.wrap);
+          cell.border = xlBorder();
+        });
+      }
+      function fmtDate(iso) {
+        if (!iso) return '';
+        var d = new Date(iso);
+        if (isNaN(d.getTime())) return iso;
+        return d.toLocaleDateString('fr-FR') + ' ' + d.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
+      }
+
+      var wb = new ExcelJS.Workbook();
+      wb.creator = 'OT Énergie — Rapport activité Maya';
+
+      // ── Onglet 1 : Feedbacks traités ──
+      var ws1 = wb.addWorksheet('Feedbacks traités');
+      ws1.columns = [{width:20},{width:28},{width:22},{width:70},{width:22}];
+      var hr1 = ws1.addRow(['Date analyse','Dossier','ID feedback','Commentaire utilisateur','Date création feedback']);
+      hr1.height = 24;
+      setH(ws1, hr1.number, hr1.values.slice(1), 'FF1B3F8B', 'FFFFFFFF', {bold:true, align:'center', wrap:true});
+
+      filtered.forEach(function(entry) {
+        var notProcessedIds = (entry.feedbacks_not_processed || []).map(function(e){ return e.id; });
+        var treated = (entry.feedbacks_injected || []).filter(function(fb){ return notProcessedIds.indexOf(fb.id) === -1; });
+        treated.forEach(function(fb) {
+          var row = ws1.addRow([fmtDate(entry.date), entry.dossier_nom || '—', fb.id || '', fb.comment || '', fmtDate(fb.date_created)]);
+          row.height = Math.min(60, Math.max(18, Math.ceil((fb.comment || '').length / 70) * 14));
+          row.eachCell(function(cell, colNum){
+            cell.font = xlFont('FF333333', false, 10);
+            cell.alignment = xlAlign(colNum === 1 || colNum === 3 || colNum === 5 ? 'center' : 'left', true);
+            cell.border = xlBorder();
+            if (colNum === 1 || colNum === 5) { cell.fill = xlFill('FFF0F4FF'); }
+          });
+        });
+      });
+      var ws1Count = ws1.rowCount - 1;
+      if (ws1Count <= 0) {
+        var e1 = ws1.addRow(['','','(aucun feedback traité dans cette période)','','']);
+        e1.getCell(3).font = xlFont('FF888888', false, 10);
+      }
+      ws1.autoFilter = { from:{row:1,column:1}, to:{row:1,column:5} };
+      ws1.views = [{ state:'frozen', ySplit:1 }];
+
+      // ── Onglet 2 : Feedbacks non traités ──
+      var ws2 = wb.addWorksheet('Feedbacks non traités');
+      ws2.columns = [{width:20},{width:28},{width:22},{width:70},{width:50}];
+      var hr2 = ws2.addRow(['Date analyse','Dossier','ID feedback','Commentaire utilisateur','Raison du non-traitement']);
+      hr2.height = 24;
+      setH(ws2, hr2.number, hr2.values.slice(1), 'FFBF360C', 'FFFFFFFF', {bold:true, align:'center', wrap:true});
+
+      filtered.forEach(function(entry) {
+        (entry.feedbacks_not_processed || []).forEach(function(fb) {
+          var row = ws2.addRow([fmtDate(entry.date), entry.dossier_nom || '—', fb.id || '', fb.comment || '', fb.raison || '']);
+          row.height = Math.min(60, Math.max(18, Math.ceil(Math.max((fb.comment || '').length, (fb.raison || '').length) / 70) * 14));
+          row.eachCell(function(cell, colNum){
+            cell.font = xlFont('FF333333', false, 10);
+            cell.alignment = xlAlign(colNum === 1 || colNum === 3 ? 'center' : 'left', true);
+            cell.border = xlBorder();
+            if (colNum === 5) { cell.fill = xlFill('FFFFF3E0'); cell.font = xlFont('FF7F3D00', false, 10); }
+          });
+        });
+      });
+      var ws2Count = ws2.rowCount - 1;
+      if (ws2Count <= 0) {
+        var e2 = ws2.addRow(['','','(aucun feedback non traité dans cette période)','','']);
+        e2.getCell(3).font = xlFont('FF888888', false, 10);
+      }
+      ws2.autoFilter = { from:{row:1,column:1}, to:{row:1,column:5} };
+      ws2.views = [{ state:'frozen', ySplit:1 }];
+
+      // ── Onglet 3 : Résumés prompt Maya ──
+      var ws3 = wb.addWorksheet('Résumés prompt Maya');
+      ws3.columns = [{width:20},{width:28},{width:16},{width:16},{width:18},{width:80}];
+      var hr3 = ws3.addRow(['Date analyse','Dossier','Nb feedbacks injectés','Nb feedbacks traités','Nb feedbacks non traités','Résumé du prompt']);
+      hr3.height = 24;
+      setH(ws3, hr3.number, hr3.values.slice(1), 'FF2E7D32', 'FFFFFFFF', {bold:true, align:'center', wrap:true});
+
+      filtered.forEach(function(entry) {
+        var nbInj = (entry.feedbacks_injected || []).length;
+        var nbNotProc = (entry.feedbacks_not_processed || []).length;
+        var nbTreated = nbInj - nbNotProc;
+        var row = ws3.addRow([fmtDate(entry.date), entry.dossier_nom || '—', nbInj, nbTreated >= 0 ? nbTreated : 0, nbNotProc, entry.prompt_summary || '']);
+        row.height = Math.min(80, Math.max(18, Math.ceil((entry.prompt_summary || '').length / 80) * 14));
+        row.eachCell(function(cell, colNum){
+          cell.font = xlFont('FF333333', false, 10);
+          cell.alignment = xlAlign(colNum <= 2 || colNum >= 6 ? (colNum >= 6 ? 'left' : 'center') : 'center', true);
+          cell.border = xlBorder();
+          if (colNum === 3) { cell.fill = xlFill('FFF0F4FF'); }
+          if (colNum === 4) { cell.fill = xlFill('FFF1F8E9'); }
+          if (colNum === 5) { cell.fill = xlFill('FFFFF3E0'); }
+        });
+      });
+      if (filtered.length === 0) {
+        var e3 = ws3.addRow(['','','','','','(aucune analyse dans cette période)']);
+        e3.getCell(6).font = xlFont('FF888888', false, 10);
+      }
+      ws3.autoFilter = { from:{row:1,column:1}, to:{row:1,column:6} };
+      ws3.views = [{ state:'frozen', ySplit:1 }];
+
+      // Télécharger
+      var buf = await wb.xlsx.writeBuffer();
+      var blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      var dateRange = fromVal + '_au_' + toVal;
+      a.download = 'maya_rapport_activite_' + dateRange + '.xlsx';
+      document.body.appendChild(a); a.click();
+      setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
+
+      closeMayaActivityModal();
+      showAlert('alerts-area', 'success', '📊 Rapport activité Maya téléchargé (' + filtered.length + ' analyse(s) sur la période).');
     }
 
     // Init au chargement final — nettoie aussi l'ancien flag doubleVerif s'il traîne en localStorage
@@ -8580,6 +9127,60 @@ ${vtShort}`;
       }
 
       return { ok: ok, missing: missing, counts: { attendu: attendu, rendu: rendu } };
+    }
+
+    // =====================================================================
+    // INJECTION DES MENUISERIES ORPHELINES
+    // =====================================================================
+    // Appariement par index d'ordre d'apparition (Audit[i] ↔ VT[i]).
+    // Cas 1 — égalité : rien à injecter (Maya a déjà traité toutes les paires).
+    // Cas 2 — VT plus longue : VT[auditN..vtN-1] → pseudo-résultats "_orphan_source: vt_only"
+    // Cas 3 — Audit plus longue : Audit[vtN..auditN-1] → pseudo-résultats "_orphan_source: audit_only"
+    //
+    // Les pseudo-résultats utilisent id_champ = "_orphan_menuiserie" pour être identifiables
+    // dans le rapport sans perturber la logique existante des champs du référentiel.
+    function injectMenuiseriesOrphans(auditList, vtList, resultsArr) {
+      var auditN = auditList.length;
+      var vtN    = vtList.length;
+
+      if (auditN === vtN) {
+        console.info('[ORPHANS] Menuiseries en nombre égal (' + auditN + ') — aucune orpheline.');
+        return;
+      }
+
+      if (vtN > auditN) {
+        // Orphelines VT : indices auditN à vtN-1
+        for (var i = auditN; i < vtN; i++) {
+          resultsArr.push({
+            id_champ:       '_orphan_menuiserie',
+            instance_label: vtList[i],
+            valeur_audit:   null,
+            valeur_vt:      vtList[i],
+            extrait_audit:  '',
+            extrait_vt:     '',
+            statut:         'MANQUANT',
+            commentaire:    'Présente en VT uniquement (menuiserie VT n°' + (i+1) + ', absente de l\'audit)',
+            _orphan_source: 'vt_only'
+          });
+        }
+        console.info('[ORPHANS] ' + (vtN - auditN) + ' orpheline(s) VT injectée(s) (indices ' + auditN + ' à ' + (vtN-1) + ').');
+      } else {
+        // Orphelines audit : indices vtN à auditN-1
+        for (var j = vtN; j < auditN; j++) {
+          resultsArr.push({
+            id_champ:       '_orphan_menuiserie',
+            instance_label: auditList[j],
+            valeur_audit:   auditList[j],
+            valeur_vt:      null,
+            extrait_audit:  '',
+            extrait_vt:     '',
+            statut:         'MANQUANT',
+            commentaire:    'Présente en audit uniquement (menuiserie audit n°' + (j+1) + ', absente de la VT)',
+            _orphan_source: 'audit_only'
+          });
+        }
+        console.info('[ORPHANS] ' + (auditN - vtN) + ' orpheline(s) audit injectée(s) (indices ' + vtN + ' à ' + (auditN-1) + ').');
+      }
     }
 
     // =====================================================================
@@ -9065,8 +9666,10 @@ ${vtShort}`;
       var SECT_BG4='FFE8EEFA', SECT_TXT4='FF1B3F8B';
       var lastSec4='';
       state.analysisResults.forEach(function(rv){
-        var sec=getFieldSection(rv.id_champ)||'-';
-        var lib=rv.instance_label?getFieldNom(rv.id_champ)+' \u2014 '+rv.instance_label:getFieldNom(rv.id_champ);
+        var sec=rv._orphan_source ? 'Menuiseries/Ouvrants' : (getFieldSection(rv.id_champ)||'-');
+        var lib=rv._orphan_source
+          ? ('Menuiserie \u2014 ' + (rv.instance_label||'') + ' [' + (rv._orphan_source==='vt_only' ? 'VT only' : 'Audit only') + ']')
+          : (rv.instance_label?getFieldNom(rv.id_champ)+' \u2014 '+rv.instance_label:getFieldNom(rv.id_champ));
         var pres4=rv.statut!=='MANQUANT';
         var rowBg4=pres4?C4P_ROW:C4A_ROW; var rowTxt4=pres4?C4P_TXT:C4A_TXT;
         var badgeBg4=pres4?C4P_HDR:C4A_HDR; var statLbl4=pres4?'PR\u00c9SENT':'ABSENT';
@@ -10526,7 +11129,7 @@ ${vtShort}`;
             <input type="checkbox" id="maya-fb-is-rule" style="margin-top:3px;accent-color:#7B2D8E;width:16px;height:16px;flex-shrink:0;" />
             <span>
               <strong>🌐 Règle générale — à appliquer à TOUS les futurs dossiers</strong><br>
-              <span style="font-size:11.5px;opacity:0.85;">Coche si cette règle métier est indépendante du dossier en cours (ex : "ITI ne s'applique qu'aux murs"). Une copie sera enregistrée comme feedback global et deviendra plus rapidement permanente.</span>
+              <span style="font-size:11.5px;opacity:0.85;">Coche si cette règle métier est indépendante du dossier en cours (ex : "ITI ne s'applique qu'aux murs"). Une copie sera enregistrée comme feedback global applicable à tous les futurs dossiers.</span>
             </span>
           </label>
         </div>
@@ -10609,6 +11212,31 @@ ${vtShort}`;
     </div>
   </div>
 
+  <!-- ================ MODALE RAPPORT ACTIVITÉ MAYA ================ -->
+  <div class="maya-activity-modal-overlay" id="maya-activity-modal-overlay" onclick="if(event.target===this)closeMayaActivityModal()">
+    <div class="maya-activity-modal" role="dialog" aria-modal="true" aria-labelledby="maya-activity-modal-title">
+      <div class="maya-activity-modal-header">
+        <div class="maya-activity-modal-title" id="maya-activity-modal-title">📊 Rapport activité Maya</div>
+        <button type="button" class="maya-activity-modal-close" onclick="closeMayaActivityModal()" aria-label="Fermer">✕</button>
+      </div>
+      <div class="maya-activity-modal-body">
+        <p class="maya-activity-modal-hint">Génère un fichier Excel 3 onglets : feedbacks traités, non traités, et résumés des analyses Maya sur la période choisie.</p>
+        <div class="maya-activity-modal-row">
+          <span class="maya-activity-modal-label">Du</span>
+          <input type="date" id="maya-activity-date-from" class="maya-activity-modal-input" />
+        </div>
+        <div class="maya-activity-modal-row">
+          <span class="maya-activity-modal-label">Au</span>
+          <input type="date" id="maya-activity-date-to" class="maya-activity-modal-input" />
+        </div>
+        <div class="maya-activity-modal-footer">
+          <button type="button" class="maya-activity-modal-cancel" onclick="closeMayaActivityModal()">Annuler</button>
+          <button type="button" class="maya-activity-modal-generate" onclick="generateMayaActivityReport()">Générer le rapport</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ================ MAYA VAGUE 3 — History drawer ================ -->
   <div class="maya-drawer-overlay" id="maya-drawer-overlay" onclick="closeMayaDrawer()"></div>
   <aside class="maya-drawer" id="maya-drawer" role="complementary" aria-labelledby="maya-drawer-title">
@@ -10618,11 +11246,10 @@ ${vtShort}`;
     </div>
     <div class="maya-drawer-filters">
       <button type="button" class="maya-drawer-filter-btn active" data-filter="all" onclick="setMayaDrawerFilter('all')" title="Afficher tous les feedbacks, quel que soit leur statut.">Tous</button>
-      <button type="button" class="maya-drawer-filter-btn" data-filter="pending" onclick="setMayaDrawerFilter('pending')" title="Feedbacks enregistrés, pas encore utilisés par Maya. Seront automatiquement injectés dans le prompt Maya lors de votre prochaine analyse, puis passeront en 'Appliqué'.">En attente</button>
-      <button type="button" class="maya-drawer-filter-btn" data-filter="applied" onclick="setMayaDrawerFilter('applied')" title="Feedbacks déjà pris en compte par Maya au moins une fois. Conservés en historique, plus ré-injectés dans les analyses suivantes.">Appliqués</button>
-      <button type="button" class="maya-drawer-filter-btn" data-filter="permanent" onclick="setMayaDrawerFilter('permanent')" title="Règles ré-injectées dans Maya à CHAQUE analyse future. Promotion automatique après 3 feedbacks similaires sur la même ligne ou catégorie.">🧠 Permanentes</button>
-      <button type="button" class="maya-drawer-filter-btn" data-filter="archived" onclick="setMayaDrawerFilter('archived')" title="Feedbacks anciens archivés (historique). Ignorés par Maya.">Archivés</button>
+      <button type="button" class="maya-drawer-filter-btn" data-filter="pending" onclick="setMayaDrawerFilter('pending')" title="Feedbacks enregistrés, pas encore utilisés par Maya. Seront automatiquement injectés dans le prompt Maya lors de votre prochaine analyse, puis passeront en 'Archivé'.">En attente</button>
+      <button type="button" class="maya-drawer-filter-btn" data-filter="archived" onclick="setMayaDrawerFilter('archived')" title="Feedbacks déjà traités par Maya. Ignorés dans les analyses suivantes.">Archivés</button>
       <button type="button" class="maya-drawer-export" onclick="exportMayaFeedbacksExcel()">📥 Exporter Excel</button>
+      <button type="button" class="maya-drawer-activity-btn" onclick="openMayaActivityModal()" title="Générer un rapport Excel de l'activité Maya sur une plage de dates : feedbacks traités, non traités, et résumés des analyses.">📊 Rapport activité Maya</button>
     </div>
     <div class="maya-drawer-filters" style="margin-top:6px;align-items:center;flex-wrap:wrap;gap:6px;">
       <span style="font-size:11px;color:#666;font-weight:600;margin-right:4px;">Période :</span>
@@ -10649,27 +11276,17 @@ ${vtShort}`;
           <tr>
             <td><span class="maya-badge-demo pending">En attente</span></td>
             <td>Feedback enregistré, pas encore utilisé par Maya.</td>
-            <td>Injecté dans le prompt Maya <b>à votre prochaine analyse</b> de dossier → passe ensuite en <b>Appliqué</b>.</td>
-          </tr>
-          <tr>
-            <td><span class="maya-badge-demo applied">Appliqué</span></td>
-            <td>Déjà utilisé par Maya au moins une fois.</td>
-            <td>Plus jamais ré-injecté. Gardé en historique pour traçabilité.</td>
-          </tr>
-          <tr>
-            <td><span class="maya-badge-demo permanent">🧠 Permanente</span></td>
-            <td>Pattern récurrent, règle à vie pour Maya.</td>
-            <td>Ré-injectée à <b>chaque analyse future</b>, avec un tag prioritaire. Promotion automatique après <b>3 feedbacks similaires</b> sur la même ligne ou catégorie.</td>
+            <td>Injecté dans le prompt Maya <b>à votre prochaine analyse</b> de dossier → passe ensuite en <b>Archivé</b>.</td>
           </tr>
           <tr>
             <td><span class="maya-badge-demo archived">Archivé</span></td>
-            <td>Feedback ancien conservé pour historique.</td>
-            <td>Ignoré par Maya.</td>
+            <td>Feedback déjà traité par Maya, conservé en historique.</td>
+            <td>Plus jamais ré-injecté dans les analyses suivantes.</td>
           </tr>
         </tbody>
       </table>
       <p class="maya-drawer-help-note">🤖 <b>Les statuts ne sont pas modifiables manuellement</b> — le système les gère selon un cycle de vie logique. Vos seules actions disponibles : ✏️ <b>Modifier</b> (uniquement tant que le feedback est <i>En attente</i>, avant que Maya ne le traite) et 🗑 <b>Supprimer</b> (à tout moment).</p>
-      <p class="maya-drawer-help-note">🔄 <b>Cycle de vie typique</b> — Vous écrivez un feedback → <i>En attente</i> → (prochaine analyse) → <i>Appliqué</i>. Si vous répétez 3× le même feedback (même ligne ou même catégorie), il devient automatiquement <i>Permanent</i>.</p>
+      <p class="maya-drawer-help-note">🔄 <b>Cycle de vie</b> — Vous écrivez un feedback → <i>En attente</i> → (prochaine analyse) → <i>Archivé</i>.</p>
     </div>
     <div class="maya-drawer-body" id="maya-drawer-body"></div>
   </aside>
