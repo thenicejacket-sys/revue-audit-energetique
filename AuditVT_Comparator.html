@@ -6226,6 +6226,7 @@ Réponds UNIQUEMENT en JSON strict :
       "action": "corriger_statut|corriger_valeur|confirmer_manquant|hallucination_detectee",
       "nouveau_statut": "VERT|ORANGE|ROUGE|MANQUANT",
       "valeur_vt_corrigee": "... ou null si pas de correction de valeur",
+      "valeur_audit_trouvee": "valeur réelle trouvée dans l'audit à injecter dans la colonne Audit — null si pas de correction",
       "raison": "explication courte (max 100 chars)",
       "source_excerpt_audit": "extrait brut de 80 à 200 caractères autour de la valeur dans l'Audit (copié-collé du texte source) — null si indisponible",
       "source_excerpt_vt": "extrait brut de 80 à 200 caractères autour de la valeur dans la VT (copié-collé du texte source) — null si indisponible",
@@ -6468,6 +6469,7 @@ ${vtShort}`;
 
           if (corr.nouveau_statut) target.statut = corr.nouveau_statut;
           if (corr.valeur_vt_corrigee) target.valeur_vt = corr.valeur_vt_corrigee;
+          if (corr.valeur_audit_trouvee) target.valeur_audit = corr.valeur_audit_trouvee;
           target.commentaire = (target.commentaire ? target.commentaire + ' ' : '') + '[\u2726 Maya: ' + corr.raison + ']';
           target._maya_corrected = true;
           corrCount++;
