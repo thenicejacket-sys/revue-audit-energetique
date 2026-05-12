@@ -4942,8 +4942,8 @@
     // _buildCatByLabelFromState : reconstruit catByLabel depuis state.detectedInstances,
     //   utilisé par harmonizeWallSurfaces quand elle est appelée hors de _antiCrossTalkParois.
     //
-    // harmonizeWallSurfaces : DÉSACTIVÉE (return en début) — conservée pour structure.
-    //   Réactiver : supprimer le return au début du corps.
+    // harmonizeWallSurfaces : RÉACTIVÉE le 2026-05-12 — audit exhaustivité + NET/BRUT distincts.
+    //   Fallback NET = BRUT si la VT ne fournit pas de surface nette par façade.
     //
     // dedupGlobalFields : ACTIVE — filet de sécurité champs globaux multipliés par instance.
     // =====================================================================
@@ -4970,17 +4970,17 @@
     // paroi-mur de l'audit, afficher la SOMME TOTALE des façades VT (NET et BRUT). Identique partout.
     // → l'utilisateur voit la même valeur VT sur toutes les lignes "Surface (m²) — Paroi N — Mur..."
     //
-    // ⚠️ DÉSACTIVÉE le 2026-05-06 (clarification utilisateur) :
-    // L'utilisateur veut le DÉTAIL PAR PAROI tel que le LLM l'extrait — chaque paroi affiche
-    // SES PROPRES façades VT, pas l'agrégation globale de toutes les parois mur.
-    // Format : "NET : 8,07 + 7,94 = 15,99 m² (surface à isoler)" (par paroi).
-    // Demande utilisateur originale : juste corriger l'addition (recalcul total via reduce(+)
-    // dans formatParoiSurface), pas changer le format. Le format détail par paroi est conservé.
+    // Réactivée le 2026-05-12 (demande utilisateur) :
+    // Audit d'exhaustivité : compare state.vtTables.FACADES (source brute PDF) vs façades sommées.
+    // Si écart : console.warn + badge ⚠️ dans commentaire de chaque paroi-mur impactée.
+    // Fallback NET = BRUT : si le LLM n'extrait pas de surface nette pour une façade, NET = BRUT.
+    // Format d'affichage : formatParoiSurface() (inchangé) — NET puis BRUT sur lignes séparées.
     // ───────────────────────────────────────────────────────────────────
     function harmonizeWallSurfaces() {
-      console.info('[SURFACE-MUR-HARMONIZE] Désactivée — détail par paroi conservé (recalcul total via reduce reste actif).');
-      return;
-      /* eslint-disable */ // code conservé pour référence
+      // Réactivée le 2026-05-12 : harmonisation surfaces MUR avec audit exhaustivité + NET/BRUT.
+      // Pour chaque paroi-mur audit, on applique la SOMME TOTALE des façades VT (identique partout).
+      // Deux totaux distincts : total_brut_vt et total_net_vt (fallback NET = BRUT si VT ne fournit pas NET).
+
       // Recalcul local de catByLabel depuis state.detectedInstances
       var catByLabel = _buildCatByLabelFromState();
       var wallSurfaceResults = state.analysisResults.filter(function(rv){
@@ -4994,9 +4994,10 @@
         return true;
       });
       if (wallSurfaceResults.length < 2) {
-        if (wallSurfaceResults.length === 1) console.info('[SURFACE-MUR-HARMONIZE] 1 seule paroi-mur — pas d\'harmonisation nécessaire.');
+        if (wallSurfaceResults.length === 1) console.info('[WALL-HARMONIZE] 1 seule paroi-mur — pas d\'harmonisation nécessaire.');
         return;
       }
+
       // Collecte de toutes les valeurs NET et BRUT extraites par le LLM (toutes parois mur confondues)
       var allNet = [], allBrut = [];
       wallSurfaceResults.forEach(function(rv){
@@ -5012,6 +5013,7 @@
           }
         }
       });
+
       // Déduplication par valeur arrondie au cm² près (évite double-comptage des façades vues plusieurs fois)
       function dedup(arr) {
         var seen = {}, out = [];
@@ -5023,31 +5025,85 @@
       }
       var uniqueNet = dedup(allNet);
       var uniqueBrut = dedup(allBrut);
+
       if (uniqueNet.length === 0 && uniqueBrut.length === 0) {
-        console.info('[SURFACE-MUR-HARMONIZE] Aucune surface VT extraite — rien à harmoniser.');
+        console.info('[WALL-HARMONIZE] Aucune surface VT extraite — rien à harmoniser.');
         return;
       }
-      var totalNet = uniqueNet.reduce(function(a,b){ return a + b; }, 0);
-      var totalBrut = uniqueBrut.reduce(function(a,b){ return a + b; }, 0);
+
+      // Fallback NET = BRUT : si le LLM n'a fourni aucune surface nette,
+      // on utilise les surfaces brutes comme approximation nette.
+      // Cela garantit qu'on a toujours deux totaux distincts NET et BRUT.
+      var finalNetParts, finalBrutParts;
+      if (uniqueNet.length === 0 && uniqueBrut.length > 0) {
+        finalNetParts = uniqueBrut.slice(); // copie
+        console.info('[WALL-HARMONIZE] Aucun NET extrait par le LLM — fallback NET = BRUT appliqué.');
+      } else {
+        finalNetParts = uniqueNet;
+      }
+      finalBrutParts = uniqueBrut.length > 0 ? uniqueBrut : uniqueNet.slice();
+
+      var totalNet = finalNetParts.reduce(function(a,b){ return a + b; }, 0);
+      var totalBrut = finalBrutParts.reduce(function(a,b){ return a + b; }, 0);
+
+      // ── Audit d'exhaustivité : compare façades brutes VT vs façades sommées ──
+      var rawFacadesCount = 0;
+      var exhaustiviteNote = '';
+      var exhaustiviteWarning = false;
+      if (state.vtTables && state.vtTables.FACADES && Array.isArray(state.vtTables.FACADES)) {
+        rawFacadesCount = state.vtTables.FACADES.length;
+        // Nombre de façades dans la somme = longueur des brut_parts (ou net_parts si pas de brut)
+        var sommeeCount = finalBrutParts.length;
+        if (rawFacadesCount > 0 && sommeeCount !== rawFacadesCount) {
+          exhaustiviteWarning = true;
+          // Identifier les façades brutes potentiellement manquantes (valeurs VT brutes non retrouvées)
+          var vtBrutRaw = [];
+          state.vtTables.FACADES.forEach(function(row){
+            var keys = Object.keys(row);
+            // Chercher une colonne "surface" brute dans la ligne du tableau VT
+            var surfKey = keys.find(function(k){ return /surface/i.test(k) && !/isol|net|à isol/i.test(k); })
+                       || keys.find(function(k){ return /surface/i.test(k); });
+            if (surfKey) {
+              var raw = String(row[surfKey]).replace(',', '.').replace(/[^\d.]/g, '');
+              var num = parseFloat(raw);
+              if (!isNaN(num) && num > 0) vtBrutRaw.push(num);
+            }
+          });
+          // Façades VT brutes dont la valeur n'est pas dans finalBrutParts (arrondi cm²)
+          var sommeeSet = {};
+          finalBrutParts.forEach(function(v){ sommeeSet[Math.round(v * 100)] = true; });
+          var manquantes = vtBrutRaw.filter(function(v){ return !sommeeSet[Math.round(v * 100)]; });
+          var manqStr = manquantes.length > 0
+            ? ' (valeurs absentes de la somme : ' + manquantes.map(function(v){ return v.toFixed(2) + ' m²'; }).join(', ') + ')'
+            : '';
+          console.warn('[WALL-HARMONIZE] Écart exhaustivité VT : ' + rawFacadesCount + ' façades brutes vs ' + sommeeCount + ' façades sommées' + manqStr);
+          exhaustiviteNote = '⚠️ Vérification : ' + sommeeCount + '/' + rawFacadesCount + ' façades VT sommées' + (manquantes.length > 0 ? ' — manquantes : ' + manquantes.map(function(v){ return v.toFixed(2) + ' m²'; }).join(', ') : '');
+        } else if (rawFacadesCount > 0) {
+          exhaustiviteNote = '✓ ' + sommeeCount + '/' + rawFacadesCount + ' façades VT sommées';
+        }
+      }
+
       // Applique la même valeur (somme totale VT) à toutes les parois-mur audit
       wallSurfaceResults.forEach(function(rv){
         rv.valeur_vt_detail = {
           type: 'paroi_multi',
-          net_parts: uniqueNet,
-          net_total: totalNet,
-          brut_parts: uniqueBrut,
-          brut_total: totalBrut,
+          net_parts: finalNetParts,
+          net_total: Math.round(totalNet * 100) / 100,
+          brut_parts: finalBrutParts,
+          brut_total: Math.round(totalBrut * 100) / 100,
           unit: 'm²'
         };
-        // Trace dans le commentaire pour traçabilité
-        var note = '[Surface mur — somme totale VT (' + uniqueBrut.length + ' façade(s)) appliquée à toutes les parois-mur audit]';
-        if ((rv.commentaire || '').indexOf(note) === -1) {
+        // Note de traçabilité : NET + BRUT + exhaustivité
+        var note = '[Harmonisation MUR — BRUT : ' + totalBrut.toFixed(2) + ' m² (' + finalBrutParts.length + ' façade(s)) | NET : ' + totalNet.toFixed(2) + ' m²' + (exhaustiviteNote ? ' | ' + exhaustiviteNote : '') + ']';
+        if ((rv.commentaire || '').indexOf('[Harmonisation MUR') === -1) {
           rv.commentaire = (rv.commentaire ? rv.commentaire + ' ' : '') + note;
         }
       });
-      console.log('[SURFACE-MUR-HARMONIZE] ' + wallSurfaceResults.length + ' paroi(s)-mur harmonisée(s) — NET total = '
-        + totalNet.toFixed(2) + ' m² (' + uniqueNet.length + ' façade(s)), BRUT total = '
-        + totalBrut.toFixed(2) + ' m² (' + uniqueBrut.length + ' façade(s))');
+
+      console.log('[WALL-HARMONIZE] ' + wallSurfaceResults.length + ' paroi(s)-mur harmonisée(s) — BRUT total = '
+        + totalBrut.toFixed(2) + ' m² (' + finalBrutParts.length + ' façade(s)), NET total = '
+        + totalNet.toFixed(2) + ' m² (' + finalNetParts.length + ' façade(s))'
+        + (exhaustiviteNote ? ' | ' + exhaustiviteNote : ''));
     }
 
     // ───────────────────────────────────────────────────────────────────
