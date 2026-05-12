@@ -826,16 +826,6 @@
     }
     .maya-fab:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(123,45,142,0.45); }
     .maya-fab.history { background: linear-gradient(135deg, #5E1B6E, #3E1149); }
-    .maya-fab-badge {
-      position: absolute; top: -4px; right: -4px;
-      min-width: 20px; height: 20px; padding: 0 5px;
-      border-radius: 10px;
-      background: #B71C1C; color: #FFFFFF;
-      font-size: 10px; font-weight: 800;
-      display: none; align-items: center; justify-content: center;
-      border: 2px solid #FFFFFF;
-    }
-    .maya-fab-badge.visible { display: flex; }
     .maya-fab-tooltip {
       position: absolute; right: 62px; top: 50%; transform: translateY(-50%);
       background: #1F2937; color: #FFFFFF;
@@ -6503,7 +6493,6 @@ ${vtShort}`;
             if (document.getElementById('maya-drawer') && document.getElementById('maya-drawer').classList.contains('visible')) {
               renderMayaDrawer();
             }
-            updateMayaFabBadges();
           }
         } catch (e) { console.warn('[MAYA-DRAWER] Marquage applied échoué:', e.message); }
 
@@ -7360,7 +7349,6 @@ ${vtShort}`;
         ? '✨ Feedback envoyé à Maya + 🌐 règle générale enregistrée pour tous les dossiers — merci !'
         : '✨ Feedback envoyé à Maya — merci ! Il sera pris en compte lors de la prochaine vérification.';
       showAlert('alerts-area', 'success', msg);
-      updateMayaFabBadges();
       renderTable(currentFilter);
     }
 
@@ -7432,7 +7420,6 @@ ${vtShort}`;
       } catch(e) { console.warn('[MAYA-SYNC] push global feedback:', e.message); }
       closeGlobalFeedback();
       showAlert('alerts-area', 'success', '💬 Feedback global enregistré — Maya en tiendra compte aux prochaines vérifications.');
-      updateMayaFabBadges();
       if (document.getElementById('maya-drawer').classList.contains('visible')) renderMayaDrawer();
     }
 
@@ -7595,23 +7582,6 @@ ${vtShort}`;
       });
       if (flipped > 0) persistMayaFeedbackMeta();
       return flipped;
-    }
-
-    function updateMayaFabBadges() {
-      var all = collectAllFeedbacks();
-      var pendingAll    = all.filter(function(i){ return i.meta.status === 'pending'; }).length;
-      var pendingGlobal = all.filter(function(i){ return i.meta.status === 'pending' && i.scope === 'global'; }).length;
-
-      var histBadge = document.getElementById('maya-fab-history-badge');
-      var globBadge = document.getElementById('maya-fab-global-badge');
-      if (histBadge) {
-        if (pendingAll > 0) { histBadge.textContent = String(pendingAll); histBadge.classList.add('visible'); }
-        else histBadge.classList.remove('visible');
-      }
-      if (globBadge) {
-        if (pendingGlobal > 0) { globBadge.textContent = String(pendingGlobal); globBadge.classList.add('visible'); }
-        else globBadge.classList.remove('visible');
-      }
     }
 
     // ---- Drawer historique ----
@@ -7962,7 +7932,7 @@ ${vtShort}`;
       mayaFeedbackMeta[id] = { status: 'applied', at: new Date().toISOString() };
       persistMayaFeedbackMeta();
       try { MayaSupabase.updateFeedback(id, { status: 'applied' }); } catch(e) {}
-      renderMayaDrawer(); updateMayaFabBadges();
+      renderMayaDrawer();
     }
 
     // Promeut un feedback ligne en règle globale (copie en scope=global, catégorie='rule')
@@ -8006,25 +7976,24 @@ ${vtShort}`;
       } catch(e) { console.warn('[MAYA-SYNC] promote to global:', e.message); }
       showAlert('alerts-area', 'success', '🌐 Feedback promu en règle globale — Maya l\'appliquera à tous les futurs dossiers.');
       renderMayaDrawer();
-      updateMayaFabBadges();
     }
     function mayaMarkPermanent(id) {
       mayaFeedbackMeta[id] = { status: 'permanent', at: new Date().toISOString() };
       persistMayaFeedbackMeta();
       try { MayaSupabase.updateFeedback(id, { status: 'permanent' }); } catch(e) {}
-      renderMayaDrawer(); updateMayaFabBadges();
+      renderMayaDrawer();
     }
     function mayaArchive(id) {
       mayaFeedbackMeta[id] = { status: 'archived', at: new Date().toISOString() };
       persistMayaFeedbackMeta();
       try { MayaSupabase.updateFeedback(id, { status: 'archived' }); } catch(e) {}
-      renderMayaDrawer(); updateMayaFabBadges();
+      renderMayaDrawer();
     }
     function mayaRestore(id) {
       mayaFeedbackMeta[id] = { status: 'pending', at: new Date().toISOString() };
       persistMayaFeedbackMeta();
       try { MayaSupabase.updateFeedback(id, { status: 'pending' }); } catch(e) {}
-      renderMayaDrawer(); updateMayaFabBadges();
+      renderMayaDrawer();
     }
     function mayaEditFeedback(id) {
       var all = collectAllFeedbacks();
@@ -8129,7 +8098,6 @@ ${vtShort}`;
       persistMayaFeedbackMeta();
       try { await MayaSupabase.deleteFeedback(id); } catch(e) {}
       renderMayaDrawer();
-      updateMayaFabBadges();
       showAlert('alerts-area', 'success', '🗑 Feedback supprimé.');
     }
 
@@ -8289,7 +8257,6 @@ ${vtShort}`;
       persistMayaFeedbackMeta();
       console.log('[MAYA-SYNC] Feedbacks chargés depuis Supabase: ' + remote.length);
       // Rafraîchir UI
-      updateMayaFabBadges();
       try { if (document.getElementById('maya-drawer') && document.getElementById('maya-drawer').classList.contains('visible')) renderMayaDrawer(); } catch(e) {}
       try { if (typeof renderTable === 'function' && state.analysisResults && state.analysisResults.length) renderTable(currentFilter); } catch(e) {}
     }
@@ -8488,7 +8455,6 @@ ${vtShort}`;
     // Init au chargement final — nettoie aussi l'ancien flag doubleVerif s'il traîne en localStorage
     setTimeout(function(){
       try { localStorage.removeItem('maya_config_flags'); } catch(e){}
-      updateMayaFabBadges();
     }, 200);
 
     function getFieldNom(id) {
@@ -10559,12 +10525,10 @@ ${vtShort}`;
     </button>
     <button type="button" class="maya-fab history" id="maya-fab-history" onclick="openMayaDrawer()" aria-label="Historique feedbacks Maya">
       📋
-      <span class="maya-fab-badge" id="maya-fab-history-badge">0</span>
       <span class="maya-fab-tooltip">Historique feedbacks Maya</span>
     </button>
     <button type="button" class="maya-fab" id="maya-fab-global" onclick="openGlobalFeedback()" aria-label="Feedback global Maya">
       💬
-      <span class="maya-fab-badge" id="maya-fab-global-badge">0</span>
       <span class="maya-fab-tooltip">Feedback global à Maya</span>
     </button>
   </div>
