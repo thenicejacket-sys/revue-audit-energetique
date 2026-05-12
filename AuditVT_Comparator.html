@@ -5033,9 +5033,18 @@
 
       // Recalcul local de catByLabel depuis state.detectedInstances
       var catByLabel = _buildCatByLabelFromState();
+      // Fix 2026-05-12 (soir) : normalisation cohérente avec _buildCatByLabelFromState
+      // qui coupe au premier tiret long. Sans ça, la clé recherchée
+      // ("paroi 1 — mur en blocs de béton…") ne matche jamais la clé stockée ("paroi 1").
+      function _normLblForLookup(lbl) {
+        return String(lbl||'').toLowerCase()
+          .replace(/\bparoi\s+0*(\d+)/g, 'paroi $1')
+          .replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim()
+          .split(/\s*(?:—|–)\s*/)[0].trim();
+      }
       var wallSurfaceResults = state.analysisResults.filter(function(rv){
         if (!rv.instance_label) return false;
-        var paroiCat = catByLabel[String(rv.instance_label).trim().toLowerCase()];
+        var paroiCat = catByLabel[_normLblForLookup(rv.instance_label)];
         if (paroiCat !== 'mur') return false;
         var champNom = (getFieldNom(rv.id_champ) || '').toLowerCase();
         // Champ surface de paroi (mais pas SHAB / surface de référence — exclus)
@@ -6743,6 +6752,14 @@ Exemples :
 - Si tu passes le statut en VERT parce que tu as trouvé la valeur → les deux champs valeur_*_trouvee correspondants DOIVENT être remplis.
 Un commentaire qui mentionne une valeur sans la remplir dans le JSON = ERREUR GRAVE. Sans exception.
 
+⚠️ RÈGLE ABSOLUE — VERT SANS VALEUR INTERDIT ⚠️
+Si tu passes nouveau_statut à "VERT", tu DOIS remplir AU MOINS UN des deux champs :
+- valeur_vt_trouvee (valeur EXACTE trouvée dans la VT)
+- valeur_audit_trouvee (valeur EXACTE trouvée dans l'Audit)
+Un VERT sans aucune valeur trouvée dans le JSON est INTERDIT — c'est une violation d'invariant qui sera rejetée.
+Si tu n'as trouvé aucune valeur dans aucun des deux documents → le statut ne peut PAS être VERT, utilise MANQUANT à la place.
+Si une des deux valeurs est explicitement vide dans la source (pas seulement absente de ton extrait), précise-le dans la raison ET remplis l'autre champ.
+
 Réponds UNIQUEMENT en JSON strict :
 {
   "corrections": [
@@ -6951,7 +6968,7 @@ ${vtShort}`;
             { role: 'user', content: userContent }
           ],
           temperature: 0.05,
-          max_tokens: 4000
+          max_tokens: 12000
         };
         if (forceJson && supportsJsonMode) {
           body.response_format = { type: 'json_object' };
