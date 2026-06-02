@@ -6799,17 +6799,23 @@ ${vtShort}`;
           }
         } catch (e) { console.warn('[FIX-5B] Auto-démote échoué:', e.message); }
 
-        // ── Marquage auto pending → applied des feedbacks drawer injectés ──
+        // ── B5 FIX (2026-06-02) : marquage pending → applied VÉRIFIÉ ──
+        // On ne passe en "applied" QUE les feedbacks que Maya a réellement honorés
+        // (une correction renvoyée sur la même ligne id_champ|instance). Les autres
+        // restent "pending" → réinjectés au prochain run + statut honnête.
         try {
-          console.log('[MAYA-DRAWER-FLIP] ⚠ Maya a retourné ' + corrCount + ' correction(s). Le code va flipper ' + (drawerInjection.injectedIds||[]).length + ' feedback(s) injecté(s) vers "applied" SANS vérifier si Maya les a réellement appliqués. (Bug B5 — voir analyse 2026-05-13)');
-          var flippedCount = markDrawerFeedbacksApplied(drawerInjection.injectedIds || []);
-          if (flippedCount > 0) {
-            console.log('[MAYA-DRAWER] ' + flippedCount + ' feedback(s) pending passé(s) en applied (règles permanentes inchangées). IDs flippés=' + JSON.stringify(drawerInjection.injectedIds || []));
-            if (document.getElementById('maya-drawer') && document.getElementById('maya-drawer').classList.contains('visible')) {
-              renderMayaDrawer();
-            }
+          var _b5flip = markDrawerFeedbacksAppliedVerified(
+            drawerInjection.injectedMeta || [],
+            (mayaResult && mayaResult.corrections) || []
+          );
+          console.log('[MAYA-DRAWER] B5-fix — sur ' + corrCount + ' correction(s) Maya : '
+            + _b5flip.flipped + ' feedback(s) vérifié(s) → "applied" ; '
+            + _b5flip.keptLine + ' ligne(s) injectée(s) non appliquée(s) par Maya → restent "pending" (réinjectées) ; '
+            + _b5flip.keptGlobal + ' global/aux non vérifiable(s) → restent "pending".');
+          if (_b5flip.flipped > 0 && document.getElementById('maya-drawer') && document.getElementById('maya-drawer').classList.contains('visible')) {
+            renderMayaDrawer();
           }
-        } catch (e) { console.warn('[MAYA-DRAWER] Marquage applied échoué:', e.message); }
+        } catch (e) { console.warn('[MAYA-DRAWER] Marquage applied (B5-fix) échoué:', e.message); }
 
         // ── Auto-apprentissage : sauvegarder les corrections comme learnings ──
         // Cato P0-4 : exclure les corrections sur des valeurs _recovered_from_comment
@@ -8302,13 +8308,14 @@ ${vtShort}`;
         // Le flip auto pending→applied continue (télémétrie préservée) mais ne tue plus l'injection.
         return s !== 'archived';
       });
-      if (toInject.length === 0) return { block: '', injectedIds: [] };
+      if (toInject.length === 0) return { block: '', injectedIds: [], injectedMeta: [] };
 
       var catLbl = { pattern: 'Pattern récurrent', rule: 'Règle manquante', prompt: 'Ajustement prompt', other: 'Remarque transverse' };
 
       // collectAllFeedbacks trie desc par timestamp → on garde la plus récente occurrence par groupe
       var seen = {};
       var dedupedIds = [];
+      var injectedMeta = [];   // B5 FIX : {id, scope, idChamp, instance} pour vérifier l'application réelle par Maya
       var skipped = 0;
       var lines = [];
 
@@ -8324,6 +8331,14 @@ ${vtShort}`;
         var dedupKey = label + '||' + normTxt;
         // tous les ids du groupe doivent flipper pending→applied, même les doublons
         dedupedIds.push(it.id);
+        // B5 FIX : on retient id_champ|instance (extrait de la clé feedback) pour matcher les corrections Maya
+        var _b5ic = null, _b5inst = '';
+        if (it.scope === 'line' && it.key) {
+          var _b5kp = String(it.key).split('|');
+          _b5ic = _b5kp[0];
+          _b5inst = _b5kp.length > 1 ? _b5kp.slice(1).join('|') : '';
+        }
+        injectedMeta.push({ id: it.id, scope: it.scope, idChamp: _b5ic, instance: _b5inst });
         if (seen[dedupKey]) { skipped++; return; }
         seen[dedupKey] = true;
 
@@ -8350,7 +8365,7 @@ ${vtShort}`;
                 + 'Quand "contexte rejeté" est indiqué, c\'est ce que tu avais sorti la fois précédente — l\'utilisateur l\'a explicitement contesté. Ajuste ton raisonnement pour ne plus produire cette sortie.\n'
                 + lines.join('\n') + '\n'
                 + '==================================================================\n';
-      return { block: block, injectedIds: dedupedIds };
+      return { block: block, injectedIds: dedupedIds, injectedMeta: injectedMeta };
     }
 
     // ---- Marquage auto pending → applied après injection réussie ----
@@ -8367,6 +8382,45 @@ ${vtShort}`;
       });
       if (flipped > 0) persistMayaFeedbackMeta();
       return flipped;
+    }
+
+    // ---- B5 FIX (2026-06-02) : marquage pending→applied VÉRIFIÉ ----
+    // Ne passe en "applied" QUE les feedbacks ligne que Maya a réellement honorés
+    // (= une correction renvoyée par Maya sur la même ligne id_champ|instance).
+    // Les feedbacks injectés mais NON appliqués par Maya restent "pending" → ils sont
+    // donc réinjectés au prochain run, et le statut "appliqué" reflète enfin la réalité.
+    // Les feedbacks globaux ne sont pas vérifiables ligne-à-ligne → restent "pending"
+    // (de toute façon toujours réinjectés). 'permanent'/'archived' restent inchangés.
+    function markDrawerFeedbacksAppliedVerified(injectedMeta, corrections) {
+      if (!injectedMeta || !injectedMeta.length) return { flipped: 0, keptLine: 0, keptGlobal: 0 };
+      // Clés réellement corrigées par Maya lors de cette passe
+      var appliedKeys = {};
+      (corrections || []).forEach(function(c){
+        if (c && c.id_champ) appliedKeys[String(c.id_champ) + '|' + (c.instance_label || '')] = true;
+      });
+      // Dédup par id (injectedMeta peut contenir des doublons venant des groupes)
+      var seenId = {};
+      var uniq = injectedMeta.filter(function(m){
+        if (!m || !m.id || seenId[m.id]) return false;
+        seenId[m.id] = true; return true;
+      });
+      var flipped = 0, keptLine = 0, keptGlobal = 0;
+      uniq.forEach(function(m){
+        var cur = (mayaFeedbackMeta[m.id] || {}).status || 'pending';
+        if (cur !== 'pending') return; // permanent / applied / archived : on ne touche pas
+        if (m.scope === 'line' && m.idChamp) {
+          if (appliedKeys[String(m.idChamp) + '|' + (m.instance || '')]) {
+            mayaFeedbackMeta[m.id] = { status: 'applied', at: new Date().toISOString(), autoApplied: true, verified: true };
+            flipped++;
+          } else {
+            keptLine++; // Maya ne l'a pas appliqué → reste pending (honnête + réinjecté)
+          }
+        } else {
+          keptGlobal++; // global non vérifiable → reste pending
+        }
+      });
+      if (flipped > 0) persistMayaFeedbackMeta();
+      return { flipped: flipped, keptLine: keptLine, keptGlobal: keptGlobal };
     }
 
     // ---- Drawer historique ----
