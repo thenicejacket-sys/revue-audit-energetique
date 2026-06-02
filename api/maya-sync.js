@@ -14,6 +14,9 @@
  *   - save_report           -> { ok, id }
  *   - delete_report         -> { ok }
  *   - clear_reports         -> { ok, deleted }
+ *   - list_correspondences  -> { ok, items: [...] }      (PR1b — soft-delete filtré)
+ *   - save_correspondence   -> { ok, id }                 (upsert lexique Fix D)
+ *   - delete_correspondence -> { ok }                     (soft-delete via deleted_at)
  */
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ataxqfqlprndcjisepbn.supabase.co'
@@ -29,6 +32,16 @@ const HEADERS = {
 function enc(s) { return encodeURIComponent(String(s)) }
 function nowIso() { return new Date().toISOString() }
 function sanitizeClient(id) { return (id || 'default').toString().slice(0, 64) }
+// PR1b — Cato P0-3 : validation client_id (UUID v4 OU 'default' OU slug court [a-z0-9_-]{1,64}).
+// Empêche exfiltration/pollution silencieuse du lexique cross-tenant.
+function isValidClientId(id) {
+  if (!id) return false
+  var s = String(id)
+  if (s === 'default') return true
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s)) return true
+  if (/^[a-z0-9_-]{1,64}$/i.test(s)) return true
+  return false
+}
 
 // ── FEEDBACKS ───────────────────────────────────────────────────────────────
 
@@ -169,6 +182,69 @@ async function clearReports(clientId) {
   if (!res.ok) throw new Error(`Supabase clear_reports ${res.status}`)
 }
 
+// ── CORRESPONDANCES (PR1b — lexique Fix D) ──────────────────────────────────
+// Table : maya_correspondences (cf. SQL fourni à Aymeric).
+// Conventions :
+//   - id stable : "corr:<scope_key>:<audit_norm_short>:<vt_norm_short>[:<hash>]"
+//   - soft-delete via deleted_at (P0-1 anti-résurrection cross-tab)
+//   - list ne renvoie QUE les actifs (deleted_at IS NULL)
+
+async function listCorrespondences(clientId) {
+  const url = `${REST}/maya_correspondences?client_id=eq.${enc(clientId)}&deleted_at=is.null&order=updated_at.desc&limit=2000`
+  const res = await fetch(url, { headers: HEADERS })
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '')
+    throw new Error(`Supabase list_correspondences ${res.status}: ${txt}`)
+  }
+  return await res.json()
+}
+
+async function saveCorrespondence(clientId, c) {
+  if (!c || !c.id) throw new Error('correspondence.id required')
+  if (!c.scope_key || !c.audit_norm || !c.vt_norm) throw new Error('scope_key + audit_norm + vt_norm required')
+  const row = {
+    id: String(c.id).slice(0, 500),
+    client_id: clientId,
+    scope_key: String(c.scope_key).slice(0, 200),
+    audit_norm: String(c.audit_norm).slice(0, 500),
+    vt_norm: String(c.vt_norm).slice(0, 500),
+    audit_raw: c.audit_raw != null ? String(c.audit_raw).slice(0, 1000) : null,
+    vt_raw: c.vt_raw != null ? String(c.vt_raw).slice(0, 1000) : null,
+    instance_labels: Array.isArray(c.instance_labels) ? c.instance_labels.slice(0, 200) : [],
+    is_singleton: c.is_singleton === true,
+    occurrences: Number.isFinite(c.occurrences) ? c.occurrences : 1,
+    created_at: c.created_at || nowIso(),
+    updated_at: nowIso(),
+    deleted_at: null, // P0-1 : un upsert "ressuscite" implicitement si l'entrée avait été supprimée
+    schema_version: 1,
+  }
+  const res = await fetch(`${REST}/maya_correspondences`, {
+    method: 'POST',
+    headers: { ...HEADERS, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify([row]),
+  })
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '')
+    throw new Error(`Supabase save_correspondence ${res.status}: ${txt}`)
+  }
+  return row.id
+}
+
+async function deleteCorrespondence(clientId, id) {
+  if (!id) throw new Error('id required')
+  // P0-1 : soft-delete = PATCH deleted_at, pas DELETE physique
+  const url = `${REST}/maya_correspondences?id=eq.${enc(id)}&client_id=eq.${enc(clientId)}`
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: { ...HEADERS, 'Prefer': 'return=minimal' },
+    body: JSON.stringify({ deleted_at: nowIso(), updated_at: nowIso() }),
+  })
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '')
+    throw new Error(`Supabase delete_correspondence ${res.status}: ${txt}`)
+  }
+}
+
 // ── Handler ─────────────────────────────────────────────────────────────────
 
 module.exports = async function handler(req, res) {
@@ -181,6 +257,10 @@ module.exports = async function handler(req, res) {
 
   const body = req.body || {}
   const action = body.action
+  // PR1b Cato P0-3 : validation client_id avant toute opération
+  if (body.client_id != null && !isValidClientId(body.client_id)) {
+    return res.status(400).json({ error: 'invalid client_id' })
+  }
   const clientId = sanitizeClient(body.client_id || 'default')
 
   try {
@@ -223,6 +303,19 @@ module.exports = async function handler(req, res) {
       }
       case 'clear_reports': {
         await clearReports(clientId)
+        return res.json({ ok: true })
+      }
+      // PR1b — lexique Fix D
+      case 'list_correspondences': {
+        const items = await listCorrespondences(clientId)
+        return res.json({ ok: true, items })
+      }
+      case 'save_correspondence': {
+        const id = await saveCorrespondence(clientId, body.correspondence || {})
+        return res.json({ ok: true, id })
+      }
+      case 'delete_correspondence': {
+        await deleteCorrespondence(clientId, body.id)
         return res.json({ ok: true })
       }
       default:

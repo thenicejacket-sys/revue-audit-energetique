@@ -2466,6 +2466,14 @@
       function deleteReport(id) { return call('delete_report', { id: id }); }
       function clearReports() { return call('clear_reports'); }
 
+      // PR1b — lexique correspondances Fix D
+      async function listCorrespondences() {
+        var r = await call('list_correspondences');
+        return (r && r.ok && Array.isArray(r.items)) ? r.items : null;
+      }
+      function saveCorrespondence(c) { return call('save_correspondence', { correspondence: c }); } // fire-and-forget
+      function deleteCorrespondence(id) { return call('delete_correspondence', { id: id }); }
+
       return {
         isAvailable: function(){ return available; },
         disabledReason: function(){ return disabledReason; },
@@ -2478,9 +2486,23 @@
         saveReport: saveReport,
         updateReportExport: updateReportExport,
         deleteReport: deleteReport,
-        clearReports: clearReports
+        clearReports: clearReports,
+        listCorrespondences: listCorrespondences,
+        saveCorrespondence: saveCorrespondence,
+        deleteCorrespondence: deleteCorrespondence
       };
     })();
+
+    // PR1b — Cato P0-2 : Promise gating extraction vs sync correspondances au boot.
+    // callMaya attend cette Promise (timeout 5s) pour garantir que le lexique distant est chargé
+    // avant que Maya analyse — sinon des paires validées seraient ignorées au 1er run après reload.
+    window.__correspondenceSyncReady = null;
+    window.__resolveCorrespondenceSync = null;
+    window.__correspondenceSyncReady = new Promise(function(resolve){
+      window.__resolveCorrespondenceSync = resolve;
+      // Filet de sécurité : auto-resolve après 5s même si sync n'est pas revenu
+      setTimeout(function(){ try { resolve('timeout'); } catch(e) {} }, 5000);
+    });
 
     // =====================================================================
     // INIT
@@ -2498,6 +2520,15 @@
       setTimeout(function(){
         try { syncHistoryFromSupabase(); } catch(e) { console.warn('[MAYA-SYNC] history init skip:', e.message); }
         try { syncFeedbacksFromSupabase(); } catch(e) { console.warn('[MAYA-SYNC] feedbacks init skip:', e.message); }
+        // PR1b — sync lexique correspondances Fix D (résout la Promise gating callMaya)
+        try {
+          syncCorrespondencesFromSupabase().finally(function(){
+            try { if (window.__resolveCorrespondenceSync) window.__resolveCorrespondenceSync('done'); } catch(e) {}
+          });
+        } catch(e) {
+          console.warn('[FIX-D-SYNC] init skip:', e.message);
+          try { if (window.__resolveCorrespondenceSync) window.__resolveCorrespondenceSync('error'); } catch(_e) {}
+        }
       }, 100);
     });
 
@@ -3116,7 +3147,41 @@
                 if (nextOmIdx > 0) val = val.substring(0, nextOmIdx).trim();
                 // Limiter à 120 chars max
                 if (val.length > 120) val = val.substring(0, 120).trim();
-                if (val) return val;
+                // ── Fix 5A (PR2a, 2026-05-13) ──────────────────────────────────────
+                // Garde label-driven à la sortie d'extractBatiauditValue.
+                // Évite que des valeurs hors-sujet soient propagées en aval :
+                //  • "Plusieurs façades exposées" pour "Année d'installation"
+                //  • "L" seul pour "Volume de stockage (L)"
+                //  • "m²" seul pour "Surface ..."
+                // Cato P0-1 : sémantique du LABEL (pas du _fieldType déclaré).
+                // Cato P0-3 : bornes années alignées sur PHYS_RANGES (1850 → currentYear).
+                // Si rejet → val=null → la boucle continue chercher une autre occurrence,
+                // puis fallback retour null → callAI prend le relais.
+                if (val) {
+                  var _lblL = label.toLowerCase();
+                  var _v = val.trim();
+                  var _unitOnly = /^(?:m[²³]|m\^2|m|cm|mm|km|l|kwh|w|°c|kg|°|%|h|j|an|ans|w\/m[²])$/i.test(_v);
+                  if (_unitOnly) {
+                    console.warn('[BATIAUDIT-REJECT-5A] unit-only "' + _v + '" rejeté pour label "' + label + '"');
+                    val = null;
+                  } else if (/ann[eé]e/i.test(_lblL)) {
+                    var _YMAX = new Date().getFullYear();
+                    var _yearMatches = _v.match(/(?:18[5-9]\d|19\d{2}|20[0-2]\d)/g);
+                    if (!_yearMatches) {
+                      console.warn('[BATIAUDIT-REJECT-5A] année invalide "' + _v + '" pour label "' + label + '"');
+                      val = null;
+                    } else if (Math.max.apply(null, _yearMatches.map(Number)) > _YMAX + 1) {
+                      console.warn('[BATIAUDIT-REJECT-5A] année > ' + _YMAX + ' "' + _v + '" pour label "' + label + '"');
+                      val = null;
+                    }
+                  } else if (/volume|surface|[eé]paisseur|puissance|hauteur|coefficient|consommation|d[eé]bit|m[²]\b|kwh|nombre/i.test(_lblL)) {
+                    if (!/\d/.test(_v)) {
+                      console.warn('[BATIAUDIT-REJECT-5A] non-numérique "' + _v + '" pour label "' + label + '"');
+                      val = null;
+                    }
+                  }
+                  if (val) return val;
+                }
               }
             }
             idx = lower.indexOf(lbl, idx + 1);
@@ -3780,11 +3845,26 @@
               if (!t) return true;
               return /^(?:m²|m2|m|cm|mm|%|kwh|kw|°c|°|w\/m|kg|wc?\b)\s*$/i.test(t);
             }
+            // ─── Cato P0-2 : Blacklist contextuelle Fix C+ ───
+            // Tokens à exclure : "page N", "RT2012", "X%", "X ème", "champ N", "N°N", "id: N"
+            // Permet d'éviter les faux positifs sur les numéros de page/article du commentaire LLM.
+            var BLACKLIST_RX = [
+              /\bpage\s*\d+/i,
+              /\bRT\s*\d{4}\b/i,
+              /\bDPE\b/i,
+              /\d+\s*(?:%|ème|eme|er|ère)\b/i,
+              /\bchamp\s*\d+/i,
+              /\bn[°o]\s*\d+/i,
+              /\bid\s*[:=]?\s*\d+/i,
+              /\bligne\s*\d+/i
+            ];
+            function isBlacklistedContext(ctx) {
+              return BLACKLIST_RX.some(function(rx){ return rx.test(ctx); });
+            }
             // Pattern : valeur+unité associée au mot "audit"
             // Ex: "191,00 m² audit" / "audit 191,00 m²" / "valeur audit 191,00 m²"
             // NOTE Vague 4.1 — combine 2 orientations (before+after du label), donc reste inline
             // au lieu d'utiliser COMMENT_PATTERNS.audit_value/vt_value (qui ne couvrent que "after").
-            // À unifier dans une session future avec extension de COMMENT_PATTERNS.
             function extractFor(label) {
               var rxBefore = new RegExp('([\\d][\\d\\s.,]*\\s*(?:m²|m2|m\\b|cm|mm|%|kwh|kw|°c|°))[^\\d]{0,15}' + label, 'i');
               var rxAfter  = new RegExp('(?:' + label + ')(?:\\s+(?:indique|dit|donne|contient))?\\s*[:=]?\\s*([\\d][\\d\\s.,]*\\s*(?:m²|m2|m\\b|cm|mm|%|kwh|kw|°c|°))', 'i');
@@ -3794,15 +3874,125 @@
             if (!explicitMissingAudit && isUnitOnlyOrEmpty(rv.valeur_audit)) {
               var foundAudit = extractFor('audit');
               if (foundAudit) {
-                rv = Object.assign({}, rv, { valeur_audit: foundAudit });
+                rv = Object.assign({}, rv, { valeur_audit: foundAudit, _recovered_from_comment: true });
                 console.log('[VALEUR-RECOVERY] valeur_audit récupérée depuis commentaire : "' + foundAudit + '" (champ ' + (rv.id_champ || '') + (rv.instance_label ? ' / ' + rv.instance_label : '') + ')');
               }
             }
             if (!explicitMissingVT && isUnitOnlyOrEmpty(rv.valeur_vt)) {
               var foundVT = extractFor('vt');
               if (foundVT) {
-                rv = Object.assign({}, rv, { valeur_vt: foundVT });
+                rv = Object.assign({}, rv, { valeur_vt: foundVT, _recovered_from_comment: true });
                 console.log('[VALEUR-RECOVERY] valeur_vt récupérée depuis commentaire : "' + foundVT + '" (champ ' + (rv.id_champ || '') + (rv.instance_label ? ' / ' + rv.instance_label : '') + ')');
+              }
+            }
+            // ─── Filet année (Phase 3 — corrigée par Cato P0-1, P0-5) ───
+            // Cible : champs "Année de construction", "Année d'installation", "Année de fabrication",
+            // "Année de pose", "Année de mise en service" + id_champ=3.
+            // Cato P0-1 : plage "1975-1977" stockée INTACTE (plus de mRange[1]+'~')
+            // Cato P0-5 : scope respecté (audit/vt) via fenêtre contextuelle ±60 chars
+            var isYearField = (
+              String(rv.id_champ || '').trim() === '3' ||
+              /ann[eé]e.*(?:construction|installation|fabrication|pose|mise\s+en\s+service)/i.test(fieldNom)
+            );
+            if (isYearField) {
+              function extractYearFromComment(scope) {
+                var scopeRx = new RegExp('\\b' + scope + '\\b', 'i');
+                var otherScope = scope === 'audit' ? 'vt' : 'audit';
+                var otherScopeRx = new RegExp('\\b' + otherScope + '\\b', 'i');
+                // Plage : 1975-1977, 1975–1977, 1975 à 1977
+                var rxRange = /\b(18[5-9]\d|19\d\d|20[0-2]\d)\s*[-–à\/]\s*(?:18[5-9]\d|19\d\d|20[0-2]\d)\b/g;
+                var rxYear  = /\b(18[5-9]\d|19\d\d|20[0-2]\d)\b/g;
+                function tryNearScope(rx) {
+                  var m;
+                  rx.lastIndex = 0;
+                  while ((m = rx.exec(comment)) !== null) {
+                    var idx = m.index;
+                    var rawMatch = m[0];
+                    var winStart = Math.max(0, idx - 60);
+                    var winEnd   = Math.min(comment.length, idx + rawMatch.length + 60);
+                    var ctx = comment.substring(winStart, winEnd);
+                    if (isBlacklistedContext(ctx)) continue;
+                    var scopePos = ctx.search(scopeRx);
+                    if (scopePos < 0) continue;
+                    var matchPosInCtx = idx - winStart;
+                    var otherPos = ctx.search(otherScopeRx);
+                    // Si l'autre scope est strictement plus proche du match, on saute
+                    if (otherPos >= 0 && Math.abs(otherPos - matchPosInCtx) < Math.abs(scopePos - matchPosInCtx)) continue;
+                    return rawMatch.trim();
+                  }
+                  return null;
+                }
+                // Essai 1 : plage proche du scope. Essai 2 : année isolée proche du scope.
+                return tryNearScope(rxRange) || tryNearScope(rxYear);
+              }
+              if (!explicitMissingAudit && isUnitOnlyOrEmpty(rv.valeur_audit)) {
+                var foundYearAudit = extractYearFromComment('audit');
+                if (foundYearAudit) {
+                  rv = Object.assign({}, rv, { valeur_audit: foundYearAudit, _recovered_from_comment: true });
+                  console.log('[VALEUR-RECOVERY-YEAR] valeur_audit année récupérée : "' + foundYearAudit + '" (champ ' + (rv.id_champ || '') + (rv.instance_label ? ' / ' + rv.instance_label : '') + ')');
+                }
+              }
+              if (!explicitMissingVT && isUnitOnlyOrEmpty(rv.valeur_vt)) {
+                var foundYearVT = extractYearFromComment('vt');
+                if (foundYearVT) {
+                  rv = Object.assign({}, rv, { valeur_vt: foundYearVT, _recovered_from_comment: true });
+                  console.log('[VALEUR-RECOVERY-YEAR] valeur_vt année récupérée : "' + foundYearVT + '" (champ ' + (rv.id_champ || '') + (rv.instance_label ? ' / ' + rv.instance_label : '') + ')');
+                }
+              }
+            }
+            // ─── Fix C+ Phase 4 (2026-05-13) : généralisation à tous champs NUMBER ───
+            // Cato P0-6 : gating strict sur fieldType === 'number'
+            // Cato P0-2 : anchor scope obligatoire (±20 chars) + blacklist contextuelle
+            // Architect P0-3 : flag _recovered_from_comment propagé pour respect par ENFORCE
+            // Cible : "Volume stockage (L)", "Surface", "Puissance", "Hauteur",
+            //   "Épaisseur isolant", "Coefficient U", "Consommation", "Débit", etc.
+            // Bug ciblé : commentaire IA "Audit indique 100 L, VT indique 150 L" mais champ vide.
+            var _fieldNomLc = (fieldNom || '').toLowerCase()
+              .replace(/[éèêë]/g,'e').replace(/[àâä]/g,'a').replace(/[ùûü]/g,'u')
+              .replace(/[îï]/g,'i').replace(/[ôö]/g,'o').replace(/[ç]/g,'c');
+            var _isNumberField = !isYearField && (
+              /surface|superficie|hauteur|altitude|epaisseur|profondeur|volume|puissance|debit|temperature|consommation|rendement|resistance|coefficient|nombre|niveau|cop|seer|scop|cee|cef|cep/.test(_fieldNomLc) ||
+              /\b[ru]\s*\(|\bsw\b|\bug\b|\btl\b/.test(_fieldNomLc)
+            );
+            if (_isNumberField) {
+              function extractNumberNearScope(scope) {
+                var scopeRx = new RegExp('\\b' + scope + '\\b', 'i');
+                var otherScope = scope === 'audit' ? 'vt' : 'audit';
+                var otherScopeRx = new RegExp('\\b' + otherScope + '\\b', 'i');
+                // Nombre avec unité optionnelle. Capture est en m[1] pour conserver l'unité.
+                var rxNum = /\b(\d{1,4}(?:[\s.,]\d{1,3})*(?:\s*(?:m²|m2|m\b|cm|mm|%|kwh|kw|w\/m²|w\/m|°c|°|kg|wc?\b|l\b|L\b))?)/g;
+                var m;
+                rxNum.lastIndex = 0;
+                while ((m = rxNum.exec(comment)) !== null) {
+                  var idx = m.index;
+                  var rawMatch = m[1];
+                  if (!rawMatch) continue;
+                  var winStart = Math.max(0, idx - 20);
+                  var winEnd   = Math.min(comment.length, idx + rawMatch.length + 20);
+                  var ctx = comment.substring(winStart, winEnd);
+                  if (isBlacklistedContext(ctx)) continue;
+                  var scopePos = ctx.search(scopeRx);
+                  if (scopePos < 0) continue;
+                  var matchPosInCtx = idx - winStart;
+                  var otherPos = ctx.search(otherScopeRx);
+                  if (otherPos >= 0 && Math.abs(otherPos - matchPosInCtx) < Math.abs(scopePos - matchPosInCtx)) continue;
+                  return rawMatch.replace(/\s+/g, ' ').trim();
+                }
+                return null;
+              }
+              if (!explicitMissingAudit && isUnitOnlyOrEmpty(rv.valeur_audit)) {
+                var foundNumAudit = extractNumberNearScope('audit');
+                if (foundNumAudit) {
+                  rv = Object.assign({}, rv, { valeur_audit: foundNumAudit, _recovered_from_comment: true });
+                  console.log('[VALEUR-RECOVERY-AUTO] valeur_audit récupérée (champ number) : "' + foundNumAudit + '" (champ ' + (rv.id_champ || '') + (rv.instance_label ? ' / ' + rv.instance_label : '') + ')');
+                }
+              }
+              if (!explicitMissingVT && isUnitOnlyOrEmpty(rv.valeur_vt)) {
+                var foundNumVT = extractNumberNearScope('vt');
+                if (foundNumVT) {
+                  rv = Object.assign({}, rv, { valeur_vt: foundNumVT, _recovered_from_comment: true });
+                  console.log('[VALEUR-RECOVERY-AUTO] valeur_vt récupérée (champ number) : "' + foundNumVT + '" (champ ' + (rv.id_champ || '') + (rv.instance_label ? ' / ' + rv.instance_label : '') + ')');
+                }
               }
             }
           })();
@@ -4452,7 +4642,13 @@
             var rf = state.referentiel.find(function(ref) { return ref.id === r.id_champ; });
             if (rf) r._fieldNom = rf.nom;
           });
-          state.analysisResults = await callMaya(state.analysisResults, auditFull, vtFull);
+          // PR1d Cato P0-1 : flag _mayaIsRunning pour bloquer changement statut user pendant Maya
+          window.__mayaIsRunning = true;
+          try {
+            state.analysisResults = await callMaya(state.analysisResults, auditFull, vtFull);
+          } finally {
+            window.__mayaIsRunning = false;
+          }
           // ─── Phase 3 — Post-Maya (transformations basées sur validation Maya) ───
           try { harmonizeWallSurfaces(); } catch(e) { console.warn('[POST-MAYA] harmonize:', e.message); }
           try { dedupGlobalFields(); } catch(e) { console.warn('[POST-MAYA] dedup:', e.message); }
@@ -5956,8 +6152,19 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
             // Cas 1 : IA a retourné vide/null → utiliser pré-extrait
             // Cas 2 : pré-extrait contient un nombre mais IA n'en a pas (ex: "m²" au lieu de "36,00 m²")
             if (!aiAudit || (preHasDigit && !aiHasDigit)) {
-              console.log('[ENFORCE-AUDIT] "' + rv.id_champ + '" : IA="' + aiAudit + '" → forcé="' + preAudit + '"');
-              rv = Object.assign({}, rv, { valeur_audit: preAudit });
+              // ── FIX B+ Phase 2 (2026-05-13) ─────────────────────────────────
+              // Bug : BATIAUDIT extrayait des unités orphelines ("m²", "L") ou
+              // valeurs incohérentes ("Plusieurs façades exposées" pour "Année d'installation")
+              // dans preExtracted. ENFORCE-AUDIT les forçait ensuite dans le champ
+              // → corrompait silencieusement Année construction, Volume stockage, etc.
+              // Fix : valider preAudit avec _isValidForFieldType (déjà appliqué côté IA)
+              // avant de l'imposer. Si invalide → REJET, on garde la valeur IA (ou null).
+              if (!_isValidForFieldType(preAudit, _fieldType)) {
+                console.warn('[ENFORCE-AUDIT-BLOCKED] "' + rv.id_champ + '" nom="' + (_currentField ? _currentField.nom : '?') + '" type=' + _fieldType + ' preAudit="' + preAudit + '" → REJET (BATIAUDIT a extrait une valeur incompatible avec le type attendu)');
+              } else {
+                console.log('[ENFORCE-AUDIT] "' + rv.id_champ + '" : IA="' + aiAudit + '" → forcé="' + preAudit + '"');
+                rv = Object.assign({}, rv, { valeur_audit: preAudit });
+              }
             }
           }
           // Enforcement VT : vtPreExtracted contient les valeurs lexique/SHAB fiables
@@ -5967,8 +6174,13 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
             var preVtHasDigit = /\d/.test(preVt);
             var aiVtHasDigit  = /\d/.test(aiVt);
             if (!aiVt || (preVtHasDigit && !aiVtHasDigit)) {
-              console.log('[ENFORCE-VT] "' + rv.id_champ + '" : IA="' + aiVt + '" → forcé="' + preVt + '"');
-              rv = Object.assign({}, rv, { valeur_vt: preVt });
+              // ── FIX B+ Phase 2 (2026-05-13) : même garde côté VT ─────────────
+              if (!_isValidForFieldType(preVt, _fieldType)) {
+                console.warn('[ENFORCE-VT-BLOCKED] "' + rv.id_champ + '" nom="' + (_currentField ? _currentField.nom : '?') + '" type=' + _fieldType + ' preVt="' + preVt + '" → REJET (valeur VT incompatible avec le type attendu)');
+              } else {
+                console.log('[ENFORCE-VT] "' + rv.id_champ + '" : IA="' + aiVt + '" → forcé="' + preVt + '"');
+                rv = Object.assign({}, rv, { valeur_vt: preVt });
+              }
             }
           }
 
@@ -6109,6 +6321,17 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
     // Vérifie les résultats ROUGE/MANQUANT pour détecter anomalies et corrections
     // =====================================================================
     async function callMaya(results, auditText, vtText) {
+      // PR1b — Cato P0-2 : attendre que le sync correspondances soit terminé
+      // (5s max via timeout interne) avant d'analyser, pour que les paires validées
+      // distantes s'appliquent dès la 1re analyse après un reload.
+      try {
+        if (window.__correspondenceSyncReady && typeof window.__correspondenceSyncReady.then === 'function') {
+          var _syncStart = Date.now();
+          await window.__correspondenceSyncReady;
+          var _syncElapsed = Date.now() - _syncStart;
+          if (_syncElapsed > 100) console.log('[FIX-D-SYNC] callMaya attendu sync ' + _syncElapsed + 'ms.');
+        }
+      } catch(e) { /* tolérer toute erreur, continuer */ }
       // Maya vérifie TOUS les résultats — chaque valeur doit exister dans son document source
       var suspects = results.filter(function(r) {
         // Exclure les résultats d'erreur API (pas de valeur à vérifier)
@@ -6136,7 +6359,18 @@ Si un champ n'a PAS d'instance_label en entrée → instance_label = null dans l
       var drawerInjection = { block: '', injectedIds: [] };
       try {
         drawerInjection = buildDrawerFeedbackInjection();
-        if (drawerInjection.block) console.log('[MAYA-DRAWER] ' + drawerInjection.injectedIds.length + ' règle(s) apprise(s) injectée(s) dans le prompt Maya (pending + permanent).');
+        if (drawerInjection.block) {
+          var _pCount = 0, _permCount = 0, _otherCount = 0;
+          (drawerInjection.injectedIds || []).forEach(function(_id){
+            var _st = (mayaFeedbackMeta[_id] || {}).status || 'pending';
+            if (_st === 'pending') _pCount++;
+            else if (_st === 'permanent') _permCount++;
+            else _otherCount++;
+          });
+          console.log('[MAYA-DRAWER] 📤 ' + drawerInjection.injectedIds.length + ' règle(s) injectée(s) dans prompt Maya — ' + _pCount + ' pending + ' + _permCount + ' permanent + ' + _otherCount + ' autre (Fix B5 : filtre exclut UNIQUEMENT "archived" — pending/applied/permanent réinjectés). IDs=' + JSON.stringify(drawerInjection.injectedIds));
+        } else {
+          console.log('[MAYA-DRAWER] 📤 0 règle injectée — aucun feedback pending/permanent disponible.');
+        }
       } catch (e) { console.warn('[MAYA-DRAWER] Injection feedbacks échouée:', e.message); }
 
       var mayaSystemPrompt = `⚠️ RÈGLE ABSOLUE — FORMAT DE SORTIE ⚠️
@@ -6426,7 +6660,10 @@ ${vtShort}`;
             return r.id_champ === corr.id_champ &&
                    (r.instance_label || null) === (corr.instance_label || null);
           });
-          if (!target) return;
+          if (!target) {
+            console.warn('[MAYA-MAP] ⚠ Valeur PERDUE — Maya a retourné une correction pour id_champ="' + corr.id_champ + '" (instance="' + (corr.instance_label||'-') + '") mais ce champ est INTROUVABLE dans les résultats. action="' + corr.action + '", valeur_audit="' + (corr.valeur_audit||'-') + '", valeur_vt="' + (corr.valeur_vt||'-') + '", commentaire="' + ((corr.commentaire||'').slice(0,80)) + '"');
+            return;
+          }
 
           // Sauvegarder l'état original
           if (!target._maya_original) {
@@ -6485,11 +6722,89 @@ ${vtShort}`;
         console.log('[MAYA] ' + corrCount + ' correction(s) appliquée(s).');
         results._mayaStatus = { ran: true, corrections: corrCount, suspects: suspects.length, lowConfidenceCount: lowConfCount, error: null };
 
+        // ── PR1a Fix D-core : application des correspondances utilisateur (force VERT post-Maya) ──
+        // Lookup lexique, force VERT si match exact (audit+vt normalisés) ET instance autorisée.
+        // P0-2 : skip si _maya_was_hallucination (anti-entérinage d'hallucination).
+        // P1-5 : skip si _recovered_from_comment (anti-pollution croisée avec Fix C+).
+        // Aucune dépendance LLM : matching local pur, zéro surcoût tokens.
+        try {
+          var _fixDMatches = 0;
+          results.forEach(function(r) {
+            if (!r || !r.id_champ) return;
+            // Garde-fous P0-2 / P1-5
+            if (r._maya_was_hallucination === true) return;
+            if (r._recovered_from_comment === true) return;
+            // Forcer VERT seulement sur lignes actuellement ORANGE/ROUGE avec deux valeurs présentes
+            if (r.statut !== 'ORANGE' && r.statut !== 'ROUGE') return;
+            if (r.valeur_audit === null || r.valeur_audit === undefined || String(r.valeur_audit).trim() === '') return;
+            if (r.valeur_vt === null || r.valeur_vt === undefined || String(r.valeur_vt).trim() === '') return;
+            var match = _fixD_findEntry(r.id_champ, r.valeur_audit, r.valeur_vt);
+            if (!match) return;
+            // P0-3 : instance courante doit être listée (ou singleton autorisé)
+            if (!_fixD_isInstanceAllowed(match.entry, r.instance_label)) return;
+            // Match valide → force VERT
+            r.statut = 'VERT';
+            r._user_validated_correspondence = true;
+            r.commentaire = (r.commentaire ? r.commentaire + ' ' : '') + '[✓ Correspondance utilisateur validée]';
+            _fixDMatches++;
+            console.log('[FIX-D-MATCH] champ=' + r.id_champ + (r.instance_label ? ' (' + r.instance_label + ')' : '') + ' audit="' + r.valeur_audit + '" ≈ vt="' + r.valeur_vt + '" → forcé VERT (correspondance utilisateur)');
+          });
+          if (_fixDMatches > 0) {
+            console.log('[FIX-D-LEXIQUE] ' + _fixDMatches + ' ligne(s) basculée(s) VERT par correspondance utilisateur validée.');
+          }
+        } catch (e) { console.warn('[FIX-D-LEXIQUE] Application correspondances échouée:', e.message); }
+
+        // Hallucination flag propagé pour P0-2 (réutilisable au prochain run)
+        try {
+          (mayaResult.corrections || []).forEach(function(c) {
+            if (c && c.action === 'hallucination_detectee') {
+              var t = results.find(function(r){ return r.id_champ === c.id_champ && (r.instance_label || null) === (c.instance_label || null); });
+              if (t) t._maya_was_hallucination = true;
+            }
+          });
+        } catch(e) {}
+
+        // ── PR2b Fix 5B — Auto-conversion VERT sans valeur → MANQUANT ──
+        // Bug INV-3 : Maya pose VERT sur des lignes sans aucune valeur (audit ET vt vides).
+        // Cato P0-1 : skip _maya_was_hallucination (protège contre démote silencieuse).
+        // Cato P0-2 : skip _recovered_from_comment (respect Fix C+).
+        // Cato P1-2 : "—" (em-dash) traité comme vide (cohérence PR1d ligne 8032).
+        // Q1=A : skip _user_status_override_ts (user manual choice) + _user_validated_correspondence (Fix D).
+        try {
+          var _fix5BDemoted = 0;
+          function _fix5B_isEmpty(v) {
+            if (v === null || v === undefined) return true;
+            var s = String(v).trim();
+            if (s === '' || s === '—' || s === '-') return true;
+            return false;
+          }
+          results.forEach(function(r) {
+            if (!r || r.statut !== 'VERT') return;
+            if (r._user_status_override_ts) return;           // Q1=A : user a forcé VERT manuel
+            if (r._user_validated_correspondence) return;     // Fix D : correspondance utilisateur
+            if (r._maya_was_hallucination) return;            // Cato P0-1
+            if (r._recovered_from_comment) return;            // Cato P0-2 : respect Fix C+
+            var hasA = !_fix5B_isEmpty(r.valeur_audit);
+            var hasV = !_fix5B_isEmpty(r.valeur_vt);
+            if (hasA || hasV) return;                         // au moins une valeur → on garde VERT
+            // VERT sans aucune valeur → MANQUANT
+            r.statut = 'MANQUANT';
+            r._auto_demoted_no_value = true;
+            r.commentaire = (r.commentaire ? r.commentaire + ' ' : '') + '[VERT sans valeur → MANQUANT (Fix 5B)]';
+            _fix5BDemoted++;
+            console.log('[FIX-5B] auto-demote VERT → MANQUANT — id=' + r.id_champ + (r.instance_label ? ' instance=' + r.instance_label : ''));
+          });
+          if (_fix5BDemoted > 0) {
+            console.log('[FIX-5B] ' + _fix5BDemoted + ' ligne(s) VERT sans valeur démoteée(s) en MANQUANT.');
+          }
+        } catch (e) { console.warn('[FIX-5B] Auto-démote échoué:', e.message); }
+
         // ── Marquage auto pending → applied des feedbacks drawer injectés ──
         try {
+          console.log('[MAYA-DRAWER-FLIP] ⚠ Maya a retourné ' + corrCount + ' correction(s). Le code va flipper ' + (drawerInjection.injectedIds||[]).length + ' feedback(s) injecté(s) vers "applied" SANS vérifier si Maya les a réellement appliqués. (Bug B5 — voir analyse 2026-05-13)');
           var flippedCount = markDrawerFeedbacksApplied(drawerInjection.injectedIds || []);
           if (flippedCount > 0) {
-            console.log('[MAYA-DRAWER] ' + flippedCount + ' feedback(s) pending passé(s) en applied (règles permanentes inchangées).');
+            console.log('[MAYA-DRAWER] ' + flippedCount + ' feedback(s) pending passé(s) en applied (règles permanentes inchangées). IDs flippés=' + JSON.stringify(drawerInjection.injectedIds || []));
             if (document.getElementById('maya-drawer') && document.getElementById('maya-drawer').classList.contains('visible')) {
               renderMayaDrawer();
             }
@@ -6497,8 +6812,25 @@ ${vtShort}`;
         } catch (e) { console.warn('[MAYA-DRAWER] Marquage applied échoué:', e.message); }
 
         // ── Auto-apprentissage : sauvegarder les corrections comme learnings ──
+        // Cato P0-4 : exclure les corrections sur des valeurs _recovered_from_comment
+        // pour éviter une boucle d'auto-renforcement KB → KB (le LLM a inventé/déduit la valeur
+        // dans son commentaire, Maya l'a vue, si on l'apprend on entérine une potentielle hallucination).
         try {
-          var mayaLearnings = extractMayaLearnings(mayaResult.corrections);
+          var _recoveredKeys = new Set();
+          results.forEach(function(r) {
+            if (r && r._recovered_from_comment) {
+              _recoveredKeys.add(String(r.id_champ) + '|' + (r.instance_label || ''));
+            }
+          });
+          var _filteredCorrections = (mayaResult.corrections || []).filter(function(c) {
+            var key = String(c.id_champ) + '|' + (c.instance_label || '');
+            if (_recoveredKeys.has(key)) {
+              console.warn('[MAYA-KB-FILTER] Correction ' + key + ' exclue de l\'auto-apprentissage (valeur _recovered_from_comment — pollution KB évitée)');
+              return false;
+            }
+            return true;
+          });
+          var mayaLearnings = extractMayaLearnings(_filteredCorrections);
           if (mayaLearnings.length > 0) {
             kbReflect('maya', mayaLearnings).then(function(r) {
               console.log('[MAYA-KB] Auto-apprentissage : ' + r.saved + ' learning(s) sauvegardé(s), ' + r.skipped + ' ignoré(s).');
@@ -6940,17 +7272,39 @@ ${vtShort}`;
           const fbTitle = _fbTitle;
           const fbAttr = fbCount > 0 ? (' data-count="' + fbCount + '"') : '';
           const safeKey = fbKey.replace(/'/g, "\\'");
+          // PR1a Fix D-core : bouton "\u2713 Valider correspondance" (visible si conditions remplies)
+          // P0-2 : visible si _maya_corrected ET !_maya_was_hallucination (anti-ent\u00e9rinage)
+          // P1-5 : cach\u00e9 si _recovered_from_comment (anti-pollution crois\u00e9e Fix C+)
+          // Visible aussi si statut original ORANGE/ROUGE et 2 valeurs pr\u00e9sentes (cas Maya pas encore lanc\u00e9)
+          var _showFixDBtn = false;
+          var _alreadyValidated = false;
+          if (r.statut === 'ORANGE' || r.statut === 'ROUGE') {
+            if (r.valeur_audit && r.valeur_vt && String(r.valeur_audit).trim() !== '' && String(r.valeur_vt).trim() !== '' && String(r.valeur_audit).trim() !== '\u2014' && String(r.valeur_vt).trim() !== '\u2014') {
+              if (!r._recovered_from_comment && !r._maya_was_hallucination) {
+                _showFixDBtn = true;
+              }
+            }
+          } else if (r.statut === 'VERT' && r._user_validated_correspondence) {
+            _alreadyValidated = true;
+          }
+          var _fixDBtnHtml = '';
+          if (_showFixDBtn) {
+            _fixDBtnHtml = '<button type="button" class="feedback-btn" style="background:#E8F5E9;color:#2E7D32;border-color:#A5D6A7" title="Valider cette correspondance audit\u2194VT comme \u00e9quivalence permanente pour tous les rapports futurs" onclick="openCorrespondenceModal(\'' + escHtml(String(r.id_champ || '')) + '\', \'' + escHtml(String(r.instance_label || '')) + '\', this.dataset.va, this.dataset.vv)" data-va="' + escHtml(String(r.valeur_audit || '')) + '" data-vv="' + escHtml(String(r.valeur_vt || '')) + '">\u2713</button>';
+          } else if (_alreadyValidated) {
+            _fixDBtnHtml = '<span title="Correspondance valid\u00e9e par utilisateur" style="display:inline-block;margin-left:4px;padding:1px 5px;background:#2E7D32;color:#fff;border-radius:8px;font-size:9px;font-weight:700">\u2713 LEXIQUE</span>';
+          }
           const confCell =
             '<td style="white-space:nowrap">' +
               '<span class="confidence-chip conf-' + conf.level + '" title="' + escHtml(conf.reason) + '">' + conf.icon + ' ' + conf.label + '</span>' +
               '<button type="button" class="' + fbClass + '" title="' + fbTitle + '"' + fbAttr + ' onclick="openMayaFeedback(\'' + safeKey + '\')">\ud83d\udcac</button>' +
+              _fixDBtnHtml +
             '</td>';
           row.innerHTML =
             '<td>' + rowNum + '</td>' +
             '<td><strong>' + escHtml(r.id_champ || '') + '</strong><br><span style="font-size:11px;color:var(--text-muted)">' + escHtml(getFieldNom(r.id_champ)) + '</span>' + instanceTag + '</td>' +
             '<td style="max-width:180px;font-size:12px">' + escHtml(r.valeur_audit || '\u2014') + '</td>' +
             '<td style="max-width:180px;font-size:12px;white-space:pre-line">' + escHtml(r.valeur_vt || '\u2014') + '</td>' +
-            '<td>' + statusChip(r.statut) + '</td>' +
+            '<td>' + statusChip(r.statut, safeKey) + '</td>' +
             confCell +
             '<td style="max-width:200px;font-size:12px;color:var(--text-muted)">' + escHtml(r.commentaire || '\u2014') + (r._maya_corrected ? ' <span style="display:inline-block;margin-top:3px;padding:1px 7px;background:#7B2D8E;color:white;border-radius:10px;font-size:9px;font-weight:700">&#10022; Maya</span>' : '') + '</td>' +
             '<td>' + revuSelectHtml(r.id_champ, r.instance_label, r.revu_doc) + '</td>';
@@ -7051,7 +7405,7 @@ ${vtShort}`;
       renderTable(f);
     }
 
-    function statusChip(statut) {
+    function statusChip(statut, rowKey) {
       const map = {
         'VERT':     ['status-vert', '✅', 'Conforme'],
         'ORANGE':   ['status-orange', '⚠️', 'Approximatif'],
@@ -7059,6 +7413,11 @@ ${vtShort}`;
         'MANQUANT': ['status-manquant', '🔲', 'Manquant']
       };
       const [cls, icon, label] = map[statut] || ['status-manquant', '🔲', statut];
+      // PR1d : chip cliquable si rowKey fourni → ouvre menu de changement de statut user
+      if (rowKey) {
+        var safeRk = String(rowKey).replace(/'/g, "\\'");
+        return '<span class="status-chip ' + cls + '" style="cursor:pointer" title="Cliquer pour changer le statut" onclick="openStatusMenu(\'' + safeRk + '\', this, event)">' + icon + ' ' + label + '</span>';
+      }
       return `<span class="status-chip ${cls}">${icon} ${label}</span>`;
     }
 
@@ -7360,8 +7719,10 @@ ${vtShort}`;
     // ============================================================
     const MAYA_GFB_KEY  = 'maya_feedbacks_global_v1';
     const MAYA_META_KEY = 'maya_feedbacks_meta_v1'; // {status: applied|archived, by feedbackId}
+    const MAYA_CORRESPONDENCES_KEY = 'maya_correspondences_v1'; // PR1a Fix D-core
     let mayaGlobalFeedbacks = [];
     let mayaFeedbackMeta    = {};
+    let mayaCorrespondences = {}; // PR1a Fix D-core : { "categorie::idChamp": [ {auditNorm, vtNorm, ...} ] }
     let mayaDrawerFilter    = 'all';
 
     function loadMayaGlobalFeedbacks() {
@@ -7369,12 +7730,165 @@ ${vtShort}`;
       catch(e) { mayaGlobalFeedbacks = []; }
       try { mayaFeedbackMeta = JSON.parse(localStorage.getItem(MAYA_META_KEY) || '{}') || {}; }
       catch(e) { mayaFeedbackMeta = {}; }
+      try { mayaCorrespondences = JSON.parse(localStorage.getItem(MAYA_CORRESPONDENCES_KEY) || '{}') || {}; }
+      catch(e) { mayaCorrespondences = {}; }
+      var _ccount = 0; try { Object.keys(mayaCorrespondences).forEach(function(k){ _ccount += (mayaCorrespondences[k]||[]).length; }); } catch(e) {}
+      if (_ccount > 0) console.log('[FIX-D-LEXIQUE] ' + _ccount + ' correspondance(s) chargée(s) au boot (clés: ' + Object.keys(mayaCorrespondences).length + ').');
     }
     function persistMayaGlobalFeedbacks() {
       try { localStorage.setItem(MAYA_GFB_KEY, JSON.stringify(mayaGlobalFeedbacks)); } catch(e) {}
     }
     function persistMayaFeedbackMeta() {
       try { localStorage.setItem(MAYA_META_KEY, JSON.stringify(mayaFeedbackMeta)); } catch(e) {}
+    }
+    function persistMayaCorrespondences() {
+      try { localStorage.setItem(MAYA_CORRESPONDENCES_KEY, JSON.stringify(mayaCorrespondences)); } catch(e) {}
+    }
+
+    // PR1b — Générateur d'ID stable pour Supabase (collision-safe via hash si trop long).
+    function _fixD_hashStr(s) {
+      var h = 0; var str = String(s || '');
+      for (var i = 0; i < str.length; i++) h = ((h << 5) - h + str.charCodeAt(i)) | 0;
+      return Math.abs(h).toString(36);
+    }
+    function _fixD_makeStableId(scopeKey, auditNorm, vtNorm) {
+      var an = String(auditNorm || '');
+      var vn = String(vtNorm || '');
+      var raw = 'corr:' + String(scopeKey) + ':' + an + ':' + vn;
+      if (raw.length <= 480) return raw;
+      // Long → truncate + suffix de hash pour stabilité
+      return 'corr:' + String(scopeKey) + ':' + an.slice(0, 80) + ':' + vn.slice(0, 80) + ':' + _fixD_hashStr(an + '|' + vn);
+    }
+
+    // PR1b — Push fire-and-forget vers Supabase (P0-1 anti-résurrection : soft-delete coté backend).
+    function _fixD_pushSupabaseSave(scopeKey, entry) {
+      if (!entry) return;
+      try {
+        if (typeof MayaSupabase === 'undefined' || !MayaSupabase.isAvailable || !MayaSupabase.isAvailable()) return;
+        var id = _fixD_makeStableId(scopeKey, entry.auditNorm, entry.vtNorm);
+        MayaSupabase.saveCorrespondence({
+          id: id,
+          scope_key: scopeKey,
+          audit_norm: entry.auditNorm || '',
+          vt_norm: entry.vtNorm || '',
+          audit_raw: entry.auditRaw || '',
+          vt_raw: entry.vtRaw || '',
+          instance_labels: Array.isArray(entry.instanceLabelsValidated) ? entry.instanceLabelsValidated : [],
+          is_singleton: entry.isSingleton === true,
+          occurrences: entry.occurrences || 1,
+          created_at: entry.createdAt || new Date().toISOString()
+        });
+      } catch(e) { console.warn('[FIX-D-SYNC] push save:', e.message); }
+    }
+    function _fixD_pushSupabaseDelete(scopeKey, entry) {
+      if (!entry) return;
+      try {
+        if (typeof MayaSupabase === 'undefined' || !MayaSupabase.isAvailable || !MayaSupabase.isAvailable()) return;
+        var id = _fixD_makeStableId(scopeKey, entry.auditNorm, entry.vtNorm);
+        MayaSupabase.deleteCorrespondence(id);
+      } catch(e) { console.warn('[FIX-D-SYNC] push delete:', e.message); }
+    }
+
+    // ============================================================
+    // PR1a Fix D-core : Lexique de correspondances utilisateur
+    // 4 P0 Cato + 5 P1 intégrés (pas de skipMaya — force VERT post-Maya uniquement)
+    // ============================================================
+    // Normalisation stricte : trim + lowercase + accents supprimés + espaces multiples écrasés.
+    // Valeurs originales (auditRaw, vtRaw) préservées pour affichage et audit.
+    function _fixD_normalize(s) {
+      if (s === null || s === undefined) return '';
+      var t = String(s).trim().toLowerCase();
+      // Supprimer accents
+      try { t = t.normalize('NFD').replace(/[̀-ͯ]/g, ''); } catch(e) {}
+      // Espaces multiples + ponctuation périphérique
+      t = t.replace(/\s+/g, ' ').replace(/[«»"'`]/g, '').trim();
+      return t;
+    }
+    // Catégorie depuis le référentiel — fallback parentSection ou section.
+    // Sert de scope-key au lexique (évite collision cross-section).
+    function _fixD_getCategorie(idChamp) {
+      try {
+        var f = state.referentiel.find(function(r){ return r.id === idChamp; });
+        if (!f) return '_unknown_';
+        return _fixD_normalize(f.categorie || f.parentSection || f.section || '_root_');
+      } catch(e) { return '_unknown_'; }
+    }
+    // Clé du lexique : catégorie::idChamp (P0-3 — instance gérée par instanceLabelsValidated dans l'entrée)
+    function _fixD_keyFor(idChamp) {
+      return _fixD_getCategorie(idChamp) + '::' + String(idChamp || '_no_id_');
+    }
+    // Cherche une entry matchante (audit+vt normalisés). Retourne {entry, key, idx} ou null.
+    function _fixD_findEntry(idChamp, valAud, valVT) {
+      var key = _fixD_keyFor(idChamp);
+      var arr = mayaCorrespondences[key];
+      if (!Array.isArray(arr) || arr.length === 0) return null;
+      var an = _fixD_normalize(valAud);
+      var vn = _fixD_normalize(valVT);
+      if (!an || !vn) return null;
+      for (var i = 0; i < arr.length; i++) {
+        if (arr[i].auditNorm === an && arr[i].vtNorm === vn) {
+          return { entry: arr[i], key: key, idx: i };
+        }
+      }
+      return null;
+    }
+    // P0-3 : match auto valide seulement si l'instance courante est listée OU si singleton/instance null.
+    function _fixD_isInstanceAllowed(entry, instanceLabel) {
+      if (!entry) return false;
+      var inst = instanceLabel || null;
+      if (inst === null) {
+        // Champ singleton : autorisé si l'entry a déjà été validée sur singleton
+        return entry.isSingleton === true || (Array.isArray(entry.instanceLabelsValidated) && entry.instanceLabelsValidated.indexOf(null) >= 0);
+      }
+      return Array.isArray(entry.instanceLabelsValidated) && entry.instanceLabelsValidated.indexOf(inst) >= 0;
+    }
+    // Ajoute/met à jour une correspondance. Renvoie l'entry à jour.
+    function _fixD_addOrUpdate(idChamp, valAud, valVT, instanceLabel) {
+      var key = _fixD_keyFor(idChamp);
+      if (!Array.isArray(mayaCorrespondences[key])) mayaCorrespondences[key] = [];
+      var arr = mayaCorrespondences[key];
+      // P1-1 / P1-3 : limite sécurité 200 entrées par clé
+      if (arr.length >= 200) {
+        console.warn('[FIX-D-LEXIQUE] Limite 200 atteinte pour clé ' + key + ' — entrée non ajoutée.');
+        return null;
+      }
+      var an = _fixD_normalize(valAud);
+      var vn = _fixD_normalize(valVT);
+      var existing = _fixD_findEntry(idChamp, valAud, valVT);
+      var inst = instanceLabel || null;
+      var now = new Date().toISOString();
+      if (existing) {
+        var e = existing.entry;
+        e.occurrences = (e.occurrences || 1) + 1;
+        e.updatedAt = now;
+        if (inst === null) {
+          e.isSingleton = true;
+          if (!Array.isArray(e.instanceLabelsValidated)) e.instanceLabelsValidated = [];
+          if (e.instanceLabelsValidated.indexOf(null) < 0) e.instanceLabelsValidated.push(null);
+        } else {
+          if (!Array.isArray(e.instanceLabelsValidated)) e.instanceLabelsValidated = [];
+          if (e.instanceLabelsValidated.indexOf(inst) < 0) e.instanceLabelsValidated.push(inst);
+        }
+        persistMayaCorrespondences();
+        _fixD_pushSupabaseSave(key, e); // PR1b — fire-and-forget
+        return e;
+      }
+      var newEntry = {
+        auditNorm: an,
+        vtNorm: vn,
+        auditRaw: String(valAud == null ? '' : valAud),
+        vtRaw: String(valVT == null ? '' : valVT),
+        instanceLabelsValidated: [inst],
+        isSingleton: (inst === null),
+        createdAt: now,
+        updatedAt: now,
+        occurrences: 1,
+        _schemaVersion: 1
+      };
+      arr.push(newEntry);
+      persistMayaCorrespondences();
+      _fixD_pushSupabaseSave(key, newEntry); // PR1b — fire-and-forget
+      return newEntry;
     }
     loadMayaGlobalFeedbacks();
 
@@ -7422,6 +7936,274 @@ ${vtShort}`;
       showAlert('alerts-area', 'success', '💬 Feedback global enregistré — Maya en tiendra compte aux prochaines vérifications.');
       if (document.getElementById('maya-drawer').classList.contains('visible')) renderMayaDrawer();
     }
+
+    // ============================================================
+    // PR1a Fix D-core — Modale "Valider correspondance"
+    // ============================================================
+    var _fixDCorrespCtx = null; // contexte modale courante
+    function openCorrespondenceModal(idChamp, instanceLabel, valAud, valVT) {
+      if (!idChamp || !valAud || !valVT) {
+        showAlert('alerts-area', 'warning', 'Données manquantes pour valider une correspondance.');
+        return;
+      }
+      var inst = instanceLabel && instanceLabel.length > 0 ? instanceLabel : null;
+      _fixDCorrespCtx = { idChamp: idChamp, instanceLabel: inst, valAud: valAud, valVT: valVT };
+      var nom = getFieldNom(idChamp) || idChamp;
+      document.getElementById('fixd-corresp-field').textContent = String(idChamp) + ' — ' + nom;
+      if (inst) {
+        document.getElementById('fixd-corresp-instance').textContent = inst;
+        document.getElementById('fixd-corresp-instance-row').style.display = '';
+      } else {
+        document.getElementById('fixd-corresp-instance-row').style.display = 'none';
+      }
+      document.getElementById('fixd-corresp-audit').textContent = valAud;
+      document.getElementById('fixd-corresp-vt').textContent = valVT;
+      document.getElementById('fixd-corresp-overlay').classList.add('visible');
+    }
+    function closeCorrespondenceModal() {
+      _fixDCorrespCtx = null;
+      document.getElementById('fixd-corresp-overlay').classList.remove('visible');
+    }
+    function submitCorrespondence() {
+      if (!_fixDCorrespCtx) { closeCorrespondenceModal(); return; }
+      var ctx = _fixDCorrespCtx;
+      try {
+        var entry = _fixD_addOrUpdate(ctx.idChamp, ctx.valAud, ctx.valVT, ctx.instanceLabel);
+        if (!entry) {
+          showAlert('alerts-area', 'warning', 'Limite de correspondances atteinte pour ce champ.');
+          closeCorrespondenceModal();
+          return;
+        }
+        console.log('[FIX-D-VALIDATED] Nouvelle correspondance ajoutée : champ=' + ctx.idChamp + (ctx.instanceLabel ? ' (' + ctx.instanceLabel + ')' : '') + ' audit="' + ctx.valAud + '" ≈ vt="' + ctx.valVT + '" (occurrences=' + entry.occurrences + ').');
+        // Force VERT immédiat sur la ligne courante de state.analysisResults
+        if (state && Array.isArray(state.analysisResults)) {
+          var matchedNow = 0;
+          state.analysisResults.forEach(function(r) {
+            if (!r || r.id_champ !== ctx.idChamp) return;
+            if ((r.instance_label || null) !== (ctx.instanceLabel || null)) return;
+            if (String(r.valeur_audit || '') !== String(ctx.valAud)) return;
+            if (String(r.valeur_vt || '') !== String(ctx.valVT)) return;
+            r.statut = 'VERT';
+            r._user_validated_correspondence = true;
+            r.commentaire = (r.commentaire ? r.commentaire + ' ' : '') + '[✓ Correspondance utilisateur validée]';
+            matchedNow++;
+          });
+          if (matchedNow > 0 && typeof renderTable === 'function') {
+            try { renderTable(currentFilter); } catch(e) {}
+          }
+        }
+        showAlert('alerts-area', 'success', '✓ Correspondance validée — sera appliquée automatiquement à tous les futurs rapports.');
+      } catch(e) {
+        console.warn('[FIX-D-VALIDATED] Erreur:', e.message);
+        showAlert('alerts-area', 'warning', 'Erreur lors de la validation : ' + e.message);
+      }
+      closeCorrespondenceModal();
+    }
+    // Exposition globale (appel depuis HTML inline)
+    window.openCorrespondenceModal = openCorrespondenceModal;
+    window.closeCorrespondenceModal = closeCorrespondenceModal;
+    window.submitCorrespondence = submitCorrespondence;
+
+    // ============================================================
+    // PR1d Fix D statut-driven — Menu changement statut + hook lexique
+    // 4 P0 + 4 P1 Cato intégrés (lexique global par catégorie, bouton ✓ conservé)
+    // ============================================================
+
+    // Retrait idempotent d'une entrée du lexique
+    function _fixD_removeEntry(idChamp, valAud, valVT, instanceLabel) {
+      var existing = _fixD_findEntry(idChamp, valAud, valVT);
+      if (!existing) return null;
+      var key = existing.key;
+      var arr = mayaCorrespondences[key];
+      var removedEntry = existing.entry;
+      arr.splice(existing.idx, 1);
+      if (arr.length === 0) delete mayaCorrespondences[key];
+      persistMayaCorrespondences();
+      _fixD_pushSupabaseDelete(key, removedEntry); // PR1b — soft-delete distant (anti-résurrection)
+      return removedEntry;
+    }
+
+    // Compte combien de lignes courantes seraient affectées par retrait d'une paire (warning toast)
+    function _fixD_countAffectedLines(idChamp, valAud, valVT) {
+      if (!state || !Array.isArray(state.analysisResults)) return 0;
+      var anN = _fixD_normalize(valAud);
+      var vnN = _fixD_normalize(valVT);
+      var c = 0;
+      state.analysisResults.forEach(function(r){
+        if (!r || r.id_champ !== idChamp) return;
+        if (_fixD_normalize(r.valeur_audit) === anN && _fixD_normalize(r.valeur_vt) === vnN) c++;
+      });
+      return c;
+    }
+
+    // Retrouve une ligne par fbKey
+    function _findResultByFbKey(fbKey) {
+      if (!fbKey || !state || !Array.isArray(state.analysisResults)) return null;
+      for (var i = 0; i < state.analysisResults.length; i++) {
+        var r = state.analysisResults[i];
+        try {
+          if (feedbackKey(r.id_champ, r.instance_label) === fbKey) return r;
+        } catch(e) {}
+      }
+      return null;
+    }
+
+    // P0-2 debounce par rowKey
+    var _statusChangeDebounce = {};
+    var _statusMenuEl = null;
+
+    function _closeStatusMenu() {
+      if (_statusMenuEl) { try { _statusMenuEl.remove(); } catch(e){} _statusMenuEl = null; }
+      document.removeEventListener('click', _onDocClickCloseStatus, true);
+    }
+    function _onDocClickCloseStatus(e) {
+      if (_statusMenuEl && !_statusMenuEl.contains(e.target)) _closeStatusMenu();
+    }
+
+    function openStatusMenu(rowKey, anchorEl, ev) {
+      if (ev) { try { ev.stopPropagation(); } catch(e){} }
+      // P0-1 : bloquer si Maya en cours
+      if (window.__mayaIsRunning === true) {
+        showAlert('alerts-area', 'warning', 'Maya analyse en cours — change le statut une fois l\'analyse terminée.');
+        return;
+      }
+      var r = _findResultByFbKey(rowKey);
+      if (!r) return;
+      _closeStatusMenu();
+      var rect = anchorEl.getBoundingClientRect();
+      var menu = document.createElement('div');
+      menu.className = 'status-menu-pr1d';
+      menu.style.cssText = 'position:fixed;background:#fff;border:1px solid #ddd;border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,0.18);padding:4px 0;z-index:99999;min-width:200px;font-size:13px;';
+      menu.style.left = Math.max(8, rect.left) + 'px';
+      menu.style.top = (rect.bottom + 4) + 'px';
+      var options = [
+        { v: 'VERT', icon: '✅', label: 'Conforme', color: '#1B5E20' },
+        { v: 'ORANGE', icon: '⚠️', label: 'Approximatif', color: '#E65100' },
+        { v: 'ROUGE', icon: '❌', label: 'Non conforme', color: '#B71C1C' },
+        { v: 'MANQUANT', icon: '🔲', label: 'Manquant', color: '#37474F' }
+      ];
+      var html = '';
+      options.forEach(function(o){
+        var selBg = (r.statut === o.v) ? '#F5F5F5' : '#fff';
+        var selWg = (r.statut === o.v) ? '600' : '500';
+        html += '<div class="status-menu-opt" data-v="' + o.v + '" style="padding:8px 14px;cursor:pointer;color:' + o.color + ';background:' + selBg + ';font-weight:' + selWg + ';">' + o.icon + ' ' + o.label + '</div>';
+      });
+      if (r._pre_user_statut && r._pre_user_statut !== r.statut) {
+        html += '<div style="height:1px;background:#eee;margin:4px 0;"></div>';
+        html += '<div class="status-menu-opt" data-v="__REVERT__" style="padding:8px 14px;cursor:pointer;color:#5E35B1;font-style:italic;background:#fff;">↺ Remettre statut Maya (' + r._pre_user_statut + ')</div>';
+      }
+      menu.innerHTML = html;
+      document.body.appendChild(menu);
+      _statusMenuEl = menu;
+      menu.querySelectorAll('.status-menu-opt').forEach(function(el){
+        el.addEventListener('mouseenter', function(){ el.style.background = '#E3F2FD'; });
+        el.addEventListener('mouseleave', function(){
+          var v = el.getAttribute('data-v');
+          el.style.background = (v === r.statut) ? '#F5F5F5' : '#fff';
+        });
+        el.addEventListener('click', function(ev2){
+          ev2.stopPropagation();
+          var v = el.getAttribute('data-v');
+          _closeStatusMenu();
+          if (v === '__REVERT__') {
+            revertToMayaStatus(rowKey);
+          } else {
+            setStatusUser(rowKey, v);
+          }
+        });
+      });
+      setTimeout(function(){ document.addEventListener('click', _onDocClickCloseStatus, true); }, 30);
+    }
+
+    function revertToMayaStatus(rowKey) {
+      var r = _findResultByFbKey(rowKey);
+      if (!r || !r._pre_user_statut) return;
+      var oldStatut = r.statut;
+      var mayaStatut = r._pre_user_statut;
+      // Si la ligne avait été marquée par le lexique (force VERT), retirer la correspondance
+      if (oldStatut === 'VERT' && r._user_validated_correspondence && r.valeur_audit && r.valeur_vt) {
+        _fixD_removeEntry(r.id_champ, r.valeur_audit, r.valeur_vt, r.instance_label);
+      }
+      r.statut = mayaStatut;
+      delete r._pre_user_statut;
+      delete r._user_validated_correspondence;
+      if (r.commentaire) r.commentaire = r.commentaire.replace(/\s*\[✓ Correspondance utilisateur validée\]/g, '').trim();
+      console.log('[FIX-D-STATUT] Revert Maya — rowKey=' + rowKey + ' : ' + oldStatut + ' → ' + mayaStatut);
+      try { renderTable(currentFilter); } catch(e){}
+      showAlert('alerts-area', 'info', '↺ Statut remis à la valeur Maya (' + mayaStatut + ').');
+    }
+
+    function setStatusUser(rowKey, newStatut) {
+      var r = _findResultByFbKey(rowKey);
+      if (!r) return;
+      var oldStatut = r.statut;
+      // P1-2 : skip si statut identique (évite pollution logs)
+      if (oldStatut === newStatut) return;
+      // P0-2 : debounce 300ms par rowKey (anti-cycle add/remove)
+      var nowMs = Date.now();
+      if (_statusChangeDebounce[rowKey] && (nowMs - _statusChangeDebounce[rowKey]) < 300) {
+        console.log('[FIX-D-STATUT] Debounced — changement trop rapide sur ' + rowKey);
+        return;
+      }
+      _statusChangeDebounce[rowKey] = nowMs;
+
+      // Sauvegarder statut original Maya (1ère manipulation utilisateur uniquement)
+      if (!r._pre_user_statut) r._pre_user_statut = oldStatut;
+      // P0-4 : flag transient (timestamp) — non persisté DOM/dataset
+      r._user_status_override_ts = nowMs;
+
+      var hasValues = r.valeur_audit && r.valeur_vt &&
+        String(r.valeur_audit).trim() !== '' && String(r.valeur_vt).trim() !== '' &&
+        String(r.valeur_audit).trim() !== '—' && String(r.valeur_vt).trim() !== '—';
+
+      // CAS 1 : passage vers VERT → tentative ajout lexique
+      if (newStatut === 'VERT' && oldStatut !== 'VERT') {
+        if (!hasValues) {
+          console.log('[FIX-D-STATUT] Pas d\'ajout — valeurs manquantes (rowKey=' + rowKey + ')');
+        } else if (_fixD_normalize(r.valeur_audit) === _fixD_normalize(r.valeur_vt)) {
+          console.log('[FIX-D-STATUT] Pas d\'ajout — valeurs identiques après normalisation (rowKey=' + rowKey + ')');
+        } else if (r._maya_was_hallucination === true) {
+          console.log('[FIX-D-STATUT] Pas d\'ajout — _maya_was_hallucination (anti-entérinage P0-2)');
+        } else if (r._recovered_from_comment === true) {
+          console.log('[FIX-D-STATUT] Pas d\'ajout — _recovered_from_comment (anti-pollution Fix C+ P1-5)');
+        } else {
+          var entry = _fixD_addOrUpdate(r.id_champ, r.valeur_audit, r.valeur_vt, r.instance_label);
+          if (entry) {
+            r._user_validated_correspondence = true;
+            console.log('[FIX-D-VALIDATED] Statut-driven : ajout — champ=' + r.id_champ + ' audit="' + r.valeur_audit + '" ≈ vt="' + r.valeur_vt + '" (occurrences=' + entry.occurrences + ')');
+            showAlert('alerts-area', 'success', '✓ Correspondance ajoutée au lexique — appliquée à tous les rapports futurs.');
+          }
+        }
+      }
+
+      // CAS 2 : sortie de VERT → tentative retrait lexique
+      if (oldStatut === 'VERT' && newStatut !== 'VERT' && hasValues) {
+        var existing = _fixD_findEntry(r.id_champ, r.valeur_audit, r.valeur_vt);
+        if (existing) {
+          var affected = _fixD_countAffectedLines(r.id_champ, r.valeur_audit, r.valeur_vt);
+          _fixD_removeEntry(r.id_champ, r.valeur_audit, r.valeur_vt, r.instance_label);
+          r._user_validated_correspondence = false;
+          console.log('[FIX-D-REMOVED] Statut-driven : retrait — champ=' + r.id_champ + ' audit="' + r.valeur_audit + '" ≈ vt="' + r.valeur_vt + '" (affecte ' + affected + ' ligne(s) cet écran)');
+          if (affected > 1) {
+            showAlert('alerts-area', 'warning', '⚠ Correspondance retirée — affecte ' + affected + ' ligne(s) similaire(s) (' + r.id_champ + ').');
+          } else {
+            showAlert('alerts-area', 'info', '🗑 Correspondance retirée du lexique.');
+          }
+        }
+      }
+
+      // Mise à jour effective + nettoyage commentaire si retrait
+      r.statut = newStatut;
+      if (newStatut !== 'VERT' && r._user_validated_correspondence === false && r.commentaire) {
+        r.commentaire = r.commentaire.replace(/\s*\[✓ Correspondance utilisateur validée\]/g, '').trim();
+      }
+      console.log('[FIX-D-STATUT] User change : rowKey=' + rowKey + ' ' + oldStatut + ' → ' + newStatut);
+      try { renderTable(currentFilter); } catch(e){}
+    }
+
+    window.openStatusMenu = openStatusMenu;
+    window.setStatusUser = setStatusUser;
+    window.revertToMayaStatus = revertToMayaStatus;
 
     // ---- Mise à jour des badges des FAB ----
     function collectAllFeedbacks() {
@@ -7515,7 +8297,10 @@ ${vtShort}`;
       var all = collectAllFeedbacks();
       var toInject = all.filter(function(i){
         var s = (i.meta && i.meta.status) || 'pending';
-        return s === 'pending' || s === 'permanent';
+        // FIX B5 (Phase 1, 2026-05-13) : on n'exclut QUE 'archived'.
+        // 'applied' redevient réinjecté tant que l'utilisateur n'archive pas manuellement.
+        // Le flip auto pending→applied continue (télémétrie préservée) mais ne tue plus l'injection.
+        return s !== 'archived';
       });
       if (toInject.length === 0) return { block: '', injectedIds: [] };
 
@@ -8255,11 +9040,126 @@ ${vtShort}`;
       persistMayaFeedbacks();
       persistMayaGlobalFeedbacks();
       persistMayaFeedbackMeta();
-      console.log('[MAYA-SYNC] Feedbacks chargés depuis Supabase: ' + remote.length);
+      var _pendingCount = 0, _appliedCount = 0, _permCount = 0, _archCount = 0;
+      Object.keys(rebuiltMeta || {}).forEach(function(_k){
+        var _st = (rebuiltMeta[_k] || {}).status || 'pending';
+        if (_st === 'pending') _pendingCount++;
+        else if (_st === 'applied') _appliedCount++;
+        else if (_st === 'permanent') _permCount++;
+        else if (_st === 'archived') _archCount++;
+      });
+      console.log('[MAYA-SYNC] ✅ Feedbacks chargés depuis Supabase: ' + remote.length + ' total — pending=' + _pendingCount + ' (réinjectés au prochain audit), applied=' + _appliedCount + ' (NON réinjectés — bug B5), permanent=' + _permCount + ' (toujours réinjectés), archived=' + _archCount + '.');
       // Rafraîchir UI
       try { if (document.getElementById('maya-drawer') && document.getElementById('maya-drawer').classList.contains('visible')) renderMayaDrawer(); } catch(e) {}
       try { if (typeof renderTable === 'function' && state.analysisResults && state.analysisResults.length) renderTable(currentFilter); } catch(e) {}
     }
+
+    // ============================================================
+    // PR1b — Sync lexique correspondances Fix D depuis Supabase
+    // Logique miroir de syncFeedbacksFromSupabase :
+    //   1) liste distante (déjà filtrée soft-delete coté backend)
+    //   2) merge avec entries locales jamais syncées → upload manquantes
+    //   3) reconstruit mayaCorrespondences depuis le merge (last-write-wins sur updatedAt)
+    //   4) persiste local + log + résout la Promise gating
+    // ============================================================
+    async function syncCorrespondencesFromSupabase() {
+      var remote;
+      try { remote = await MayaSupabase.listCorrespondences(); } catch(e) { remote = null; }
+      if (!remote) {
+        console.warn('[FIX-D-SYNC] Mode local uniquement (Supabase indisponible) — ' + (typeof MayaSupabase !== 'undefined' && MayaSupabase.disabledReason ? MayaSupabase.disabledReason() : 'raison inconnue'));
+        return;
+      }
+      // Map des entries distantes par ID stable pour lookup rapide
+      var remoteByStableId = {};
+      remote.forEach(function(row){
+        if (!row || !row.id) return;
+        remoteByStableId[row.id] = row;
+      });
+
+      // 1) Reconstruit la structure locale depuis le distant
+      var rebuilt = {};
+      var importedCount = 0;
+      remote.forEach(function(row){
+        var key = row.scope_key;
+        if (!key) return;
+        if (!Array.isArray(rebuilt[key])) rebuilt[key] = [];
+        rebuilt[key].push({
+          auditNorm: row.audit_norm || '',
+          vtNorm: row.vt_norm || '',
+          auditRaw: row.audit_raw || '',
+          vtRaw: row.vt_raw || '',
+          instanceLabelsValidated: Array.isArray(row.instance_labels) ? row.instance_labels : [],
+          isSingleton: row.is_singleton === true,
+          createdAt: row.created_at || new Date().toISOString(),
+          updatedAt: row.updated_at || row.created_at || new Date().toISOString(),
+          occurrences: Number.isFinite(row.occurrences) ? row.occurrences : 1,
+          _schemaVersion: row.schema_version || 1
+        });
+        importedCount++;
+      });
+
+      // 2) Préserve + upload les entries locales jamais syncées (réconciliation L→D)
+      var uploadedCount = 0;
+      Object.keys(mayaCorrespondences || {}).forEach(function(key){
+        (mayaCorrespondences[key] || []).forEach(function(localEntry){
+          var stableId = _fixD_makeStableId(key, localEntry.auditNorm, localEntry.vtNorm);
+          var remoteRow = remoteByStableId[stableId];
+          if (remoteRow) {
+            // Conflit : last-write-wins sur updatedAt
+            var rUpd = new Date(remoteRow.updated_at || remoteRow.created_at || 0).getTime();
+            var lUpd = new Date(localEntry.updatedAt || localEntry.createdAt || 0).getTime();
+            if (lUpd > rUpd) {
+              // Local plus récent → upload (préserve les changements locaux post-load)
+              _fixD_pushSupabaseSave(key, localEntry);
+              // Remplace dans rebuilt
+              if (!Array.isArray(rebuilt[key])) rebuilt[key] = [];
+              var found = -1;
+              for (var i = 0; i < rebuilt[key].length; i++) {
+                if (rebuilt[key][i].auditNorm === localEntry.auditNorm && rebuilt[key][i].vtNorm === localEntry.vtNorm) { found = i; break; }
+              }
+              if (found >= 0) rebuilt[key][found] = localEntry;
+              else rebuilt[key].push(localEntry);
+            }
+            // sinon distant plus récent → rien à faire, rebuilt a déjà la bonne version
+            return;
+          }
+          // Pas en distant → upload
+          if (!Array.isArray(rebuilt[key])) rebuilt[key] = [];
+          rebuilt[key].push(localEntry);
+          _fixD_pushSupabaseSave(key, localEntry);
+          uploadedCount++;
+        });
+      });
+
+      // 3) Écrase et persiste
+      mayaCorrespondences = rebuilt;
+      persistMayaCorrespondences();
+
+      var totalCount = 0;
+      Object.keys(rebuilt).forEach(function(k){ totalCount += (rebuilt[k] || []).length; });
+      console.log('[FIX-D-SYNC] ✅ ' + totalCount + ' correspondance(s) actives (distant=' + importedCount + ', local→distant uploadées=' + uploadedCount + ').');
+
+      // Rafraîchir UI si table affichée (les matchs auto vont s'appliquer)
+      try { if (typeof renderTable === 'function' && state.analysisResults && state.analysisResults.length) renderTable(currentFilter); } catch(e) {}
+    }
+
+    // PR1b — Multi-onglet : écouter les changements localStorage pour propager entre onglets
+    try {
+      window.addEventListener('storage', function(ev){
+        if (!ev || ev.key !== MAYA_CORRESPONDENCES_KEY) return;
+        // Reload depuis localStorage (autre onglet a modifié)
+        try {
+          var newVal = JSON.parse(ev.newValue || '{}') || {};
+          mayaCorrespondences = newVal;
+          var ct = 0; Object.keys(newVal).forEach(function(k){ ct += (newVal[k] || []).length; });
+          console.log('[FIX-D-SYNC-MULTITAB] Lexique rechargé depuis autre onglet : ' + ct + ' correspondance(s).');
+          // ⚠ NE PAS re-persister (boucle storage event) — juste actualiser RAM + UI
+          if (typeof renderTable === 'function' && state.analysisResults && state.analysisResults.length) {
+            try { renderTable(currentFilter); } catch(e) {}
+          }
+        } catch(e) { console.warn('[FIX-D-SYNC-MULTITAB] parse error:', e.message); }
+      });
+    } catch(e) {}
 
     // ---- Export Excel (ExcelJS) ----
     async function exportMayaFeedbacksExcel() {
@@ -10562,6 +11462,32 @@ ${vtShort}`;
       <div class="maya-modal-footer">
         <button type="button" class="btn btn-outline" onclick="closeGlobalFeedback()">Annuler</button>
         <button type="button" class="btn btn-primary" onclick="submitGlobalFeedback()" style="background:#7B2D8E;border-color:#7B2D8E">Envoyer à Maya</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================ PR1a Fix D-core — Validation correspondance utilisateur ================ -->
+  <div class="maya-modal-overlay" id="fixd-corresp-overlay" onclick="if(event.target===this) closeCorrespondenceModal()">
+    <div class="maya-modal" role="dialog" aria-labelledby="fixd-corresp-title" style="max-width:520px;">
+      <div class="maya-modal-header" style="background:linear-gradient(135deg, #C62828, #8E1818);">
+        <div class="maya-modal-header-title" id="fixd-corresp-title">⚠ Validation PERMANENTE pour TOUS les futurs rapports</div>
+        <button type="button" class="maya-modal-close" onclick="closeCorrespondenceModal()" aria-label="Fermer">✕</button>
+      </div>
+      <div class="maya-modal-body">
+        <p style="margin:0 0 12px 0;font-weight:600;color:#C62828;font-size:13px;">Cette correspondance sera appliquée automatiquement (statut <strong>VERT</strong>) sur TOUS les rapports futurs pour ce champ.</p>
+        <div style="background:#F5F5F5;border-left:3px solid #2E7D32;padding:10px 12px;border-radius:4px;font-size:13px;line-height:1.6;margin-bottom:10px;">
+          <div><strong>Champ :</strong> <span id="fixd-corresp-field">—</span></div>
+          <div id="fixd-corresp-instance-row" style="display:none;"><strong>Instance :</strong> <span id="fixd-corresp-instance">—</span></div>
+          <div style="margin-top:6px;"><strong>Audit :</strong> <span id="fixd-corresp-audit" style="color:#1B3F8B;font-weight:600">—</span></div>
+          <div><strong>VT :</strong> <span id="fixd-corresp-vt" style="color:#1B3F8B;font-weight:600">—</span></div>
+        </div>
+        <div style="font-size:12px;color:#555;background:#FFF8E1;border-left:3px solid #FB8C00;padding:8px 10px;border-radius:4px;">
+          <strong>Avant de valider :</strong> assure-toi que ces deux valeurs sont bien équivalentes dans la réalité. Une mauvaise validation polluera tous les rapports futurs.
+        </div>
+      </div>
+      <div class="maya-modal-footer">
+        <button type="button" class="btn btn-outline" onclick="closeCorrespondenceModal()">Annuler</button>
+        <button type="button" class="btn btn-primary" onclick="submitCorrespondence()" style="background:#2E7D32;border-color:#2E7D32;">✓ Valider PERMANENT</button>
       </div>
     </div>
   </div>
