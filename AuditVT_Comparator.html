@@ -4341,6 +4341,26 @@
           return fromName || null;
         }
 
+        // Catégorie EXPLICITE portée par le NOM du champ — version CONSERVATRICE (anti-faux-positif).
+        // Ne retourne une catégorie que si le nom contient UN SEUL mot-clé de catégorie non ambigu.
+        // Sert de garde forte : le nom "Matériau mur" est un signal humain explicite qui prime
+        // même quand la SECTION du référentiel range ce champ ailleurs (ex : sous "Planchers").
+        // Contrairement à _inferCat, "Mur mitoyen" → 'mur' (et non 'plancher') car on exige
+        // la présence du mot de catégorie ET l'absence de tout autre mot de catégorie.
+        function _explicitNameCat(nom) {
+          var s = (nom||'').toLowerCase();
+          var hasMur        = /\bmur\b|fa[çc]ade/.test(s);
+          var hasPlancher   = /\bplancher\b(?!\s*haut)|vide[\s-]?san|terre[\s-]?plein/.test(s);
+          var hasToiture    = /\btoiture\b|\bcomble|rampant|plafond[\s-]*haut|plancher[\s-]*haut/.test(s);
+          var hasMenuiserie = /fen[eê]tre|\bporte\b|\bbaie\b|vitrage|menuiserie|ouvrant/.test(s);
+          var cats = [];
+          if (hasMur)        cats.push('mur');
+          if (hasPlancher)   cats.push('plancher');
+          if (hasToiture)    cats.push('toiture');
+          if (hasMenuiserie) cats.push('menuiserie');
+          return cats.length === 1 ? cats[0] : null; // explicite ET non-ambigu uniquement
+        }
+
         // Étape 1 : catégorie canonique de chaque paroi (par son label)
         // Priorité 1 : detectedInstances (source de vérité absolue)
         // Priorité 2 : _inferCat sur le texte du label (fallback texte)
@@ -4388,11 +4408,27 @@
           if (!rv.instance_label) return true;
           var paroiCat = catByLabel[String(rv.instance_label).trim().toLowerCase()];
           if (!paroiCat) return true;
+          var champNom = (typeof getFieldNom === 'function') ? (getFieldNom(rv.id_champ) || rv.id_champ) : rv.id_champ;
+
+          // GARDE NOM EXPLICITE (prioritaire) : le NOM du champ est le signal humain le plus fort.
+          // Un champ dont le NOM dit explicitement "mur" (ex "Matériau mur") appliqué à une paroi
+          // qui n'est PAS un mur (page 6 audit) est non-applicable — MÊME si la SECTION du
+          // référentiel range ce champ sous la mauvaise catégorie (cas réel : "Matériau mur"
+          // classé sous la section "Planchers" → _fieldCat renvoyait 'plancher' = paroiCat et
+          // la contradiction du nom passait inaperçue). Cf. règle prompt L~5634.
+          var nameCat = _explicitNameCat(getFieldNom(rv.id_champ) || '');
+          if (nameCat && nameCat !== paroiCat) {
+            console.warn('[ANTI-DOUBLON-PAROIS] Suppression NOM-contradiction : paroi="'
+              + rv.instance_label + '" (cat page 6 = ' + paroiCat + ') ≠ NOM champ "' + champNom + '" (orienté ' + nameCat + ')');
+            removedSummary.push(champNom + ' / ' + rv.instance_label + ' [nom]');
+            removed++;
+            return false;
+          }
+
           var fc = _fieldCat(rv);
           if (!fc) return true;
           if (paroiCat === fc) return true;
           // Ne jamais supprimer silencieusement — logger chaque suppression explicitement
-          var champNom = (typeof getFieldNom === 'function') ? (getFieldNom(rv.id_champ) || rv.id_champ) : rv.id_champ;
           console.warn('[ANTI-DOUBLON-PAROIS] Suppression cross-section : paroi="'
             + rv.instance_label + '" (cat page 6 = ' + paroiCat + ') ≠ champ "' + champNom + '" (cat = ' + fc + ')');
           removedSummary.push(champNom + ' / ' + rv.instance_label);
