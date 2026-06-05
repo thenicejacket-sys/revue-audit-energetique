@@ -3249,6 +3249,25 @@
         }
         var MAIN_SECT_EXIT = /^(?:ventilation|chauffage|b[âa]timent|enveloppe|bilan|r[eé]sultat|garde|escalier|cave|garage|annexe|note|conclusion)\s*/i;
 
+        // Catégorie SÉMANTIQUE portée par la DESCRIPTION d'une paroi — version conservatrice.
+        // Sert de garde-fou quand PDF.js perd/mélange l'en-tête de section page 6 : si la section
+        // courante dit MURS mais que la description dit "Plancher mitoyen", la description prime.
+        // Ne retourne une catégorie que si la description contient UN SEUL mot-clé non ambigu
+        // (anti faux-positif). "dalle" est volontairement EXCLU car ambigu (dalle de toiture vs
+        // plancher bas) — cf. avertissement _inferCat plus bas.
+        function _descSemanticCat(desc) {
+          var s = (desc||'').toLowerCase();
+          if (!s) return null;
+          var hasToiture  = /\btoiture|\bcomble|rampant|plafond|plancher\s*haut/.test(s);
+          var hasPlancher = /\bplancher\b(?!\s*haut)|vide[\s-]?sanit|terre[\s-]?plein/.test(s);
+          var hasMur      = /\bmur\b|fa[çc]ade/.test(s);
+          var cats = [];
+          if (hasToiture)  cats.push('toiture');
+          if (hasPlancher) cats.push('plancher');
+          if (hasMur)      cats.push('mur');
+          return cats.length === 1 ? cats[0] : null; // explicite ET non-ambigu uniquement
+        }
+
         // ===== PASS 0 (PRIORITAIRE) : format tableau récapitulatif page 6
         // Format : "[Catégorie] Description Isolation" → "Paroi NN [description]" / "(L×H) Fen.bat. ..."
         // Le plus fiable : lit exactement ce qui est dans le résumé "État initial du logement"
@@ -3298,12 +3317,21 @@
             if (!pm0) continue;
             var desc0 = pm0[2].trim().split(/\s{3,}|\t/)[0].trim().substring(0,50);
             var lblp0 = desc0 ? 'Paroi '+pm0[1]+' \u2014 '+desc0 : 'Paroi '+pm0[1];
-            // La section PDF est l'AUTORITÉ — pas d'override sémantique.
-            // Si le PDF met une paroi sous "Toitures", c'est une toiture.
+            // La section PDF est l'autorité PAR DÉFAUT, mais la DESCRIPTION de la paroi la corrige
+            // quand PDF.js a perdu/mal ordonné l'en-tête de section (ex : "Paroi 3 — Plancher
+            // mitoyen" lue sous la section MURS → byNumber=mur → l'anti-cross-talk croit que c'est
+            // un mur et y colle un champ "Matériau mur"). L'override n'est appliqué QUE si la
+            // description contient un seul mot de catégorie non ambigu (_descSemanticCat).
             // byNumber capture ce mapping pour enforcePage6Classification() override absolu.
-            if (curCat0==='murs') { addUniq(murs, lblp0); byNumber[String(parseInt(pm0[1],10))] = 'mur'; }
-            else if (curCat0==='planchers') { addUniq(planchers, lblp0); byNumber[String(parseInt(pm0[1],10))] = 'plancher'; }
-            else if (curCat0==='toitures') { addUniq(toitures, lblp0); byNumber[String(parseInt(pm0[1],10))] = 'toiture'; }
+            var _secCat0 = curCat0==='murs' ? 'mur' : curCat0==='planchers' ? 'plancher' : curCat0==='toitures' ? 'toiture' : null;
+            var _semCat0 = _descSemanticCat(desc0);
+            var _finalCat0 = (_semCat0 && _semCat0 !== _secCat0) ? _semCat0 : _secCat0;
+            if (_semCat0 && _semCat0 !== _secCat0) {
+              console.warn('[PASS0-SEMANTIC] "' + lblp0 + '" : section PDF="' + _secCat0 + '" corrigée → "' + _semCat0 + '" (mot-clé description prioritaire)');
+            }
+            if (_finalCat0==='mur') { addUniq(murs, lblp0); byNumber[String(parseInt(pm0[1],10))] = 'mur'; }
+            else if (_finalCat0==='plancher') { addUniq(planchers, lblp0); byNumber[String(parseInt(pm0[1],10))] = 'plancher'; }
+            else if (_finalCat0==='toiture') { addUniq(toitures, lblp0); byNumber[String(parseInt(pm0[1],10))] = 'toiture'; }
           }
         }
 
