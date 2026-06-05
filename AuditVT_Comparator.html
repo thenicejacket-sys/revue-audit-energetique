@@ -6750,11 +6750,16 @@ ${vtShort}`;
 
           if (corr.action === 'hallucination_detectee') {
             target.statut = 'MANQUANT';
+            // Une hallucination = la valeur extraite est fausse. Pour un champ non-applicable
+            // (ex "Mat\u00e9riau mur" sur un plancher) la valeur AUDIT est aussi emprunt\u00e9e au mur :
+            // on efface les DEUX c\u00f4t\u00e9s, sinon le champ audit garde des d\u00e9tails de mur sur un
+            // plancher. Le statut MANQUANT n'a de sens que si audit ET vt sont vides.
             target.valeur_vt = null;
+            target.valeur_audit = null;
             target.commentaire = (target.commentaire ? target.commentaire + ' ' : '') + '[\u2726 Maya \u2014 Hallucination : ' + corr.raison + ']';
             target._maya_corrected = true;
             corrCount++;
-            console.log('[MAYA-HALLUCINATION] ' + corr.id_champ + (corr.instance_label ? ' (' + corr.instance_label + ')' : '') + ' \u2192 valeur VT effac\u00e9e \u2014 ' + corr.raison);
+            console.log('[MAYA-HALLUCINATION] ' + corr.id_champ + (corr.instance_label ? ' (' + corr.instance_label + ')' : '') + ' \u2192 valeurs audit + VT effac\u00e9es \u2014 ' + corr.raison);
             return;
           }
 
