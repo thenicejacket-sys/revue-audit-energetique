@@ -4355,8 +4355,13 @@
           if (/toiture|comble|plafond[\s-]*haut|plancher[\s-]*haut|rampant/.test(s)) return 'toiture';
           // "dalle" seul est AMBIGU (peut être plancher bas OU dalle de toiture) — ne pas l'utiliser
           // comme discriminant. Seuls les mots non-ambigus sont acceptés ici.
-          if (/plancher(?!\s*haut)|vide[\s-]?san|terre[\s-]?plein|mitoyen(?!\s*mur)/.test(s)) return 'plancher';
+          // ORDRE IMPORTANT : "plancher" explicite d'abord, puis "mur" explicite, et SEULEMENT
+          // ENSUITE "mitoyen" seul. Sinon "Mur mitoyen (int.)" était classé PLANCHER à tort
+          // (l'ancienne règle mitoyen(?!\s*mur) ne regardait que ce qui SUIT "mitoyen", pas le
+          // mot "mur" qui le PRÉCÈDE). "mur" est un nom de catégorie fort : il prime sur mitoyen.
+          if (/plancher(?!\s*haut)|vide[\s-]?san|terre[\s-]?plein/.test(s)) return 'plancher';
           if (/\bmur(?!\s*(?:porteur\s*mitoyen))|fa[çc]ade|paroi\s*opaque(?!\s*(?:bas|haut))/.test(s)) return 'mur';
+          if (/mitoyen/.test(s)) return 'plancher'; // mitoyen SEUL (sans mur/plancher explicite) → défaut plancher
           return null;
         }
         // Catégorie du CHAMP : on regarde d'abord sa section référentiel, puis son nom.
@@ -5060,10 +5065,53 @@
       var totalKnown = Object.keys(byNumber).length;
 
       if (totalKnown === 0) {
-        console.warn('[PAGE6-ENFORCE] Aucune paroi numerotee detectee page 6 — override desactive');
+        // PASS 0 n'a trouvé aucune paroi NUMÉROTÉE "Paroi N". Ce n'est PAS forcément une erreur :
+        // certains audits présentent le tableau "État initial du logement" avec des libellés
+        // descriptifs ("Mur mitoyen (int.)", "Plancher TP (TP)", "Comble perdu"…) sans numéro.
+        // Dans ce cas, on RECONSTRUIT la classification depuis les parois que le LLM a réellement
+        // extraites (instance_label), classées par mots-clés — au lieu d'afficher une alerte
+        // alarmante. On n'avertit l'utilisateur que si AUCUNE paroi n'a pu être identifiée.
+        function _classifyLabel(txt) {
+          var s = String(txt || '').toLowerCase();
+          if (/fen[eê]tre|porte|baie|vitrage|menuiserie|ouvrant/.test(s)) return 'menuiseries';
+          if (/toiture|comble|plafond[\s-]*haut|plancher[\s-]*haut|rampant|plafond/.test(s)) return 'toitures';
+          if (/plancher(?!\s*haut)|vide[\s-]?san|terre[\s-]?plein/.test(s)) return 'planchers';
+          if (/\bmur(?!\s*(?:porteur\s*mitoyen))|fa[çc]ade|paroi\s*opaque(?!\s*(?:bas|haut))/.test(s)) return 'murs';
+          if (/mitoyen/.test(s)) return 'planchers';
+          return null;
+        }
+        var _rebuilt = { murs: [], planchers: [], toitures: [], menuiseries: [] };
+        var _seenLbl = {};
+        (state.analysisResults || []).forEach(function(rv) {
+          if (!rv.instance_label) return;
+          var key = String(rv.instance_label).trim().toLowerCase();
+          if (_seenLbl[key]) return;
+          _seenLbl[key] = true;
+          var cat = _classifyLabel(rv.instance_label);
+          if (cat) _rebuilt[cat].push(rv.instance_label);
+        });
+        var _rebuiltTotal = _rebuilt.murs.length + _rebuilt.planchers.length + _rebuilt.toitures.length + _rebuilt.menuiseries.length;
+
+        if (_rebuiltTotal > 0) {
+          // Conserve byNumber vide (pas d'override numéroté strict — on n'invente pas de numéros),
+          // mais peuple les listes de catégories pour l'affichage/export et la cohérence interne.
+          state.detectedInstances = state.detectedInstances || {};
+          state.detectedInstances.murs       = _rebuilt.murs;
+          state.detectedInstances.planchers  = _rebuilt.planchers;
+          state.detectedInstances.toitures   = _rebuilt.toitures;
+          state.detectedInstances.menuiseries= _rebuilt.menuiseries;
+          console.info('[PAGE6-ENFORCE] Tableau "État initial" non numéroté (libellés descriptifs) — '
+            + 'classification reconstruite depuis le LLM : murs=' + _rebuilt.murs.length
+            + ' planchers=' + _rebuilt.planchers.length + ' toitures=' + _rebuilt.toitures.length
+            + ' menuiseries=' + _rebuilt.menuiseries.length + '. Pas d\'alerte (classification OK).');
+          return;
+        }
+
+        // Vraiment aucune paroi identifiable → on prévient (cas rare : tableau introuvable).
+        console.warn('[PAGE6-ENFORCE] Aucune paroi détectée (ni numérotée, ni via le LLM) — override désactivé');
         try {
           showAlert('alerts-area', 'warning',
-            '⚠️ Page 6 audit non detectee — la classification des parois s\'appuie sur le LLM, à vérifier manuellement.');
+            '⚠️ Tableau « État initial du logement » introuvable — aucune paroi détectée. Vérifiez que l\'audit contient bien ce tableau.');
         } catch(e) {}
         return;
       }
@@ -5681,12 +5729,14 @@ Exemples : "hauteur sous plafond" = HSP / hauteur libre / hauteur de volume / h.
 "résistance thermique" = R / R-value / résistance isolant
 Ne rate jamais une valeur parce que le libellé exact ne correspond pas — cherche le sens, pas le mot.
 
-RÈGLE ABSOLUE — PAGE 6 DE L'AUDIT = SOURCE DE VÉRITÉ POUR LES CATÉGORIES :
-La page 6 de l'audit contient le tableau récapitulatif "État initial du logement" avec une SECTION distincte pour chaque catégorie (MURS, PLANCHERS, TOITURES, MENUISERIES). Les en-têtes de colonnes sont "Description" et "Isolation".
-→ La catégorie de CHAQUE paroi est définie par la SECTION dans laquelle elle apparaît page 6 — pas par son nom, ni son matériau, ni son adjacence.
-→ Si la paroi "Paroi 3 — Plancher mitoyen" apparaît sous l'en-tête PLANCHERS page 6 → catégorie = PLANCHER (jamais "mur" même si le mot "mitoyen" apparaît dans son nom).
-→ INTERDICTION ABSOLUE de classer une paroi dans une catégorie autre que celle où elle figure page 6.
-→ Si le bloc INSTANCES ci-dessous liste les parois par catégorie (murs / planchers / toitures / menuiseries), c'est le résultat de l'extraction page 6 → respecte-la strictement.
+RÈGLE ABSOLUE — TABLEAU "ÉTAT INITIAL DU LOGEMENT" = SOURCE DE VÉRITÉ POUR LES CATÉGORIES :
+L'audit contient un tableau récapitulatif intitulé "État initial du logement" avec une SECTION distincte pour chaque catégorie (MURS, PLANCHERS, TOITURES, MENUISERIES). Les en-têtes de colonnes sont "Description" et "Isolation".
+⚠️ REPÈRE CE TABLEAU PAR SON TITRE "État initial du logement", PAS par un numéro de page. Il porte souvent la mention "p.6" sur la page, MAIS sa position physique dans le PDF peut être DÉCALÉE (page 7, 8…) si l'auditeur a inséré des photos ou des pages avant. Cherche-le dans TOUT le document, pas seulement à la 6ᵉ page physique. S'il n'est pas là où tu l'attends, continue à chercher plus loin.
+⚠️ Les lignes de ce tableau ne sont PAS toujours numérotées "Paroi 1/2/3". Selon le logiciel d'audit, elles peuvent être des libellés descriptifs : "Mur mitoyen (int.)", "Mur extérieur Ouest (ext.)", "Plancher TP (TP)", "Comble perdu", etc. Traite chacune de ces lignes comme une paroi à part entière, classée selon la SECTION (Murs/Planchers/Toitures) sous laquelle elle figure.
+→ La catégorie de CHAQUE paroi est définie par la SECTION dans laquelle elle apparaît dans ce tableau — pas par son nom, ni son matériau, ni son adjacence.
+→ Si la paroi "Paroi 3 — Plancher mitoyen" apparaît sous l'en-tête PLANCHERS → catégorie = PLANCHER (jamais "mur" même si le mot "mitoyen" apparaît dans son nom).
+→ INTERDICTION ABSOLUE de classer une paroi dans une catégorie autre que celle où elle figure dans le tableau "État initial du logement".
+→ Si le bloc INSTANCES ci-dessous liste les parois par catégorie (murs / planchers / toitures / menuiseries), c'est le résultat de l'extraction de ce tableau → respecte-la strictement.
 
 RÈGLE ABSOLUE — ANTI-DOUBLONS PAROIS :
 Aucune paroi ne doit apparaître dans deux catégories à la fois.
