@@ -3498,15 +3498,47 @@
           if (PAROI_KEYS4.test(gtypeRaw4)) continue; // parois : déjà gérées
           // Normaliser en clé catégorie
           var gcat4;
-          if (/chauf|g[eé]n[eé]rat|chaud[i\u00e8]re|\bpac\b|pompe.cha/i.test(gtypeRaw4)) gcat4 = 'chauffage';
-          else if (/\becs\b|eau.*chaude|chauffe.eau|ballon/i.test(gtypeRaw4)) gcat4 = 'ecs';
-          else if (/\bvmc\b|ventil/i.test(gtypeRaw4)) gcat4 = 'ventilation';
-          else if (/[eé]clairage/i.test(gtypeRaw4)) gcat4 = 'eclairage';
+          if (/chauf|g[eé]n[eé]rat|chaud[i\u00e8]re|\bpac\b|pompe.cha/i.test(gtypeRaw4)) continue; // equipement: instance via entete numerote (PASS 4b), pas par ligne
+          else if (/\becs\b|eau.*chaude|chauffe.eau|ballon/i.test(gtypeRaw4)) continue; // ECS: instance via PASS 4b
+          else if (/\bvmc\b|ventil/i.test(gtypeRaw4)) continue; // ventilation: instance via PASS 4b
+          else if (/[eé]clairage/i.test(gtypeRaw4)) continue; // eclairage: instance via PASS 4b
           else gcat4 = gtypeRaw4.split(/\s+/)[0];
           var glabel4 = gm4[2].trim().split(/\s{3,}|\t/)[0].trim();
           if (!glabel4 || glabel4.length < 2 || glabel4.length > 100) continue;
+          // Filet de securite : un nom d'instance ne doit JAMAIS etre une VALEUR
+          // (annee, mesure kW/m2/%, oui/non, tiret, "absent", "val_defaut"...).
+          var VALUE_LIKE4 = /^(?:\d{4}|[-–—.\s]+|oui|non|n\/?a|n[eé]ant|manquant|absent|val[_ ]?d[eé]faut|\d+(?:[.,]\d+)?\s*(?:kw|kwh|w|m[²³2]|°c|%|kg|m|cm|mm|l|bar|pa)?)$/i;
+          if (VALUE_LIKE4.test(glabel4)) continue;
           if (!generic[gcat4]) generic[gcat4] = [];
           if (generic[gcat4].indexOf(glabel4) < 0) generic[gcat4].push(glabel4);
+        }
+
+        // ===== PASS 4b : EQUIPEMENTS a instances NUMEROTEES (source de verite)
+        // Chauffage / ECS / ventilation sont ancres dans BATIAUDIT par un entete
+        // numerote "Systeme de chauffage N" / "Systeme de production d'eau chaude
+        // sanitaire N" / "Systeme de ventilation N". On compte ces entetes = nombre
+        // REEL d'equipements. \s+ couvre les entetes repartis sur 2 lignes.
+        //  - 1 entete   -> 1 instance  -> pas d'expansion -> un seul bloc propre.
+        //  - >=2 entetes -> expansion normale (multi-chauffages reels preserves).
+        // Aucun entete numerote -> aucune instance equipement -> champs emis une fois.
+        function _countSystems(re) {
+          var out = [], m, g = new RegExp(re.source, 'gi');
+          while ((m = g.exec(text)) !== null) {
+            var n = parseInt(m[1], 10);
+            if (!isNaN(n) && out.indexOf(n) < 0) out.push(n);
+          }
+          return out.sort(function(a, b){ return a - b; });
+        }
+        var _chauffNums = _countSystems(/syst[èe]me\s+de\s+chauffage\s+0*([1-9]\d*)/);
+        var _ecsNums    = _countSystems(/syst[èe]me\s+de\s+production\s+d.eau\s+chaude\s+sanitaire\s+0*([1-9]\d*)/);
+        var _ventNums   = _countSystems(/syst[èe]me\s+de\s+ventilation\s+0*([1-9]\d*)/);
+        if (_chauffNums.length > 0) generic.chauffage  = _chauffNums.map(function(n){ return 'Chauffage ' + n; });
+        if (_ecsNums.length    > 0) generic.ecs         = _ecsNums.map(function(n){ return 'ECS ' + n; });
+        if (_ventNums.length   > 0) generic.ventilation = _ventNums.map(function(n){ return 'Ventilation ' + n; });
+        if (_chauffNums.length || _ecsNums.length || _ventNums.length) {
+          console.log('[EQUIPEMENTS NUMEROTES] chauffage=' + _chauffNums.length
+            + ' ecs=' + _ecsNums.length + ' ventilation=' + _ventNums.length
+            + ' (entetes "Systeme de ... N" detectes)');
         }
 
         return { murs:murs, planchers:planchers, toitures:toitures, menuiseries:menuiseries, generic:generic, byNumber:byNumber };
